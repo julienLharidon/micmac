@@ -1,46 +1,61 @@
-#include "../include/MMVII_all.h"
+#include "cMMVII_Appli.h"
+#include "MMVII_DeclareCste.h"
+#include <clocale>
+#include "MMVII_Sys.h"
+/*
+
+Delaunay/delaunator : Copyright (c) 2018 Volodymyr Bilonenko  (MIT Licence)
+Ply/happly  Copyright (c) 2018 Nick Sharp
+eigen ...
+
+*/
+
+
+using namespace MMVII;
+
 
 
 int main(int argc, char ** argv)
 {
-   std::vector<cSpecMMVII_Appli*> &  aVSpecAll = cSpecMMVII_Appli::VecAll();
+   std::setlocale(LC_ALL, "C");
+   // std::setlocale(LC_ALL, "en_US.UTF-8");
 
-   std::string aNameCom ;
+   cMMVII_Appli::InitMMVIIDirs(MMVII_CanonicalRootDirFromExec());
+   // Debug, print command
+#if 0
+   {
+       StdOut() << "==========COMM=====   " << std::endl;
+       for (int aK=0 ; aK<argc ; aK++)
+       {
+            if (aK) StdOut() << " ";
+            StdOut() << argv[aK];
+       }
+       StdOut() << std::endl;
+   }
+#endif
+    
    if (argc>1)
    {
-        aNameCom = argv[1];
-        // Recherche la specif correspondant au nom de commande
-        for (auto itS=aVSpecAll.begin() ; itS!=aVSpecAll.end() ; itS++)
-        {
-            // Execute si match
-            if ((*itS)->Name()==aNameCom)
-            {
-                // Ajoute celui la pour teste la destruction avec unique_ptr
-                const cMemState  aMemoState= cMemManager::CurState() ;
-                int aRes=-1;
-                {
+      std::string aNameCom = argv[1];
 
-                    tMMVII_UnikPApli anAppli = (*itS)->Alloc()(argc,argv);
-                    // Verifie si une commande respecte les consignes de documentation
-                    (*itS)->Check();
-                    // Execute
-                    aRes = anAppli->Exe();
-                // delete anAppli;
-                }
-                cMemManager::CheckRestoration(aMemoState);
-                return aRes;
-            }
-        }
+      // Recherche la specif correspondant au nom de commande
+      cSpecMMVII_Appli*  aSpec = cSpecMMVII_Appli::SpecOfName(aNameCom,true);
+
+      // Execute si match
+      if (aSpec)
+      {
+         std::vector<std::string> aVArgs;
+         for (int aK=0 ; aK<argc; aK++)
+             aVArgs.push_back(argv[aK]);
+         return aSpec->AllocExecuteDestruct(aVArgs);
+      }
    }
 
    // Affiche toutes les commandes
-   for (auto itS=aVSpecAll.begin() ; itS!=aVSpecAll.end() ; itS++)
+   for (const auto & aSpec : cSpecMMVII_Appli::VecAll())
    {
-       std::cout << (*itS)->Name() << " => " << (*itS)->Comment() << "\n";
+      StdOut()  << aSpec->Name() << " => " << aSpec->Comment() << std::endl;
    }
-   
-
-
    return EXIT_SUCCESS;
 }
 

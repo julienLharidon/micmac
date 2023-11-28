@@ -690,44 +690,69 @@ cSolBasculeRig cAppliApero::BasculePoints
    if (aBonC)
    {
       const cBascOnCentre aBC = aBOP.BascOnCentre().Val();
-      for (int aKPose=0 ; aKPose<int(mVecPose.size()) ; aKPose++)
-      {
+      double  ForceVert =  aBC.ForceVertical().ValWithDef(-1);
 
-          cPoseCam * aPC = mVecPose[aKPose];
-          if (
+std::cout << "ForceVertForceVertForceVert " << ForceVert << "\n";
+
+      int aNbIter = (ForceVert>0) ? 2 : 1;
+      double  aLambda=0;   // scale factor init
+
+      for (int aKIter =0 ; aKIter< aNbIter; aKIter ++)
+      {
+         bool  IterForLambda = (ForceVert>0) && (aKIter==0);
+         bool  IterForVert = (ForceVert>0) && (aKIter==1);
+
+         for (int aKPose=0 ; aKPose<int(mVecPose.size()) ; aKPose++)
+         {
+             cPoseCam * aPC = mVecPose[aKPose];
+             if (
                    aSelectorEstim.IsSetIn(aPC->Name())
                 && (aPC->RotIsInit())
                 && (aPC->HasObsOnCentre())
                 && ((! CalcV) || aPC->HasObsOnVitesse())
-             )
-          {
-              // std::cout << "BASCULE CENTRE DO " << aPC->Name() << "\n";
-              Pt3dr aC0 = aPC->CurRot().ImAff(Pt3dr(0,0,0));
+                )
+             {
+                 // std::cout << "BASCULE CENTRE DO " << aPC->Name() << "\n";
+                 Pt3dr aC0 = aPC->CurRot().ImAff(Pt3dr(0,0,0));
+                 Pt3dr aCObs = aPC->ObsCentre();
 
-              Pt3dr aCObs = aPC->ObsCentre();
+                 // const cObserv1Im<cTypeEnglob_Centre> & anOC = ObsCentre(aBC.IdBDC(),aPC->Name());
+                 //
+                   if (Test) aVName.push_back(aPC->Name());
 
-              // const cObserv1Im<cTypeEnglob_Centre> & anOC = ObsCentre(aBC.IdBDC(),aPC->Name());
-              //
-                if (Test) aVName.push_back(aPC->Name());
+                  if (CalcV)
+                  {
+                      Pt3dr aV = aPC->Vitesse();
+                      aBasc.AddExemple(aC0,aCObs,&aV,aPC->Name());
+                  }
+                  else
+                  {
+                      aBasc.AddExemple(aC0,aCObs,0,aPC->Name());
+		      if (IterForVert)
+		      {
+                           Pt3dr aAxeK =  aPC->CurRot().ImVect(Pt3dr(0,0,-ForceVert/aLambda));
+                           aBasc.AddExemple(aC0 + aAxeK ,aCObs + Pt3dr(0,0,ForceVert),nullptr,aPC->Name()+"_Vertical");
+                           Pt3dr aAxeK2 =  aPC->CurRot().ImVect(Pt3dr(0,0,ForceVert/aLambda));
+                           aBasc.AddExemple(aC0 + aAxeK2 ,aCObs + Pt3dr(0,0,-ForceVert),nullptr,aPC->Name()+"_Vertical2");
+		      }
+                  }
 
-               if (CalcV)
-               {
-                   Pt3dr aV = aPC->Vitesse();
-                   aBasc.AddExemple(aC0,aCObs,&aV,aPC->Name());
-               }
-               else
-               {
-                   aBasc.AddExemple(aC0,aCObs,0,aPC->Name());
-               }
-
-               if (   aBOP.PoseCentrale().IsInit()
-                   && (! CalcV)
-                   && (aBOP.PoseCentrale().Val()==aPC->Name())
-                  )
-               {
-                  aKC = aBasc.CurK();
-               }
-          }
+                  if (   aBOP.PoseCentrale().IsInit()
+                      && (! CalcV)
+                      && (aBOP.PoseCentrale().Val()==aPC->Name())
+                     )
+                  {
+                     aKC = aBasc.CurK();
+                  }
+             }
+         }
+	 if (IterForLambda)
+	 {
+             bool OkBasc = aBasc.CloseWithTrGlob(true);
+             ELISE_ASSERT ( OkBasc, "Not enough samples (Min 3) in cRansacBasculementRigide");
+	     aLambda =  aBasc.EstimLambda();
+             aBasc = cRansacBasculementRigide(CalcV);
+	 }
       }
    }
 
@@ -890,7 +915,7 @@ cSolBasculeRig cAppliApero::BasculePoints
                ElCamera::ChangeSys(aVC,*aPtrBNL,FTR,!aBonC);
                if (FTR)
                {
-                  aPC->SetCurRot(aCS->Orient().inv());
+                  aPC->PCSetCurRot(aCS->Orient().inv());
                }
                else
                {
@@ -901,7 +926,6 @@ cSolBasculeRig cAppliApero::BasculePoints
 /*
 */
             }
-            //   aPC->SetCurRot ( aSBR.TransformOriC2M(aPC->CurRot()));
 
             if (aPC->HasObsOnCentre() && ((!CalcV) || (aPC->HasObsOnVitesse())))
             {
@@ -1020,10 +1044,13 @@ cElPlan3D cAppliApero::EstimPlan
 
    aPOL->GetPtsTerrain (aPEP, aSelectorEstim, aAGPt,anAttr);
 
+
    // const std::vector<Pt3dr>  &  aVPts = aAGPt.Pts();
    // const std::vector<double> &  aVPds = aAGPt.Pds();
    std::vector<Pt3dr>   aVPts = aAGPt.Pts();
    std::vector<double>  aVPds = aAGPt.Pds();
+
+   std::cout << "NbPts 4 plan " << aVPts.size() << "\n";
 
    if ((aVPts.size() == 0) && (aPEP.AcceptDefPlanIfNoPoint().Val()))
    {
@@ -1278,7 +1305,6 @@ void cAppliApero::BasculePlan
 //  {RP2E     * Rc}(Cam)  = Plan
 //
 // std::cout << euclid(aPC->CurRot().tr()) <<  " " <<  aPC->CurRot().tr()  << "\n";
-            // aPC->SetCurRot(aRP2E.inv()*(aPC->CurRot()));
 //            std::cout << "BASCULE PLAN DONE FOR " << aPC->Name() << "\n";
 // std::cout << euclid(aPC->CurRot().tr()) <<  " " << aPC->CurRot().tr() << "\n\n";
             aPC->SetBascRig(aSBR);
@@ -1308,9 +1334,11 @@ void cAppliApero::BasculePlan
      //---------------------------------------------
 
 
+  
 
 void cAppliApero::Bascule(const cBasculeOrientation & aBO,bool CalledAfter)
 {
+
    if (CalledAfter != aBO.AfterCompens().Val()) return;
    // cElRegex aSelectorEstim(aBO.PatternNameEstim().Val(),10);
    cSetName *  aSelectorEstim = mICNM->KeyOrPatSelector(aBO.PatternNameEstim().Val());
@@ -1392,7 +1420,7 @@ void cAppliApero::FixeEchelle(const cFixeEchelle & aFE)
        if ( aPC->RotIsInit())
        {
             ElRotation3D  aR = aPC->CurRot();
-            aPC->SetCurRot(ElRotation3D(aR.tr()*aMult,aR.Mat(),true));
+            aPC->PCSetCurRot(ElRotation3D(aR.tr()*aMult,aR.Mat(),true));
        }
    }
 
@@ -1623,8 +1651,7 @@ void cAppliApero::FixeOrientPlane(const cFixeOrientPlane & aFOP)
        {
 // std::cout << aR.Mat() * (Pt3dr(0,0,1)) << "\n";
 // std::cout << aPC->CurRot().Mat() * (Pt3dr(0,0,1)) << "\n";
-            aPC->SetCurRot(aR*aPC->CurRot());
-// std::cout << aPC->CurRot().Mat() * (Pt3dr(0,0,1)) << "\n\n";
+            aPC->PCSetCurRot(aR*aPC->CurRot());
        }
    }
 }
@@ -2092,33 +2119,33 @@ void  cAppliApero::BasculeBloc(const cBlocBascule & aBB)
 
 /*Footer-MicMac-eLiSe-25/06/2007
 
-Ce logiciel est un programme informatique servant �  la mise en
+Ce logiciel est un programme informatique servant a  la mise en
 correspondances d'images pour la reconstruction du relief.
 
-Ce logiciel est régi par la licence CeCILL-B soumise au droit français et
+Ce logiciel est regi par la licence CeCILL-B soumise au droit français et
 respectant les principes de diffusion des logiciels libres. Vous pouvez
 utiliser, modifier et/ou redistribuer ce programme sous les conditions
-de la licence CeCILL-B telle que diffusée par le CEA, le CNRS et l'INRIA
+de la licence CeCILL-B telle que diffusee par le CEA, le CNRS et l'INRIA
 sur le site "http://www.cecill.info".
 
-En contrepartie de l'accessibilité au code source et des droits de copie,
-de modification et de redistribution accordés par cette licence, il n'est
-offert aux utilisateurs qu'une garantie limitée.  Pour les mêmes raisons,
-seule une responsabilité restreinte pèse sur l'auteur du programme,  le
-titulaire des droits patrimoniaux et les concédants successifs.
+En contrepartie de l'accessibilite au code source et des droits de copie,
+de modification et de redistribution accordes par cette licence, il n'est
+offert aux utilisateurs qu'une garantie limitee.  Pour les memes raisons,
+seule une responsabilite restreinte pese sur l'auteur du programme,  le
+titulaire des droits patrimoniaux et les concedants successifs.
 
-A cet égard  l'attention de l'utilisateur est attirée sur les risques
-associés au chargement,  �  l'utilisation,  �  la modification et/ou au
-développement et �  la reproduction du logiciel par l'utilisateur étant
-donné sa spécificité de logiciel libre, qui peut le rendre complexe �
-manipuler et qui le réserve donc �  des développeurs et des professionnels
-avertis possédant  des  connaissances  informatiques approfondies.  Les
-utilisateurs sont donc invités �  charger  et  tester  l'adéquation  du
-logiciel �  leurs besoins dans des conditions permettant d'assurer la
-sécurité de leurs systèmes et ou de leurs données et, plus généralement,
-�  l'utiliser et l'exploiter dans les mêmes conditions de sécurité.
+A cet egard  l'attention de l'utilisateur est attiree sur les risques
+associes au chargement,  a  l'utilisation,  a  la modification et/ou au
+developpement et a  la reproduction du logiciel par l'utilisateur etant
+donne sa specificite de logiciel libre, qui peut le rendre complexe a
+manipuler et qui le reserve donc a  des developpeurs et des professionnels
+avertis possedant  des  connaissances  informatiques approfondies.  Les
+utilisateurs sont donc invites a  charger  et  tester  l'adequation  du
+logiciel a  leurs besoins dans des conditions permettant d'assurer la
+securite de leurs systèmes et ou de leurs donnees et, plus generalement,
+a  l'utiliser et l'exploiter dans les mêmes conditions de securite.
 
-Le fait que vous puissiez accéder �  cet en-tête signifie que vous avez
-pris connaissance de la licence CeCILL-B, et que vous en avez accepté les
+Le fait que vous puissiez acceder a  cet en-tete signifie que vous avez
+pris connaissance de la licence CeCILL-B, et que vous en avez accepte les
 termes.
 Footer-MicMac-eLiSe-25/06/2007*/

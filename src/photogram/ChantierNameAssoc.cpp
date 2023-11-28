@@ -38,15 +38,6 @@ See below and http://www.cecill.info.
 Header-MicMac-eLiSe-25/06/2007*/
 
 #include "general/CMake_defines.h"
-#if (ELISE_QT_VERSION >= 4)
-    #ifdef Int
-        #undef Int
-    #endif
-    #include "QCoreApplication"
-    #include "QStringList"
-    #include "QDir"
-#endif
-
 #include "StdAfx.h"
 
 
@@ -471,6 +462,8 @@ bool ElGetStrSys( const std::string & i_base_cmd, std::string &o_result )
 static std::string ArgvMMDir;
 static std::string CurrentProgramFullName;
 static std::string CurrentProgramSubcommand = "unknown";
+std::string MM3DFixeByMMVII ="";
+
 void MMD_InitArgcArgv(int argc,char ** argv,int aNbMin)
 {
     static bool First=true;
@@ -493,9 +486,16 @@ void MMD_InitArgcArgv(int argc,char ** argv,int aNbMin)
     {
         MemoArg(argc,argv);
 #if ELISE_windows
-        TCHAR FilePath[MAX_PATH] = { 0 };
-        GetModuleFileName(NULL,FilePath, MAX_PATH );
-        CurrentProgramFullName = string( FilePath );
+        if (MM3DFixeByMMVII != "")
+        {
+            CurrentProgramFullName = MM3DFixeByMMVII;
+        } 
+        else
+        {
+            TCHAR FilePath[MAX_PATH] = { 0 };
+            GetModuleFileName(NULL, FilePath, MAX_PATH);
+            CurrentProgramFullName = string(FilePath);
+        }
         std::string sFile;
 
         replace( CurrentProgramFullName.begin(), CurrentProgramFullName.end(), '\\', '/' );
@@ -541,6 +541,10 @@ void MMD_InitArgcArgv(int argc,char ** argv,int aNbMin)
             // if which failed then we're doomed
             ELISE_ASSERT( whichSucceed, "MMD_InitArgcArgv : unable to retrieve binaries directory" );
         }
+        if (MM3DFixeByMMVII !="")
+        {
+           aFullArg0 = MM3DFixeByMMVII ;
+        }
 
         std::string aPatProg = "([0-9]|[a-z]|[A-Z]|_)+";
         cElRegex  anAutomProg(aPatProg,10);
@@ -571,7 +575,14 @@ int CalcNbProcSys()
     return sysinfo.dwNumberOfProcessors;
 #else
     // return GetValStrSys<int>("cat /proc/cpuinfo | grep processor  | wc -l");
-    return sysconf (_SC_NPROCESSORS_CONF);
+    //// MODIFIED
+    //set number of process according to env variable MICMAC_MAX_THREADS if defined.
+    if (const char* env_p = std::getenv("MICMAC_MAX_THREADS")) {
+        return atoi(env_p);
+    } else {
+        return sysconf (_SC_NPROCESSORS_CONF);
+    }
+    //// END MODIFED
 #endif
 }
 
@@ -649,6 +660,11 @@ std::string Basic_XML_MM_File(const std::string & aFile)
 {
    return   MMDir() + std::string("include" +std::string(ELISE_STR_DIR) + "XML_MicMac" + std::string(ELISE_STR_DIR) + aFile);
 }
+std::string Specif_XML_MM_File(const std::string & aFile)
+{
+    return   aFile;
+}
+
 std::string XML_MM_File(const std::string & aFile)
 {
 
@@ -968,7 +984,6 @@ std::string XML_MM_File(const std::string & aFile)
         mSubDirRec (aSubDirRec)
     {
         // std::cout << "mSubDirRec " << mSubDirRec <<  " " << this<<  "\n";
-        // getchar();
     }
 
     cInterfChantierNameManipulateur * cMultiNC::ICNM()
@@ -1289,7 +1304,6 @@ const cInterfChantierSetNC::tSet  * cSetName::Get()
         std::map<tKey,cSetName *>::iterator anIt = mDico.find(aKeySsArb);
         if (anIt==mDico.end())
         {
-// std::cout << "NO fOUND " << aKeySsArb<<"\n"; getchar();
             return 0;
         }
 
@@ -1871,10 +1885,8 @@ const cInterfChantierSetNC::tSet  * cSetName::Get()
             cNameRelDescriptor & aNRD = *(new cNameRelDescriptor(aSCR->NRD()));
 
             // std::cout << aKey  << "+++" << aVParams[0] << " " << aVParams[1]<< " " << aVParams.size() << "\n";
-            // getchar();
             TransFormArgKey(aNRD,false,aVParams);
             // std::cout << "lllllllllllll\n";
-            // getchar();
             cStdChantierRel * aNewSCR =  new cStdChantierRel(*mGlob,aNRD);
             mRels[aKey] = aNewSCR;
             return true;
@@ -2103,7 +2115,10 @@ std::string cInterfChantierNameManipulateur::NameOriStenope(const tKey & aKeyOri
             const tSet * aSet = mVM[aK]->Get(aKey);
             if (aSet!=0)
             {
-                std::cout<<"\""<<aKey<<"\": "<<aSet->size()<<" matches."<<std::endl;
+                if (!MPD_MM()) 
+                {
+                    std::cout<<"\""<<aKey<<"\": "<<aSet->size()<<" matches."<<std::endl;
+                }
 
                 return aSet;
             }
@@ -2542,73 +2557,18 @@ std::string cInterfChantierNameManipulateur::NameOriStenope(const tKey & aKeyOri
 
     bool MPD_MM()
     {
-        static bool aRes = MMUserEnv().UserName().Val() == "MPD";
+        static bool aRes = MMUserEnv().UserName().ValWithDef("") == "MPD";
         return aRes;
     }
     bool ERupnik_MM()
     {
-        static bool aRes = MMUserEnv().UserName().Val() == "ERupnik";
+        static bool aRes = MMUserEnv().UserName().ValWithDef("") == "ERupnik";
         return aRes;
     }
 
 
 bool DebugConvCal() {return false;}
 
-#if(ELISE_QT_VERSION >= 4)
-    string MMQtLibraryPath()
-    {
-        #if defined(__APPLE__) || defined(__MACH__)
-            return MMDir() + "Frameworks";
-		#elif ELISE_windows
-			return MMBin();
-        #endif
-        return string();
-    }
-
-    // there is alway one path in the list to avoid multiple library loading
-    void setQtLibraryPath(const string &i_path)
-	{
-        QString path( i_path.c_str() );
-        if ( !QDir(path).exists() ) cerr << "WARNING: setQtLibraryPath(" << i_path << "): path does not exist" << endl;
-
-        QCoreApplication::setLibraryPaths( QStringList(path) );
-    }
-
-    // if default path does not exist, replace it by deployment path
-    // used by mm3d and SaisieQT
-    void initQtLibraryPath()
-    {
-        // set to install plugins directory if it exists
-        const string installPlugins = QT_INSTALL_PLUGINS;
-        if ( !installPlugins.empty() && QDir( QString(installPlugins.c_str())).exists() )
-        {
-            setQtLibraryPath(installPlugins);
-            return;
-        }
-
-        // set to deployment path if it exists
-        const string deploymentPath = MMQtLibraryPath();
-
-        if ( !deploymentPath.empty() && QDir( QString(deploymentPath.c_str())).exists() )
-        {
-            setQtLibraryPath(deploymentPath);
-            return;
-        }
-
-        // keep the first existing path to avoid multiple library loading
-        QStringList paths = QCoreApplication::libraryPaths();
-        for ( int i=0; i<paths.size(); i++ )
-        {
-            if ( QDir( paths.at(i) ).exists() )
-            {
-                setQtLibraryPath( paths.at(i).toStdString() );
-                return;
-            }
-        }
-
-        cerr << "WARNING: initQtLibraryPath: no valid path found" << endl;
-    }
-#endif
 
     std::string MMBin() { return MMDir()+"bin"+ELISE_CAR_DIR; }
 
@@ -2926,7 +2886,7 @@ cInterfChantierNameManipulateur* cInterfChantierNameManipulateur::BasicAlloc(con
     {
 
         tNuplet aRes= isDirect ? Direct(aKey,aVNames)  : Inverse(aKey,aVNames);
-        ELISE_ASSERT(aRes.size()==1,"Multiple res in Assoc1To1");
+        ELISE_ASSERT(aRes.size()==1,"Multiple res in Assoc1ToN");
 
         return aRes[0];
     }
@@ -2959,6 +2919,22 @@ cInterfChantierNameManipulateur* cInterfChantierNameManipulateur::BasicAlloc(con
         return aRes[0];
     }
 
+std::string cInterfChantierNameManipulateur::NameImEpip(const std::string & anOri,const std::string & aIm1,const std::string & aIm2)
+{
+   return Assoc1To3("NKS-Assoc-NameImEpip@tif",anOri,aIm1,aIm2,true);
+}
+
+std::string cInterfChantierNameManipulateur::NameOrientEpipGen(const std::string & anOri,const std::string & aIm1,const std::string & aIm2)
+{
+  return Assoc1To2 ( "NKS-Assoc-CplIm2OriGenEpi@"+anOri+"@txt", aIm1,aIm2,true);
+
+}
+
+std::string cInterfChantierNameManipulateur::NameAppuiEpip(const std::string & anOri,const std::string & aIm1,const std::string & aIm2)
+{
+   return Assoc1To3("NKS-Assoc-NameAppuiEpip",anOri,aIm1,aIm2,true);
+}
+
     std::string  cInterfChantierNameManipulateur::Assoc1To3
         (
         const tKey & aKey,
@@ -2975,7 +2951,7 @@ cInterfChantierNameManipulateur* cInterfChantierNameManipulateur::BasicAlloc(con
 
         tNuplet aRes= isDirect ? Direct(aKey,aInput)  : Inverse(aKey,aInput);
 
-        ELISE_ASSERT(aRes.size()==1,"Multiple res in Assoc1To2");
+        ELISE_ASSERT(aRes.size()==1,"Multiple res in Assoc1To3");
 
         return aRes[0];
     }
@@ -2996,7 +2972,7 @@ cInterfChantierNameManipulateur* cInterfChantierNameManipulateur::BasicAlloc(con
 
         tNuplet aRes= isDirect ? Direct(aKey,aInput)  : Inverse(aKey,aInput);
 
-        ELISE_ASSERT(aRes.size()==2,"Multiple res in Assoc1To1");
+        ELISE_ASSERT(aRes.size()==2,"Wrong res number in Assoc2To1");
 
         return std::pair<std::string,std::string>(aRes[0],aRes[1]);
 
@@ -3428,7 +3404,6 @@ void cStdChantierRel::AddAllCpleKeySet
                 {
 
                     const std::vector<std::string> & aVS = itO->Soms();
-                    // std::cout << "SIZ " << aVS.size() << "\n"; getchar();
                     const std::vector<int> & aVI = itO->Delta();
                     for (int aKS=0 ; aKS<int(aVS.size()) ; aKS++)
                     {

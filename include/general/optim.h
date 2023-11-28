@@ -42,12 +42,15 @@ Header-MicMac-eLiSe-25/06/2007*/
 #ifndef _ELISE_GENERAL_OPTIM_H
 #define _ELISE_GENERAL_OPTIM_H
 
+extern bool DEBUG_LSQ;
+
 class cOneEqCalcVarUnkEl
 {
      public :
          cOneEqCalcVarUnkEl(double anO,double aPds) :
             mO   (anO*aPds),
-            mPds (aPds)
+            mPds (aPds),
+            mRes (0)
          {
          }
 
@@ -1435,6 +1438,19 @@ int amd_demo_1 (void);
 */
 
 
+class cQual12Param
+{
+     public :
+       cQual12Param();
+
+       void Show() const;
+
+       double mMoyReproj;
+       double mMoyBundleProj;
+       double mMoyBundleIm;
+       double mPropVis;
+};
+
 class cEq12Parametre
 {
     public :
@@ -1449,6 +1465,7 @@ class cEq12Parametre
 
         static CamStenope * Camera11Param
                             (
+			        cQual12Param &,
                                 const Pt2di&               aSzCam,
                                 bool                       isFraserModel,
                                 const std::vector<Pt3dr> & aVCPCur,
@@ -1459,6 +1476,7 @@ class cEq12Parametre
 
         static CamStenope * RansacCamera11Param
                             (
+			        cQual12Param &,
                                 const Pt2di&               aSzCam,
                                 bool                       isFraserModel,
                                 const std::vector<Pt3dr> & aVCPCur,
@@ -1469,7 +1487,6 @@ class cEq12Parametre
                                 double  aPropInlier,
                                 int     aNbMaxTirage
                             );
-
 
     private :
         L2SysSurResol mSys;

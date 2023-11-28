@@ -64,6 +64,8 @@ void XXXXX(FILE * aF)
 }
 */
 
+extern bool ERupnik_MM();
+
 /**********************************************************/
 /*                                                        */
 /*         cStdNamePx2D                                   */
@@ -114,10 +116,11 @@ class cParamMap2DRobustInit
          int                 mNbTirRans;
          int                 mNbMaxPtsRansac;
          int                 mNbTestFor1P;
-         double              mPropRan;
+         double              mPropRan;  // Percentile (entre 0 et 1) pour estimer l'erreur lors du Ransac
          int                 mNbIterL2;
          cElMap2D*           mRes;
          std::vector<std::string>  mVAux;
+         std::vector<double>       mVPdsSol;
 };
 
 
@@ -134,12 +137,99 @@ cParamMap2DRobustInit::cParamMap2DRobustInit(eTypeMap2D aType,int aNbTirRans,con
 }
 
 
-
-
-
 void  Map2DRobustInit(const ElPackHomologue & aPackFull,cParamMap2DRobustInit & aParam);
+template <class Type> Type TplMap2DRobustInit(const ElPackHomologue & aPackFull,double aPropRan,int aNbTir,eTypeMap2D anIdType,std::vector<double> * aVPds)
+{
+    cParamMap2DRobustInit aParam(anIdType,aNbTir,nullptr);
+    aParam.mPropRan = aPropRan;
+    Map2DRobustInit(aPackFull,aParam);
+    if (! aParam.mRes)
+    {
+        std::cout << "NBPOINT= " << aPackFull.size() << "\n";
+        ELISE_ASSERT( false,"TplMap2DRobustInit no result");
+    }
+    ELISE_ASSERT(aParam.mRes->Type()==anIdType,"TplMap2DRobustInit");
+
+    if (aVPds)
+       *aVPds = aParam.mVPdsSol;
+    Type * aPtrRes = static_cast<Type *>(aParam.mRes);
+
+    Type aRes = * aPtrRes;
+    delete aPtrRes;
+    return aRes;
+
+}
+
+
 cElMap2D *  L2EstimMapHom(cElMap2D * aRes,const ElPackHomologue & aPack);
 cElMap2D * L2EstimMapHom(eTypeMap2D aType,const ElPackHomologue & aPack,const std::vector<std::string> * aVAux=0);
+
+
+cElHomographie HomogrRobustInit(const ElPackHomologue & aPackFull,double aPropRan,int aNbTir)
+{
+    return TplMap2DRobustInit<cElHomographie>(aPackFull,aPropRan,aNbTir,eTM2_Homogr,nullptr);
+}
+
+ElSimilitude  L2EstimSimHom(const ElPackHomologue & aPack)
+{
+   ElSimilitude aRes;
+   L2EstimMapHom(&aRes,aPack);
+   return aRes;
+}
+
+
+
+ElSimilitude SimilRobustInitGen(const ElPackHomologue & aPackFull,double aPropRan,int aNbTir,bool IsRot)
+{
+/*
+    ELISE_ASSERT(  aPackFull.size()>=2,"SimilRobustInit not enough pint");
+    cParamMap2DRobustInit aParam(eTM2_Simil,aNbTir,nullptr);
+    aParam.mPropRan = aPropRan;
+    Map2DRobustInit(aPackFull,aParam);
+    ELISE_ASSERT( aParam.mRes!=0,"SimilRobustInit no result");
+    // cXml_Map2D    aParam. ToXmlGen();
+
+    ELISE_ASSERT(aParam.mRes->Type()==eTM2_Simil,"SimilRobustInit");
+    ElSimilitude * aResSim = static_cast<ElSimilitude *>(aParam.mRes);
+
+    ElSimilitude aSim = * aResSim;
+*/
+    std::vector<double> aVPds;
+    ElSimilitude aSim = TplMap2DRobustInit<ElSimilitude>(aPackFull,aPropRan,aNbTir,eTM2_Simil,&aVPds);
+
+    if (IsRot)
+    {
+        Pt2dr aSc1 = vunit(aSim.sc());
+        int aK=0;
+        double aSomP=0;
+        Pt2dr aCdg1(0,0);
+        Pt2dr aCdg2(0,0);
+        for (ElPackHomologue::const_iterator it=aPackFull.begin(); it!=aPackFull.end(); it++)
+        {
+            double aPds = aVPds[aK++];
+            aSomP += aPds;
+            aCdg1 = aCdg1 + it->P1() * aPds;
+            aCdg2 = aCdg2 + it->P2() * aPds;
+        }
+        aCdg1 = aCdg1 / aSomP;
+        aCdg2 = aCdg2 / aSomP;
+        Pt2dr aTr = aCdg2 - aCdg1*aSc1;
+
+        aSim = ElSimilitude(aTr,aSc1);
+    }
+
+    return aSim;
+}
+
+ElSimilitude SimilRobustInit(const ElPackHomologue & aPackFull,double aPropRan,int aNbTir)
+{
+    return SimilRobustInitGen( aPackFull,aPropRan,aNbTir,false);
+}
+
+ElSimilitude RotationRobustInit(const ElPackHomologue & aPackFull,double aPropRan,int aNbTir)
+{
+    return SimilRobustInitGen( aPackFull,aPropRan,aNbTir,true);
+}
 
 //=====================================================================================
 
@@ -185,6 +275,12 @@ class cMapPol2d : public  cElMap2D
        int            mNbMon;
 };
 
+cElMap2D *  MapPolFromHom(const ElPackHomologue & aPack,const Box2dr & aBox,int aDeg,int aRabDegInv)
+{
+   cMapPol2d * aRes = new cMapPol2d(aDeg,aBox,aRabDegInv);
+   L2EstimMapHom(aRes,aPack);
+   return aRes;
+}
 
 std::vector<std::string>  cMapPol2d::ParamAux() const
 {
@@ -1518,6 +1614,8 @@ int CPP_CalcMapAnalitik(int argc,char** argv)
     std::vector<double> aVRE; // Robust Estim
     std::vector<std::string>  aParamAux;
     std::vector<std::string>  aDeprParamPoly;
+    bool IdX=false;
+    bool IdY=false;
 
     // int NbTest =50;
     // double  Perc = 80.0;
@@ -1547,6 +1645,8 @@ int CPP_CalcMapAnalitik(int argc,char** argv)
                     <<  EAM(ByKey,"ByKey",true,"When true multiple, Param is a pattern of Im1, param2 is a key of compute")
 	            <<  EAM(aDeprExpTxt,"ExpTxt",true,"DEPRECATED !!! => use Ext (string not bool)")
                     <<  EAM(aDeprParamPoly,"ParPol",true,"Param for polygonal model [Deg,x0,y0,x1,y1]")
+                    <<  EAM(IdX,"IdX",true,"Force P2.x=P1.x")
+                    <<  EAM(IdY,"IdY",true,"Force P2.y=P1.y")
     );
     ELISE_ASSERT
     (
@@ -1615,12 +1715,18 @@ int CPP_CalcMapAnalitik(int argc,char** argv)
 
         for (ElPackHomologue::iterator itCpl=aPackInLoc.begin();itCpl!=aPackInLoc.end() ; itCpl++)
         {
+            if (IdX)
+               itCpl->P2().x = itCpl->P1().x;
+            if (IdY)
+               itCpl->P2().y = itCpl->P1().y;
+
             aPackInitialGlob.Cple_Add(itCpl->ToCple());
             if (aCS1)
             {
                 itCpl->P1() = aCS1->DistInverse(itCpl->P1());
                 itCpl->P2() = aCS2->DistInverse(itCpl->P2());
             }
+
             aPackInGlob.Cple_Add(itCpl->ToCple());
             aP1Max = Sup(aP1Max, itCpl->P1());
             aP1Min = Inf(aP1Min, itCpl->P1());
@@ -1775,9 +1881,11 @@ int CPP_ReechImMap(int argc,char** argv)
     std::string aNameIm,aNameMap;
     Pt2di aSzOut;
     std::string aNameOut;
+    std::string aPrefixOut("Reech_");
     std::string aMAF;
     std::string aMAFOut;
-	bool aDoImgReech=true;
+    bool aDoImgReech=true;
+    Pt2di aWinInt(5,5); 
 	
 	Tiff_Im * aTifOut = 0;
 	std::vector<Im2DGen *> aVecImOut;
@@ -1787,16 +1895,17 @@ int CPP_ReechImMap(int argc,char** argv)
         argc,argv,
         LArgMain()  <<  EAMC(aNameIm,"Name Im")
                     <<  EAMC(aNameMap,"Name map"),
-        LArgMain()  <<  EAM(aNameOut,"Out",false,"Tif file to write to")
+        LArgMain()  <<  EAM(aNameOut,"Out",false,"Tif file to write to, this file must already exist")
+                    <<  EAM(aPrefixOut,"PrefixOut",false,"Prefix of output file, def 'Reech_'")
                     <<  EAM(aMAF,"MAF",false,"Xml file of Image Measures")
                     <<  EAM(aDoImgReech,"DoImgReech",false,"Generate Image Reech ; Def=true")
+                    <<  EAM(aWinInt,"Win",false,"Interpolation window ; Def=[5,5]")
     );
 
-    if (!EAMIsInit(&aNameOut))
-       aNameOut = DirOfFile(aNameIm) + "Reech_" + NameWithoutDir(StdPrefix(aNameIm)) + ".tif";
-	else
-       aTifOut = new Tiff_Im(Tiff_Im::StdConvGen(aNameOut,-1,true)); 
-		
+    if (!EAMIsInit(&aNameOut))  
+       aNameOut = DirOfFile(aNameIm) + aPrefixOut + NameWithoutDir(StdPrefix(aNameIm)) + ".tif";
+     else
+       aTifOut = new Tiff_Im(Tiff_Im::StdConvGen(aNameOut,-1,true));
 
     cElMap2D * aMap = cElMap2D::FromFile(aNameMap);
     
@@ -1824,7 +1933,7 @@ int CPP_ReechImMap(int argc,char** argv)
 		std::vector<cIm2DInter*> aVInter;
 		for (int aK=0 ; aK<aNbC ; aK++)
 		{
-			aVInter.push_back(aVecImIn[aK]->SinusCard(5,5));
+			aVInter.push_back(aVecImIn[aK]->SinusCard(aWinInt.x,aWinInt.y));
 		}
 
 		Pt2di aP;
@@ -2298,8 +2407,9 @@ void  Map2DRobustInit(const ElPackHomologue & aPackFull,cParamMap2DRobustInit & 
    
    for (int aKItL2=0 ; aKItL2<aParam.mNbIterL2; aKItL2++)
    {
+       aParam.mVPdsSol.clear();
        ElPackHomologue aPackEstim;
-       std::vector<double> aVD2;
+       // std::vector<double> aVD2;
        for (ElPackHomologue::tCstIter itH=aPackFull.begin() ; itH!=aPackFull.end() ; itH++)
        {
             Pt2dr aP1 = itH->P1();
@@ -2307,9 +2417,9 @@ void  Map2DRobustInit(const ElPackHomologue & aPackFull,cParamMap2DRobustInit & 
             double aD2 = square_euclid((*aBestSol)(aP1)-aP2);
             double aPds   = 1/ (1+ (4.0*aD2)/aD2Std);
             aPackEstim.Cple_Add(ElCplePtsHomologues(aP1,aP2,aPds));
-            aVD2.push_back(aD2);
+            aParam.mVPdsSol.push_back(aD2);
        }
-       aD2Std  = KthValProp(aVD2,aParam.mPropRan);
+       aD2Std  = KthValProp(aParam.mVPdsSol,aParam.mPropRan);
        L2EstimMapHom(aBestSol,aPackEstim);
    }
    delete aTestMap;
@@ -2853,6 +2963,119 @@ int CPP_MakeMapEvolOfT(int argc,char ** argv)
 }
 
 
+int CPP_PolynOfImageStd(int argc,char ** argv)
+{
+    std::string aNameIm;
+    std::string aMasq;
+    std::string aNameOut="FitPolyIm.tif";
+    std::string aNameMapOut="FitPolyIm.xml";
+
+    Pt2di       aP0(100,100);
+    Pt2di       aP1(1000,1000);
+
+    int         aNb;
+    int         aDeg=2;
+    Box2dr      aBox(aP0,aP0+aP1);
+
+
+//    eTypeMap2D aType="eTM2_Polyn";
+
+    ElInitArgMain
+    (
+        argc, argv,
+        LArgMain() << EAMC(aNameIm,"Image name")
+                   << EAMC(aNb,"Number of points in X (and Y respectively)"),
+        LArgMain() << EAM(aP0,"P0",true,"P0 of the bounding box")
+                   << EAM(aP1,"P1",true,"P1 of the bounding box")
+                   << EAM(aDeg,"Deg",true,"Polynom degree")
+                   << EAM(aNameOut,"Out",true,"Name of the output image")
+                   << EAM(aMasq,"Masq",true,"Name of the mask image")
+    );
+
+
+    //lecture d'une image
+    Tiff_Im aTifIn = Tiff_Im::StdConvGen(aNameIm,-1,true);
+    Pt2di   aTifSz = aTifIn.sz();
+
+    Im2D_REAL4 aImR(aTifSz.x, aTifSz.y);
+    ELISE_COPY
+    (
+        aImR.all_pts(),
+        aTifIn.in(),
+        aImR.out()
+    );
+
+
+    Im2D_REAL4 aMasqIm(aTifSz.x,aTifSz.y,1.0);
+    if (EAMIsInit(&aMasq))
+    {
+        Tiff_Im aMasqTif = Tiff_Im::StdConvGen(aMasq,-1,true);
+        
+        ELISE_COPY
+        (
+            aMasqIm.all_pts(),
+            aMasqTif.in(),
+            aMasqIm.out()
+        );
+    }
+
+    Im2D_REAL8 aImRes(aTifSz.x,aTifSz.y,0.0);
+
+    Pt2di aPas(floor(double(aP1.x-aP0.x)/aNb), floor(double(aP1.y-aP0.y)/aNb));
+
+    ElPackHomologue aPack;
+    for (int aK1=aP0.x; aK1<aP1.x; aK1=aK1+aPas.x)
+    {
+        for (int aK2=aP0.y; aK2<aP1.y; aK2=aK2+aPas.y)
+        {
+            Pt2dr aP(aK1,aK2);
+	    if(aMasqIm.Val(aP.x,aP.y))
+	    {
+
+		if(ERupnik_MM())
+		    std::cout << "* aK1=" << aK1 << ", aK2" << aK2 << ", aPas=" << aPas << " ---- ImR=" << aImR.Val(aP.x,aP.y) <<  "\n";
+
+
+                double aD(aImR.Val(aP.x,aP.y));
+                aPack.Cple_Add(ElCplePtsHomologues(aP,aP+Pt2dr(aD,aD),aMasqIm.Val(aP.x,aP.y)));  
+	    }
+        }
+    }
+
+
+    cMapPol2d aMapPol(aDeg,aBox,2);
+    std::vector<std::string> aVAux = aMapPol.ParamAux();
+    cParamMap2DRobustInit aParam(eTypeMap2D(aMapPol.Type()),200,&aVAux);
+    Map2DRobustInit(aPack,aParam);
+
+    cElMap2D * aMapCor= aParam.mRes;
+    std::vector<cElMap2D *> aVMap;
+    aVMap.push_back(aMapCor);
+    cComposElMap2D aComp(aVMap);
+
+    for (int aK1=aP0.x; aK1<aP1.x; aK1++)
+    {
+        for (int aK2=aP0.y; aK2<aP1.y; aK2++)
+        {
+	    if(aMasqIm.Val(aK1,aK2))
+            {
+                Pt2dr  aP(aK1,aK2);
+                double aRes  = aComp(aP).x - aP.x;
+
+                aImRes.SetR_SVP(Pt2di(aP.x,aP.y),aRes);
+	    }
+        }
+    }
+    MakeFileXML(aComp.ToXmlGen(),aNameMapOut);
+
+    Tiff_Im::CreateFromIm(aImRes,aNameOut);
+
+    return EXIT_SUCCESS;
+
+
+
+
+}
   
 /*Footer-MicMac-eLiSe-25/06/2007
 

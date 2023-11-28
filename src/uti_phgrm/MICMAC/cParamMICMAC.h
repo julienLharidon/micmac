@@ -27,6 +27,7 @@ typedef enum
   eMCC_GrCensus,
   eMCC_CensusBasic,
   eMCC_CensusCorrel,
+  eMCC_CensusQuantitatif,
   eMCC_CensusMixCorrelBasic
 } eModeCensusCost;
 void xml_init(eModeCensusCost & aVal,cElXMLTree * aTree);
@@ -393,6 +394,9 @@ class cSpecFitrageImage
         cTplValGesInit< int > & NbIteration();
         const cTplValGesInit< int > & NbIteration()const ;
 
+        cTplValGesInit< int > & NbItereIntern();
+        const cTplValGesInit< int > & NbItereIntern()const ;
+
         cTplValGesInit< double > & AmplitudeSignal();
         const cTplValGesInit< double > & AmplitudeSignal()const ;
 
@@ -405,6 +409,7 @@ class cSpecFitrageImage
         cTplValGesInit< ePxApply > mPxApply;
         cTplValGesInit< cElRegex_Ptr > mPatternSelFiltre;
         cTplValGesInit< int > mNbIteration;
+        cTplValGesInit< int > mNbItereIntern;
         cTplValGesInit< double > mAmplitudeSignal;
         cTplValGesInit< bool > mUseIt;
 };
@@ -429,8 +434,12 @@ class cXML_RatioCorrImage
 
         double & Ratio();
         const double & Ratio()const ;
+
+        cTplValGesInit< int > & NbPt();
+        const cTplValGesInit< int > & NbPt()const ;
     private:
         double mRatio;
+        cTplValGesInit< int > mNbPt;
 };
 cElXMLTree * ToXMLTree(const cXML_RatioCorrImage &);
 
@@ -2230,8 +2239,8 @@ class cCensusCost
         friend void xml_init(cCensusCost & anObj,cElXMLTree * aTree);
 
 
-        cTplValGesInit< double > & PdsCrown();
-        const cTplValGesInit< double > & PdsCrown()const ;
+        cTplValGesInit< double > & Dyn();
+        const cTplValGesInit< double > & Dyn()const ;
 
         eModeCensusCost & TypeCost();
         const eModeCensusCost & TypeCost()const ;
@@ -2248,7 +2257,7 @@ class cCensusCost
         cTplValGesInit< double > & SeuilBasCorMixte();
         const cTplValGesInit< double > & SeuilBasCorMixte()const ;
     private:
-        cTplValGesInit< double > mPdsCrown;
+        cTplValGesInit< double > mDyn;
         eModeCensusCost mTypeCost;
         cTplValGesInit< bool > mVerif;
         cTplValGesInit< double > mAttenDist;
@@ -2312,6 +2321,35 @@ void  BinaryDumpInFile(ELISE_fp &,const cGPU_Correl &);
 void  BinaryUnDumpFromFile(cGPU_Correl &,ELISE_fp &);
 
 std::string  Mangling( cGPU_Correl *);
+
+class cMutiCorrelOrthoExt
+{
+    public:
+        cGlobXmlGen mGXml;
+
+        friend void xml_init(cMutiCorrelOrthoExt & anObj,cElXMLTree * aTree);
+
+
+        cTplValGesInit< std::string > & Cmd();
+        const cTplValGesInit< std::string > & Cmd()const ;
+
+        cTplValGesInit< std::string > & Options();
+        const cTplValGesInit< std::string > & Options()const ;
+
+        cTplValGesInit< int > & DeltaZ();
+        const cTplValGesInit< int > & DeltaZ()const ;
+    private:
+        cTplValGesInit< std::string > mCmd;
+        cTplValGesInit< std::string > mOptions;
+        cTplValGesInit< int > mDeltaZ;
+};
+cElXMLTree * ToXMLTree(const cMutiCorrelOrthoExt &);
+
+void  BinaryDumpInFile(ELISE_fp &,const cMutiCorrelOrthoExt &);
+
+void  BinaryUnDumpFromFile(cMutiCorrelOrthoExt &,ELISE_fp &);
+
+std::string  Mangling( cMutiCorrelOrthoExt *);
 
 class cGPU_CorrelBasik
 {
@@ -2401,6 +2439,43 @@ void  BinaryDumpInFile(ELISE_fp &,const cMultiCorrelPonctuel &);
 void  BinaryUnDumpFromFile(cMultiCorrelPonctuel &,ELISE_fp &);
 
 std::string  Mangling( cMultiCorrelPonctuel *);
+
+class cScoreLearnedMMVII
+{
+    public:
+        cGlobXmlGen mGXml;
+
+        friend void xml_init(cScoreLearnedMMVII & anObj,cElXMLTree * aTree);
+
+
+        std::string & FileModeleCost();
+        const std::string & FileModeleCost()const ;
+
+        cTplValGesInit< double > & CostDyn();
+        const cTplValGesInit< double > & CostDyn()const ;
+
+        cTplValGesInit< double > & CostExp();
+        const cTplValGesInit< double > & CostExp()const ;
+
+        cTplValGesInit< std::string > & Cmp_FileMC();
+        const cTplValGesInit< std::string > & Cmp_FileMC()const ;
+
+        cTplValGesInit< int > & Cmp_NbDisc();
+        const cTplValGesInit< int > & Cmp_NbDisc()const ;
+    private:
+        std::string mFileModeleCost;
+        cTplValGesInit< double > mCostDyn;
+        cTplValGesInit< double > mCostExp;
+        cTplValGesInit< std::string > mCmp_FileMC;
+        cTplValGesInit< int > mCmp_NbDisc;
+};
+cElXMLTree * ToXMLTree(const cScoreLearnedMMVII &);
+
+void  BinaryDumpInFile(ELISE_fp &,const cScoreLearnedMMVII &);
+
+void  BinaryUnDumpFromFile(cScoreLearnedMMVII &,ELISE_fp &);
+
+std::string  Mangling( cScoreLearnedMMVII *);
 
 class cCorrel_Ponctuel2ImGeomI
 {
@@ -2794,11 +2869,17 @@ class cTypeCAH
         cTplValGesInit< cGPU_Correl > & GPU_Correl();
         const cTplValGesInit< cGPU_Correl > & GPU_Correl()const ;
 
+        cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt();
+        const cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt()const ;
+
         cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik();
         const cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik()const ;
 
         cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel();
         const cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel()const ;
+
+        cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII();
+        const cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII()const ;
 
         cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI();
         const cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI()const ;
@@ -2821,8 +2902,10 @@ class cTypeCAH
         cTplValGesInit< cCensusCost > mCensusCost;
         cTplValGesInit< cCorrel2DLeastSquare > mCorrel2DLeastSquare;
         cTplValGesInit< cGPU_Correl > mGPU_Correl;
+        cTplValGesInit< cMutiCorrelOrthoExt > mMutiCorrelOrthoExt;
         cTplValGesInit< cGPU_CorrelBasik > mGPU_CorrelBasik;
         cTplValGesInit< cMultiCorrelPonctuel > mMultiCorrelPonctuel;
+        cTplValGesInit< cScoreLearnedMMVII > mScoreLearnedMMVII;
         cTplValGesInit< cCorrel_Ponctuel2ImGeomI > mCorrel_Ponctuel2ImGeomI;
         cTplValGesInit< cCorrel_PonctuelleCroisee > mCorrel_PonctuelleCroisee;
         cTplValGesInit< cCorrel_MultiFen > mCorrel_MultiFen;
@@ -2882,11 +2965,17 @@ class cCorrelAdHoc
         cTplValGesInit< cGPU_Correl > & GPU_Correl();
         const cTplValGesInit< cGPU_Correl > & GPU_Correl()const ;
 
+        cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt();
+        const cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt()const ;
+
         cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik();
         const cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik()const ;
 
         cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel();
         const cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel()const ;
+
+        cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII();
+        const cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII()const ;
 
         cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI();
         const cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI()const ;
@@ -4388,11 +4477,17 @@ class cEtapeMEC
         cTplValGesInit< cGPU_Correl > & GPU_Correl();
         const cTplValGesInit< cGPU_Correl > & GPU_Correl()const ;
 
+        cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt();
+        const cTplValGesInit< cMutiCorrelOrthoExt > & MutiCorrelOrthoExt()const ;
+
         cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik();
         const cTplValGesInit< cGPU_CorrelBasik > & GPU_CorrelBasik()const ;
 
         cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel();
         const cTplValGesInit< cMultiCorrelPonctuel > & MultiCorrelPonctuel()const ;
+
+        cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII();
+        const cTplValGesInit< cScoreLearnedMMVII > & ScoreLearnedMMVII()const ;
 
         cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI();
         const cTplValGesInit< cCorrel_Ponctuel2ImGeomI > & Correl_Ponctuel2ImGeomI()const ;
@@ -5121,6 +5216,9 @@ class cSection_MEC
         friend void xml_init(cSection_MEC & anObj,cElXMLTree * aTree);
 
 
+        cTplValGesInit< double > & ExtensionIntervZ();
+        const cTplValGesInit< double > & ExtensionIntervZ()const ;
+
         cTplValGesInit< bool > & PasIsInPixel();
         const cTplValGesInit< bool > & PasIsInPixel()const ;
 
@@ -5220,6 +5318,7 @@ class cSection_MEC
         cTplValGesInit< bool > & Correl16Bits();
         const cTplValGesInit< bool > & Correl16Bits()const ;
     private:
+        cTplValGesInit< double > mExtensionIntervZ;
         cTplValGesInit< bool > mPasIsInPixel;
         cTplValGesInit< Box2dr > mProportionClipMEC;
         cTplValGesInit< bool > mClipMecIsProp;
@@ -6930,6 +7029,9 @@ class cParamMICMAC
 
         cSection_PriseDeVue & Section_PriseDeVue();
         const cSection_PriseDeVue & Section_PriseDeVue()const ;
+
+        cTplValGesInit< double > & ExtensionIntervZ();
+        const cTplValGesInit< double > & ExtensionIntervZ()const ;
 
         cTplValGesInit< bool > & PasIsInPixel();
         const cTplValGesInit< bool > & PasIsInPixel()const ;

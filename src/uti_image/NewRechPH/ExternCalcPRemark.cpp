@@ -40,6 +40,87 @@ Header-MicMac-eLiSe-25/06/2007*/
 
 #include "NewRechPH.h"
 
+std::string NameFileNewPCarac(eTypePtRemark aLab,const std::string & aNameGlob,bool Bin,const std::string & anExt)
+{
+    std::string aDirGlob = DirOfFile(aNameGlob);
+    std::string aDirLoc= "NewPH" + anExt + "/";
+    ELISE_fp::MkDirSvp(aDirGlob+aDirLoc);
+
+    return aDirGlob+aDirLoc + NameWithoutDir(aNameGlob) +  "_" + eToString(aLab) + (Bin ? ".dmp" : ".xml");
+}
+
+
+cSetPCarac * LoadStdSetCarac(eTypePtRemark aLab,const std::string & aNameIm,const std::string & aExt)
+{
+   if (aLab != eTPR_NoLabel)
+   {
+      return new cSetPCarac(StdGetFromNRPH(NameFileNewPCarac(aLab,aNameIm,true, aExt),SetPCarac));
+   }
+
+   cSetPCarac * aRes = new cSetPCarac;
+   for (int aKLab=0 ; aKLab<int(eTPR_NoLabel) ; aKLab++)
+   {
+       cSetPCarac * aSetLab =  new cSetPCarac(StdGetFromNRPH(NameFileNewPCarac(eTypePtRemark(aKLab),aNameIm,true, aExt),SetPCarac));
+       for (auto & aPC : aSetLab->OnePCarac())
+       {
+           aRes->OnePCarac().push_back(aPC);
+       }
+       delete aSetLab;
+   }
+     
+   return aRes;
+}
+
+void  SaveStdSetCaracMultiLab(const cSetPCarac aSetGlob,const std::string & aNameIm,const std::string & aExt,int aSeuilHS)
+{
+   for (int aKLab=0 ; aKLab<int(eTPR_NoLabel) ; aKLab++)
+   {
+      cSetPCarac  aSetLab ;
+      eTypePtRemark aLab = (eTypePtRemark) aKLab;
+      for (auto & aPC : aSetGlob.OnePCarac())
+      {
+         if (aPC.Kind() == aLab)
+         {
+            aSetLab.OnePCarac().push_back(aPC);
+         }
+      }
+      if (aSeuilHS<0)
+      {
+         MakeFileXML(aSetLab,NameFileNewPCarac(aLab,aNameIm,true,aExt));
+      }
+      else
+      {
+          std::vector<double> aVScale;
+          for (auto & aPC : aSetLab.OnePCarac())
+              aVScale.push_back(ScaleGen(aPC));
+          int aKSeuil = ElMax(0, int(aVScale.size()-1)-aSeuilHS);
+// std::cout << "aScaleLimaScaleLim " << aVScale.size() << " " << aKSeuil << "\n";
+          double aScaleLim = (aVScale.empty()) ? 0.0 : KthVal(aVScale,aKSeuil);
+// std::cout << "********** aScaleLimaScaleLim \n";
+          cSetPCarac aSetHighS;
+          cSetPCarac aSetLowS;
+          for (auto & aPC : aSetLab.OnePCarac())
+          {
+              if (ScaleGen(aPC) >= aScaleLim)
+              {
+                 aSetHighS.OnePCarac().push_back(aPC);
+              }
+              else
+              {
+                 aSetLowS.OnePCarac().push_back(aPC);
+              }
+          }
+/*
+std::cout << "HHHhhhhhh " << aSetLab.OnePCarac().size() << " " 
+                          <<  aSetHighS.OnePCarac().size() << " " 
+                          << aSetLowS.OnePCarac().size() << "\n" ;
+*/
+          MakeFileXML(aSetLowS,NameFileNewPCarac(aLab,aNameIm,true,aExt));
+          MakeFileXML(aSetHighS,NameFileNewPCarac(aLab,aNameIm,true,"_HighS"+aExt));
+      }
+   }
+}
+
 
 // Visualise une conversion de flux en vecteur de point
 void  TestFlux2StdCont()
@@ -59,83 +140,12 @@ void  TestFlux2StdCont()
 }
 
 /*
-template <class TypeIm> class  cAutoCorrelDir
+class cSurfQuadr
 {
     public :
-        typedef typename TypeIm::tValueElem tElem;
-        typedef typename TypeIm::OutputFonc tBase;
-        cAutoCorrelDir(TypeIm anIm,const Pt2di & aP0,double aRho,int aSzW) :
-           mTIm   (anIm),
-           mP0    (aP0),
-           mRho   (aRho),
-           mSzW   (aSzW)
-        {
-        }
-
-        void DoIt()
-        {
-           double aStep0 = 1/mRho;
-           int aNb = round_up(PI/aStep0);
-           Pt2dr aRes0 = DoItOneStep(0.0,aNb,aStep0);
-           Pt2dr aRes1 = DoItOneStep(aRes0.x,3,aStep0/4.0);
-           Pt2dr aRes2 = DoItOneStep(aRes1.x,2,aStep0/10.0);
-        }
-
     private :
-        Pt2dr  DoItOneStep(double aTeta0,int aNb,double aStep)
-        {
-           double aScMax = -1e10;
-           double aTetaMax = 0;
-           for (int aK=-aNb; aK<aNb ; aK++)
-           {
-               double aTeta =  aTeta0 + aK * aStep;
-               double aVal =  CorrelTeta(aTeta) ;
-               if (aVal >aScMax)
-               {
-                  aScMax = aVal;
-                  aTetaMax = aTeta;
-               }
-           }
-           return Pt2dr(aTetaMax,aScMax);
-        }
-
-
-        double  CorrelOneOffset(const Pt2di & aP0,const Pt2dr & anOffset,int aSzW)
-        {
-            tBase aDef =   El_CTypeTraits<tBase>::MaxValue();
-            RMat_Inertie aMat;
-            for (int aDx=-aSzW ; aDx<=aSzW ; aDx++)
-            {
-                for (int aDy=-aSzW ; aDy<=aSzW ; aDy++)
-                {
-                    Pt2di aP1 = aP0 + Pt2di(aDx,aDy);
-                    tBase aV1 = mTIm.get(aP1,aDef);
-                    if (aV1==aDef) return -1;
-                    tBase aV2 = mTIm.getr(Pt2dr(aP1)+anOffset,aDef);
-                    if (aV2==aDef) return -1;
-                    aMat.add_pt_en_place(aV1,aV2);
-                }
-            }
-            return aMat.correlation();
-        }
-
-        double  CorrelTeta(double aTeta)
-        {
-            return CorrelOneOffset(mP0,Pt2dr::FromPolar(mRho,aTeta),mSzW);
-        }
-
-
-        TypeIm  mTIm;
-        Pt2di   mP0;
-        double  mRho;
-        int     mSzW;
+               
 };
-
-void TestcAutoCorrelDir(TIm2D<double,double> aTIm,const Pt2di & aP0)
-{
-    cAutoCorrelDir<TIm2D<double,double> >  aACD(aTIm,aP0,3.0,3);
-    aACD.DoIt();
-}
 */
 
 
@@ -144,6 +154,7 @@ void TestcAutoCorrelDir(TIm2D<double,double> aTIm,const Pt2di & aP0)
 /*                 ::                                */
 /*                                                   */
 /*****************************************************/
+
 class cCmpPt2diOnEuclid
 {
    public : 
@@ -176,12 +187,29 @@ std::vector<Pt2di> SortedVoisinDisk(double aDistMin,double aDistMax,bool Sort)
    return aResult;
 }
 
-Pt3di CoulOfType(eTypePtRemark aType)
+Pt3di Ply_CoulOfType(eTypePtRemark aType,int aL0,int aLong)
 {
+    if (aLong==0) 
+       return Pt3di(255,255,255);
+
+
+    double aSeuil = 5.0;
+    if (aLong < 5) 
+    {
+       int aG = 255 * ( aSeuil - aLong) / aSeuil;
+       return Pt3di(aG,aG,aG);
+    }
+
+
+
     switch(aType)
     {
-         case eTPR_Max : return Pt3di(255,0,0);
-         case eTPR_Min : return Pt3di(0,0,255);
+         case eTPR_LaplMax  : return Pt3di(255,128,128);
+         case eTPR_LaplMin  : return Pt3di(128,128,255);
+
+         case eTPR_GrayMax  : return Pt3di(255,  0,  0);
+         case eTPR_GrayMin  : return Pt3di(  0,  0,255);
+         case eTPR_GraySadl : return Pt3di(  0,255,  0);
 
          default :;
     }
@@ -189,39 +217,65 @@ Pt3di CoulOfType(eTypePtRemark aType)
     return  Pt3di(128,128,128);
 }
 
+Pt3dr X11_CoulOfType(eTypePtRemark aType)
+{
+   Pt3di aCI = Ply_CoulOfType(aType,0,1000);
+   return Pt3dr(aCI) /255.0;
+}
+
+void ShowPt(const cOnePCarac & aPC,const ElSimilitude & aSim,Video_Win * aW,bool HighLight)
+{
+    if (! aW) return;
+
+    Pt3dr aC = X11_CoulOfType(aPC.Kind());
+    Col_Pal aCPal = aW->prgb()(aC.x*255,aC.y*255,aC.z*255);
+
+    aW->draw_circle_abs(aSim(aPC.Pt()),3.0,aCPal);
+    if (HighLight)
+    {
+       aW->draw_circle_abs(aSim(aPC.Pt()),5.0,aCPal);
+       aW->draw_circle_abs(aSim(aPC.Pt()),7.0,aCPal);
+    }
+}
+
+
 /*****************************************************/
 /*                                                   */
 /*                  cPtRemark                        */
 /*                                                   */
 /*****************************************************/
 
-cPtRemark::cPtRemark(const Pt2dr & aPt,eTypePtRemark aType) :
-           mPtR   (aPt),
-           mType  (aType),
-           mHR    (0),
-           mLR    (0)
+cPtRemark::cPtRemark(const Pt2dr & aPt,eTypePtRemark aType,int aNiv) :
+     mRPt   (aPt),
+     mType  (aType),
+     mHighRs (),
+     mLowR  (0),
+     mNiv   (aNiv)
 {
 }
 
-/*
-  mLR      this
-    \
-    aHR    
-*/
 
-void cPtRemark::MakeLink(cPtRemark * aHR)
+void cPtRemark::MakeLink(cPtRemark * aHighRes)
 {
-   if (aHR->mLR)
-   {
-        if (euclid(aHR->mLR->mPtR-aHR->mPtR) < euclid(mPtR-aHR->mPtR))
-           return;
-
-         aHR->mLR->mHR=0;
-         aHR->mLR=0;
-   }
-   mHR = aHR;
-   aHR->mLR = this;
+   mHighRs.push_back(aHighRes);
+   aHighRes->mLowR = this;
 }
+
+void  cPtRemark::RecGetAllPt(std::vector<cPtRemark *> & aRes)
+{
+     aRes.push_back(this);
+     for (auto & aPt:  mHighRs)
+         aPt->RecGetAllPt(aRes);
+}
+
+
+Pt2dr cPtRemark::RPtAbs(cAppli_NewRechPH & anAppli) const
+{
+    cOneScaleImRechPH *  anIm = anAppli.GetImOfNiv(mNiv,true);
+    return mRPt * (double) anIm->PowDecim();
+}
+
+
 
 /*****************************************************/
 /*                                                   */
@@ -229,19 +283,223 @@ void cPtRemark::MakeLink(cPtRemark * aHR)
 /*                                                   */
 /*****************************************************/
 
-cBrinPtRemark::cBrinPtRemark(cPtRemark * aP0,int aNiv0) :
-    mP0    (aP0),
-    mPLast (mP0),
-    mNiv0  (aNiv0),
-    mLong  (0)
+int SignOfType(eTypePtRemark aKind)
 {
-   ELISE_ASSERT(mP0->HR()==0,"Incoh in cBrinPtRemark");
-   while (mPLast->LR())
+   switch(aKind)
    {
-       mPLast  = mPLast->LR();
-       mLong++;
+       case eTPR_LaplMax :
+       case eTPR_GrayMax :
+       case eTPR_BifurqMax :
+            return 1;
+
+       case eTPR_LaplMin :
+       case eTPR_GrayMin :
+       case eTPR_BifurqMin :
+            return -1;
+       case eTPR_GraySadl :
+            return 0;
+       default :
+            ELISE_ASSERT(false,"cAppli_NewRechPH::PtOfBuf");
    }
+   return 0;
 }
+
+cBrinPtRemark::cBrinPtRemark(cPtRemark * aLR,cAppli_NewRechPH & anAppli) :
+    mLR          (aLR),
+    mBrScaleStab (-1),
+    mBifurk      (nullptr)
+{
+    std::vector<cPtRemark *> aVPt;
+    mLR->RecGetAllPt(aVPt);
+    
+    int aNbMult=0;
+    int aNivMin = aLR->Niv();
+
+    for (auto & aPt:  aVPt)
+    {
+        aNivMin = ElMin(aNivMin,aPt->Niv());
+        if (aPt->HighRs().size()>=2)
+        {
+           aNbMult++;
+           mBifurk = aPt;
+        }
+    }
+
+    if (aNbMult==1) 
+    {
+       mOk = true;
+       mNivScal =  mBifurk->Niv();
+       mScale =  anAppli.ScaleAbsOfNiv(mNivScal);
+       mBrScaleStab =  mScale;
+       mScaleNature =  mScale;
+       return;
+       // static int aCpt=0; aCpt++;
+       // std::cout << "PMUuUL ====== " << aCpt << "=======================================================================\n";
+    }
+    mBifurk = nullptr;
+
+    mOk = (aNbMult==0) && anAppli.OkNivStab(aLR->Niv()) && (aNivMin==0);
+    if (!mOk) return;
+
+    mBrScaleStab = anAppli.ScaleAbsOfNiv(aLR->Niv());
+
+
+/*
+    bool  Debug = (mBrScaleStab >=15.0);
+    if (Debug)
+    {
+        Pt2dr aPt =  aLR->RPtAbs(anAppli);
+        std::cout << "SSSS mBrScaleStab " << mBrScaleStab << " " << aPt <<  " " << (aPt/512.0) << "\n";
+    }
+*/
+
+// std::cout << "aLR-aLR-aLR-aLR- NIIIV " << aLR->Niv() << "\n";
+
+    int aSign = SignOfType(mLR->Type());
+
+    if (aSign)
+    {
+        std::vector<double> aVLapl;
+        mLaplMax = -1;
+        mLaplMaxNature = -1;
+
+        for (auto & aPt:  aVPt)
+        {
+            int aNiv = aPt->Niv();
+            if (anAppli.OkNivLapl(aNiv))
+            {
+               double aLapl =  0;
+
+              if (anAppli.ScaleCorr())
+              {
+                  aLapl = anAppli.GetImOfNiv(aNiv,true)->QualityScaleCorrel(round_ni(aPt->RPt()),aSign,true)  ;
+              }
+              else
+              {
+                  aLapl =  anAppli.GetLapl(aNiv,round_ni(aPt->RPt()),mOk) * aSign;
+              }
+ 
+               if (!mOk)
+               {
+                   return;
+               }
+
+               double aScale = anAppli.ScaleAbsOfNiv(aNiv);
+               if ((aLapl>mLaplMax)  && anAppli.ScaleIsValid(aScale))
+               {
+                   mNivScal = aNiv;
+                   mScale   =  aScale;
+                   mLaplMax = aLapl;
+               }
+               if (aLapl>mLaplMaxNature) 
+               {
+                    mScaleNature = mScale;
+                    mLaplMaxNature = aLapl;
+               }
+            }
+      //   std::cout << "CORRELL " << anAppli.GetImOfNiv(aNiv)->QualityScaleCorrel(round_ni(aPt->Pt()),aSign,true)  << " \n";
+        }
+
+        if (mLaplMax==-1)
+        {
+           mOk = false;
+           return ;
+        }
+   }
+   else
+   {
+         mNivScal =  mLR->Niv();
+         mScale =  mBrScaleStab;
+         mScaleNature =  mBrScaleStab;
+   }
+    
+/*
+*/
+}
+
+std::vector<cPtRemark *> cBrinPtRemark::GetAllPt()
+{
+    std::vector<cPtRemark *> aRes;
+    mLR->RecGetAllPt(aRes);
+    return aRes;
+}
+
+
+
+/*
+cPtRemark *  cBrinPtRemark::Nearest(int & aNivMin,double aTargetNiv)
+{
+    cPtRemark * aRes = mP0;
+    cPtRemark * aPtr = aRes;
+    int aCurNiv = mNiv0;
+    aNivMin = aCurNiv;
+    double aScoreMin = 1e10;
+    while (aPtr)
+    {
+       double aScore = ElAbs(aTargetNiv-aCurNiv);
+       if (aScore < aScoreMin)
+       {
+           aScore = aScoreMin;
+           aRes = aPtr;
+           aNivMin = aCurNiv;
+       }
+       aPtr = aPtr->LR();
+       aCurNiv ++;
+    }
+    return aRes;
+}
+*/
+
+/*****************************************************/
+/*                                                   */
+/*                  cFHistoInt                       */
+/*                                                   */
+/*****************************************************/
+
+cFHistoInt::cFHistoInt() :
+   mSom (0)
+{
+}
+
+int cFHistoInt::at(int aK)
+{
+   return ((aK>=0) && (aK<int(mHist.size()))) ? mHist.at(aK) : 0;
+}
+
+void cFHistoInt::Add(int aK,double aPds,int aLine)
+{
+   if (aK<0)
+   {
+       std::cout << "KKKKK = " << aK << " LINE=" << aLine<< "\n";
+       ELISE_ASSERT(aK>=0,"cFHistoInt::Add");
+   }
+   mSom++;
+   while(int(mHist.size())<= aK)
+     mHist.push_back(0);
+   mHist.at(aK) += aPds;
+}
+
+double cFHistoInt::Perc(int aK)
+{
+   return mHist.at(aK) * (100.0/mSom);
+}
+
+
+void cFHistoInt::Show()
+{
+   double aSomPond = 0.0;
+   for (int aK=0 ; aK<int(mHist.size()) ; aK++)
+   {
+       if (at(aK))
+       {
+          aSomPond += aK * at(aK);
+          std::cout << " Hist " << aK << " %=" << Perc(aK)  << " Nb=" << at(aK) << "\n";
+       }
+   }
+   std::cout << " HistMoy= " << aSomPond / mSom << "\n";
+}
+
+
 
 
 

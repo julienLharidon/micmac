@@ -260,7 +260,7 @@ else
       std::string aNameIm = mVName[aKImg];
       cBasicGeomCap3D * mCamGen = aICNM->StdCamGenerikOfNames(aOriInput,aNameIm);
       mVOri.push_back(mCamGen);
-      CamStenope * mCamSten = mCamGen->DownCastCS();
+      //CamStenope * mCamSten = mCamGen->DownCastCS();
       Tiff_Im mTif  = Tiff_Im::UnivConvStd(aDir + aNameIm);
       mVTif.push_back(mTif);
       Video_Win * mW = 0;
@@ -272,6 +272,9 @@ else
       ElTimer aChrono;
       cMesh myMesh(pathPlyFileS, true);
       const int nFaces = myMesh.getFacesNumber();
+
+      vector<int> cntVisible(mVName.size(), 0);
+
       for (int aKTri=0; aKTri<nFaces; aKTri++)
       {
           cTriangle* aTri = myMesh.getTriangle(aKTri);
@@ -306,9 +309,11 @@ else
                       aOri->PIsVisibleInImage(aTri3D.P2()) &&
                       aOri->PIsVisibleInImage(aTri3D.P3());
               double signTri = (aPt1-aPt2)^(aPt1-aPt3);
+
+
               if (oriTri == false)
               {
-                  if (signTri < 0 && visible && VWPic[aKImg]!=0)
+                  if (visible && VWPic[aKImg]!=0)
                   {
                       VWPic[aKImg]->draw_poly(aVPts,  VWPic[aKImg]->pdisc()(P8COL::green), true);
                   }
@@ -324,6 +329,11 @@ else
           if (aKTri == nFaces-1)
               VWPic[mVName.size()-1]->clik_in();
       }
+
+      for (uint aKImg=0; aKImg < mVName.size(); aKImg++)
+          cout<<mVName[aKImg]<<" - NbVis "<<cntVisible[aKImg]<<endl;
+
+
       cout<<"done - time "<<aChrono.uval()<<endl;
 }
     return EXIT_SUCCESS;

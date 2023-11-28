@@ -208,7 +208,10 @@ class cFilterImPolI
        // mChgCtx => signifie que les Symbole Elise ne peuvent pas etre reutilise et qu'il faut 
        // duplique la fonction
 
-       cFilterImPolI(tPtrCalcFF,int aNbFoncIn,int aNbFoncMax,int aNbArgNum,int aNbArgMax,const std::string & aPat,bool ChgCtx);
+       cFilterImPolI(tPtrCalcFF,int aNbFoncIn,int aNbFoncMax,int aNbArgNum,int aNbArgMax,const std::string & aPat,bool ChgCtx,const std::string & aCom);
+
+
+       void Show() const;
 
 
        tPtrCalcFF  mCalc;
@@ -219,9 +222,29 @@ class cFilterImPolI
        std::string mPat;
        cElRegex    mAutom;
        bool        mChgCtx;
+       std::string mCom;
 };
 
-cFilterImPolI::cFilterImPolI(tPtrCalcFF aCalc,int aNbFoncIn,int  aNbFoncMax,int aNbArgNum,int  aNbArgMax,const std::string & aPat,bool aChgCtx) :
+void cFilterImPolI::Show() const
+{
+           std::cout << "====== Name=[" << mPat << "]" ;
+           std::cout << "\n";
+           std::cout << " Com=" << mCom  << " ;  NbF=" ;
+           if (mNbFoncIn==mNbFoncMax) 
+              std::cout << mNbFoncIn ;
+           else
+              std::cout << "[" << mNbFoncIn << "," << mNbFoncMax << "]" ;
+
+           std::cout << "  NbA=" ;
+           if (mNbArgNum==mNbArgMax) 
+              std::cout << mNbArgNum ;
+           else
+              std::cout << "[" << mNbArgNum << "," << mNbArgMax << "]" ;
+           std::cout << "\n";
+}
+
+
+cFilterImPolI::cFilterImPolI(tPtrCalcFF aCalc,int aNbFoncIn,int  aNbFoncMax,int aNbArgNum,int  aNbArgMax,const std::string & aPat,bool aChgCtx,const std::string & aCom) :
     mCalc      (aCalc),
     mNbFoncIn  (aNbFoncIn),
     mNbFoncMax (aNbFoncMax),
@@ -229,7 +252,8 @@ cFilterImPolI::cFilterImPolI(tPtrCalcFF aCalc,int aNbFoncIn,int  aNbFoncMax,int 
     mNbArgMax  (aNbArgMax),
     mPat       ("("+aPat + ")"),
     mAutom     (mPat,10),
-    mChgCtx    (aChgCtx)
+    mChgCtx    (aChgCtx),
+    mCom       (aCom)
 {
 }
 
@@ -259,7 +283,7 @@ static Fonc_Num FPermut(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return aF.permut(aVI);
 }
-static cFilterImPolI  Opermut(FPermut,1,1,1,1,"permut",false);
+static cFilterImPolI  Opermut(FPermut,1,1,1,1,"permut",false,"permut F [i1 i2]");
 
   //----------------------------------------------------------------
 static Fonc_Num FKProj(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
@@ -269,7 +293,7 @@ static Fonc_Num FKProj(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return aF.kth_proj(ToInt(EndStr(anArg.mNameIn) )); // (( anArg.mNameIn.substr(1,std::string::npos)));
 }
-static cFilterImPolI  OperKProj(FKProj,1,1,0,0,"v[0-9]+",false);
+static cFilterImPolI  OperKProj(FKProj,1,1,0,0,"v[0-9]+",false,"v0 F or  v1 F  or ...." );
 
 
 
@@ -284,7 +308,7 @@ static Fonc_Num FSetSymb(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return anArg.mVIn.at(1);
 }
-static cFilterImPolI  OperSetSymb(FSetSymb,1,2,0,0,"=[A-Z,a-z].*",false);
+static cFilterImPolI  OperSetSymb(FSetSymb,1,2,0,0,"=[A-Z,a-z].*",false,"=toto F or (=toto F1 F2)");
 
   //----------------------------------------------------------------
 static Fonc_Num FUseSymb(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
@@ -293,7 +317,7 @@ static Fonc_Num FUseSymb(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return  *aRes;
 }
-static cFilterImPolI  OperUseSymb(FUseSymb,0,0,0,0,"@[A-Z,a-z].*",false);
+static cFilterImPolI  OperUseSymb(FUseSymb,0,0,0,0,"@[A-Z,a-z].*",false,"@toto");
 
   //----------------------------------------------------------------
 
@@ -307,7 +331,7 @@ static Fonc_Num FAssoc(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
    return aRes;
 }
 
-static cFilterImPolI  OperAssoc(FAssoc,2,10000,0,0,"\\*|\\+|max|min",false);
+static cFilterImPolI  OperAssoc(FAssoc,2,10000,0,0,"\\*|\\+|max|min",false,"max F1 F2 or (max F1 F2 F3 ....)");
 
 
   //----------------------------------------------------------------
@@ -321,7 +345,7 @@ static Fonc_Num FVirgule(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
    return aRes;
 }
 
-static cFilterImPolI  OperVirgule(FVirgule,2,10000,0,0,",",false);
+static cFilterImPolI  OperVirgule(FVirgule,2,10000,0,0,",",false,", F1 F2 or (,  F1 F2 F3 ....)");
 
 
   //----------------------------------------------------------------
@@ -333,7 +357,7 @@ static Fonc_Num FOperIf(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
     return aTest * anArg.mVIn.at(1) + (!aTest) * anArg.mVIn.at(2);
 }
 
-static cFilterImPolI  OperIf(FOperIf,3,3,0,0,"\\?",false);
+static cFilterImPolI  OperIf(FOperIf,3,3,0,0,"\\?",false,"? F1 F2 F3");
   //----------------------------------------------------------------
 
 static Fonc_Num FOperBin(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
@@ -343,8 +367,8 @@ static Fonc_Num FOperBin(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
     return anOper(anArg.mVIn.at(0),anArg.mVIn.at(1));
 }
 
-static std::string TheStrOpB="-|/|pow|>=|>|<|<=|==|!=|&|&&|(\\|)|(\\|\\|)|\\^|%|mod|>>|<<";
-static cFilterImPolI  OperBin(FOperBin,2,2,0,0,TheStrOpB,false);
+static std::string TheStrOpB="-|/|pow|>=|>|<|<=|==|!=|&|&&|(\\|)|(\\|\\|)|\\^|%|mod|>>|<<|f1f2bn";
+static cFilterImPolI  OperBin(FOperBin,2,2,0,0,TheStrOpB,false,"pow F1 F2");
   //----------------------------------------------------------------
 
 static Fonc_Num FOperUn(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
@@ -354,8 +378,8 @@ static Fonc_Num FOperUn(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
     return anOper(anArg.mVIn.at(0));
 }
 
-static std::string TheStrOpU="u-|~|!|signed_frac|ecart_frac|cos|sin|tan|log|log2|exp|square|cube|abs|atan|sqrt|erfcc";
-static cFilterImPolI  OperUn(FOperUn,1,1,0,0,TheStrOpU,false);
+static std::string TheStrOpU="u-|~|!|signed_frac|ecart_frac|cos|sin|tan|log|log2|exp|square|cube|abs|atan|sqrt|erfcc|isbadnum";
+static cFilterImPolI  OperUn(FOperUn,1,1,0,0,TheStrOpU,false,"cos F");
 
 
   //----------------------------------------------------------------
@@ -364,7 +388,7 @@ static Fonc_Num FTif(cFilterImPolI &,const cArgFilterPolI & anArg)
    return  Tiff_Im::StdConvGen(anArg.mNameIn,-1,true).in_proj();
 }
 // static cFilterImPolI  OperTif(FTif,0,0,0,0,".*\\.(tif|tiff|Tif|Tiff|TIF|TIFF|jpg|jpeg|Jpg|Jpeg|JPG|JPEG)",false);
-static cFilterImPolI  OperTif(FTif,0,0,0,0,".*\\.(tif|tiff|jpg|jpeg|cr2|arw)",false);
+static cFilterImPolI  OperTif(FTif,0,0,0,0,".*\\.(tif|tiff|jpg|jpeg|cr2|arw|png|pfm|pgm)",false,"MyFile.tif");
 
   //----------------------------------------------------------------
 
@@ -380,7 +404,7 @@ static Fonc_Num FCoord(cFilterImPolI & aPolI,const cArgFilterPolI & anArg)
    return  kth_coord(aKC);
 }
 
-static cFilterImPolI  OperCoord(FCoord,0,0,0,0,"x|y|z|x[0-9]+",false);
+static cFilterImPolI  OperCoord(FCoord,0,0,0,0,"x|y|z|x[0-9]+",false,"x or y oz or x0 x1 ....");
 
 
 
@@ -390,13 +414,13 @@ static Fonc_Num FDoubleCste(cFilterImPolI &,const cArgFilterPolI & anArg)
 {
    return   Fonc_Num(ToDouble(anArg.mNameIn));
 }
-static cFilterImPolI  OperDoubleCste(FDoubleCste,0,0,0,0,"-?[0-9]+\\.[0-9]*",false);
+static cFilterImPolI  OperDoubleCste(FDoubleCste,0,0,0,0,"-?[0-9]+\\.[0-9]*([eE]-?[0-9]+)?",false,"3.14");
 
 static Fonc_Num FIntCste(cFilterImPolI &,const cArgFilterPolI & anArg)
 {
    return   Fonc_Num(ToInt(anArg.mNameIn));
 }
-static cFilterImPolI  OperIntCste(FIntCste,0,0,0,0,"-?[0-9]+",false);
+static cFilterImPolI  OperIntCste(FIntCste,0,0,0,0,"-?[0-9]+",false,"222");
 
   //----------------------------------------------------------------
 
@@ -405,7 +429,7 @@ static Fonc_Num FDeriche(cFilterImPolI &,const cArgFilterPolI & anArg)
    return   deriche(anArg.mVIn.at(0) ,ToDouble(anArg.mVArgs.at(0)),20);
 }
 
-static cFilterImPolI  OperDeriche(FDeriche,1,1,1,1,"deriche",true);
+static cFilterImPolI  OperDeriche(FDeriche,1,1,1,1,"deriche",true,"deriche F a ; a=exposant  in e(-a|x|)");
 
   //----------------------------------------------------------------
 
@@ -414,7 +438,9 @@ static Fonc_Num FPolar(cFilterImPolI &,const cArgFilterPolI & anArg)
    return   Polar_Def_Opun::polar(anArg.mVIn.at(0),0);
 }
 
-static cFilterImPolI  OperPolar(FPolar,1,1,0,0,"polar",false);
+static cFilterImPolI  OperPolar(FPolar,1,1,0,0,"polar",false,"polar F");
+
+
 
   //----------------------------------------------------------------
 
@@ -426,7 +452,81 @@ static Fonc_Num FExtinc(cFilterImPolI &,const cArgFilterPolI & anArg)
     return extinc(anArg.mVIn.at(0),aChmf,aD);
 }
 
-static cFilterImPolI  OperExtinc(FExtinc,1,1,1,2,"extinc",true);
+static cFilterImPolI  OperExtinc(FExtinc,1,1,1,2,"extinc",true,"extinc F c d ; c=chamfer d=distance");
+
+
+  //----------------------------------------------------------------
+
+static Fonc_Num FCourbTgt(cFilterImPolI &,const cArgFilterPolI & anArg)
+{
+    double aExp = (anArg.mVArgs.size() >=1) ? ToDouble(anArg.mVArgs.at(0)) : 0.5;
+
+    return courb_tgt(anArg.mVIn.at(0),aExp);
+}
+
+static cFilterImPolI  OperCourbTgt(FCourbTgt,1,1,0,1,"corner",true,"corner F P? ; F=func P=pow, def=0.5");
+
+  //----------------------------------------------------------------
+
+static Fonc_Num FNoise(cFilterImPolI &,const cArgFilterPolI & anArg,bool Gauss)
+{
+    int aNbArgTot = anArg.mVArgs.size() ;
+    ELISE_ASSERT(aNbArgTot && (aNbArgTot%2==0),"Bad Nb Arg in FNoise");
+    int aNbV = aNbArgTot / 2;
+
+    std::vector<double> aVPds;
+    std::vector<int> aVSz;
+    for (int aK=0 ; aK < aNbV ; aK++)
+    {
+         aVPds.push_back(ToDouble(anArg.mVArgs.at(2*aK)));
+         aVSz.push_back(ToInt(anArg.mVArgs.at(2*aK+1)));
+    }
+
+
+    return   Gauss ? gauss_noise_4(aVPds.data(),aVSz.data(),aNbV) : unif_noise_4(aVPds.data(),aVSz.data(),aNbV);
+}
+
+static Fonc_Num FGaussNoise(cFilterImPolI &aFP,const cArgFilterPolI & anArg)
+{
+   return FNoise(aFP,anArg,true);
+}
+
+static cFilterImPolI  OperGaussNoise(FGaussNoise,0,0,2,10000,"gauss_noise",true,"gauss_noise p1 s1 p2 s2 ....");
+
+
+
+  //----------------------------------------------------------------
+
+static Fonc_Num FMinSelfDiSym(cFilterImPolI &,const cArgFilterPolI & anArg)
+{
+    int aNbWin = ToInt(anArg.mVArgs.at(0)) ;
+    double aNbVois = ToDouble(anArg.mVArgs.at(1)) ;
+    double aD2Max = ElSquare(aNbVois);
+    int aNbVI = round_up(aNbVois);
+    double aExp=2; // Par defaut prop au carre de la dist
+ 
+    Fonc_Num aFonc = anArg.mVIn.at(0);
+    Fonc_Num aFoncRes = Fonc_Num(1e10);
+
+    for (int aDx=-aNbVI ; aDx<=aNbVI ; aDx++)
+    {
+        for (int aDy=-aNbVI ; aDy<=aNbVI ; aDy++)
+        {
+            int aD2 = ElSquare(aDx) + ElSquare(aDy);
+            if ((aD2!=0 ) && (aD2 <= aD2Max))
+            {
+               Fonc_Num aFDif = rect_som(Abs(aFonc-trans(aFonc,Pt2di(aDx,aDy))),aNbWin);
+               aFDif = aFDif / pow(sqrt(aD2),aExp);
+               aFoncRes = Min(aFoncRes,aFDif);
+            }
+        }
+    }
+
+    return aFoncRes;
+}
+
+static cFilterImPolI  OperMinSelfDiSym(FMinSelfDiSym,1,1,2,2,"msd",true,"Self dissymilarity  : MinSelfDiSym Fonc Vois SzW");
+
 
 
   //----------------------------------------------------------------
@@ -439,7 +539,7 @@ static Fonc_Num FEroDil(cFilterImPolI &,const cArgFilterPolI & anArg)
     return (anArg.mNameIn=="erode") ? erod(anArg.mVIn.at(0),aChmf,aD) : dilat(anArg.mVIn.at(0),aChmf,aD);
 }
 
-static cFilterImPolI  OperEroDil(FEroDil,1,1,2,2,"erode|dilate",true);
+static cFilterImPolI  OperEroDil(FEroDil,1,1,2,2,"erode|dilate",true,"erode F c d ; c=chamfer d=distance");
 
   //----------------------------------------------------------------
 
@@ -452,7 +552,7 @@ static Fonc_Num FCloseOpen(cFilterImPolI &,const cArgFilterPolI & anArg)
     return (anArg.mNameIn=="open") ? open(anArg.mVIn.at(0),aChmf,aD,aDelta) : close(anArg.mVIn.at(0),aChmf,aD,aDelta);
 }
 
-static cFilterImPolI  OperCloseOpen(FCloseOpen,1,1,2,3,"open|close",true);
+static cFilterImPolI  OperCloseOpen(FCloseOpen,1,1,2,3,"open|close",true,"(open F  c d1 d2) ; c=chamfer d1,d2=distance");
 
   //----------------------------------------------------------------
 
@@ -470,7 +570,62 @@ static Fonc_Num FMoy(cFilterImPolI &,const cArgFilterPolI & anArg)
     return aRes;
 }
 
-static cFilterImPolI  OperMoy(FMoy,1,1,1,2,"moy",true);
+static cFilterImPolI  OperMoy(FMoy,1,1,1,2,"moy",true,"(moy F SzW NbIter)");
+
+  //----------------------------------------------------------------
+
+
+static Fonc_Num FMoyPond(cFilterImPolI &,const cArgFilterPolI & anArg)
+{
+    int aNbVx =  ToInt(anArg.mVArgs.at(0)) ;
+    int aNbVy =  ToInt(anArg.mVArgs.at(1)) ;
+
+    ELISE_ASSERT( int(anArg.mVArgs.size())==(2+aNbVx*aNbVy),"FMoyPond bad nb arg");
+    Im2D_REAL8 anIm(aNbVx,aNbVy);
+    int aCpt=2;
+    double aSom = 0.0;
+    for (int aKx=0 ; aKx<aNbVx ; aKx++)
+    {
+       for (int aKy=0 ; aKy<aNbVy ; aKy++)
+       {
+          double aV= ToDouble(anArg.mVArgs.at(aCpt));
+          aSom += aV;
+          anIm.SetR(Pt2di(aKx,aKy),aV);
+          aCpt++;
+       }
+    }
+    ELISE_COPY(anIm.all_pts(),anIm.in()/aSom,anIm.out());
+   
+    return som_masq(Rconv(anArg.mVIn.at(0)),anIm);
+}
+
+static cFilterImPolI  OperMoyPond(FMoyPond,1,1,2,500,"moyp",true,"(moyp F 3 3 1 2 1 2 4 2 1 2 1)");
+
+
+
+
+  //----------------------------------------------------------------
+
+static Fonc_Num FMaxMin(cFilterImPolI &,const cArgFilterPolI & anArg)
+{
+    int aNbV =  ToInt(anArg.mVArgs.at(0)) ;
+    int aNbIter =  (anArg.mVArgs.size()>=2) ? ToInt(anArg.mVArgs.at(1)) : 1 ;
+
+    Fonc_Num aRes = Rconv(anArg.mVIn.at(0));
+    for (int  aK=0 ; aK<aNbIter ; aK++)
+    {
+        if      (anArg.mNameIn=="maxv") aRes =  rect_max(aRes,aNbV);
+        else if (anArg.mNameIn=="minv") aRes =  rect_min(aRes,aNbV);
+        else {ELISE_ASSERT(false,"Bas name in FMaxMin");}
+    }
+
+    return aRes;
+}
+
+static cFilterImPolI  OperMaxMin(FMaxMin,1,1,1,2,"maxv|minv",true,"(maxv SzW NbIter)");
+
+
+
 
   //----------------------------------------------------------------
 
@@ -485,7 +640,49 @@ static Fonc_Num FMedian(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return aRes;
 }
-static cFilterImPolI  OperMed(FMedian,1,1,1,2,"median",true);
+static cFilterImPolI  OperMed(FMedian,1,1,1,2,"median",true,"(median F SzW NbIter)");
+
+
+  //----------------------------------------------------------------
+//        0    1  2    3    4
+//  kth F 0.5  Sz VMin VMax Nbal  (NbIter=1) (Sz.y=Sz=Sz.x)
+
+static Fonc_Num FIKth(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
+{
+   int aNbArg = anArg.mVArgs.size();
+   double   aProp = ToDouble(anArg.mVArgs.at(0));
+   int      aSzX  =    ToInt(anArg.mVArgs.at(1));
+   double   aVMin = ToDouble(anArg.mVArgs.at(2));
+   double   aVMax = ToDouble(anArg.mVArgs.at(3));
+   int   aNbVal   =     ToInt(anArg.mVArgs.at(4));
+   int      aNbIter = (aNbArg >=6) ? ToInt(anArg.mVArgs.at(5)) : 1;
+   int      aSzY    = (aNbArg >=7) ? ToInt(anArg.mVArgs.at(6)) : aSzX;
+   
+ 
+   Fonc_Num aRes  = anArg.mVIn.at(0);
+   aRes = Max(0,Min(aNbVal-1,round_ni(aNbVal *(aRes-aVMin) /(aVMax-aVMin))));
+   
+   int aNbVois =  (1+2*aSzX) * (1+2*aSzY);
+
+   for (int  aK=0 ; aK<aNbIter ; aK++)
+       aRes = rect_kth(aRes,round_ni(aProp*(aNbVois-1)),Pt2di(aSzX,aSzY),aNbVal);
+
+    aRes = aVMin + aRes * (aVMax-aVMin) / aNbVal;
+    return aRes;
+}
+static cFilterImPolI  OperIKth(FIKth,1,1,5,7,"ikth",true,"(ikth F Prop SzW VMin VMax NbDisc ?NbIter ?SzWy)");
+
+
+  //----------------------------------------------------------------
+
+/*
+static Fonc_Num FSobel(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg) 
+{
+    Fonc_Num aFonc = anArg.mVIn.at(0);
+    return sobel(aFonc);
+}
+static cFilterImPolI  OperSobel(FSobel,1,1,0,0,"sobel",true);
+*/
 
   //----------------------------------------------------------------
 
@@ -497,7 +694,7 @@ static Fonc_Num FTrans(cFilterImPolI & aFIPI,const cArgFilterPolI & anArg)
 
     return trans(aFonc,Pt2di(aTX,aTY));
 }
-static cFilterImPolI  OperTrans(FTrans,1,1,2,2,"trans",true);
+static cFilterImPolI  OperTrans(FTrans,1,1,2,2,"trans",true,"trans F dx dy");
 
   //----------------------------------------------------------------
 
@@ -520,6 +717,9 @@ static std::vector<cFilterImPolI *>  VPolI()
          aRes.push_back(&OperDoubleCste);
          aRes.push_back(&OperPolar);
          aRes.push_back(&OperExtinc);
+         aRes.push_back(&OperCourbTgt);
+         aRes.push_back(&OperGaussNoise);
+         aRes.push_back(&OperMinSelfDiSym);
          aRes.push_back(&Opermut);
          aRes.push_back(&OperSetSymb);
          aRes.push_back(&OperUseSymb);
@@ -531,6 +731,10 @@ static std::vector<cFilterImPolI *>  VPolI()
          aRes.push_back(&OperMoy);
          aRes.push_back(&OperMed);
          aRes.push_back(&OperTrans);
+         aRes.push_back(&OperIKth);
+         aRes.push_back(&OperMaxMin);
+         aRes.push_back(&OperMoyPond);
+         // aRes.push_back(&OperSobel);
     }
 
     return aRes;
@@ -622,6 +826,7 @@ cResFilterPolI RecParseStrFNPolI(tCPtr & aStr,cCtxtFoncPolI * aCtx)
     for (int aK=0 ; aK<int(aVPol.size()) ; aK++)
     {
         cFilterImPolI & aPolI = *(aVPol[aK]);
+// std::cout << "HHHHH " << aPolI.mAutom.NameExpr() << " " << aIdSymb << "\n";
         if (aPolI.mAutom.Match(aIdSymb))
         {
             if (aPolI.mChgCtx)
@@ -693,6 +898,10 @@ cResFilterPolI RecParseStrFNPolI(tCPtr & aStr,cCtxtFoncPolI * aCtx)
 
             return  cResFilterPolI(aPolI.mCalc(aPolI,anArg),anArg.mBox);
         }
+        else
+        {
+             // std::cout << "SYMB NOT MATCHED= " << aIdSymb << "\n";
+        }
     }
 
     std::cout << "For symb=[" << aSymb << "]\n";
@@ -722,6 +931,16 @@ cResFilterPolI GlobParseStrFNPolI(tCPtr & aStr)
     return aRes;
 }
 
+void NirupActionOnHelp(int argc,char ** argv)
+{
+     // std::vector<cFilterImPolI *>  aVP =  VPolI();
+     for  (const auto & aP :  VPolI())
+     {
+        aP->Show();
+     }
+}
+
+
 
 int Nikrup_main(int argc,char ** argv)
 {
@@ -731,6 +950,13 @@ int Nikrup_main(int argc,char ** argv)
     // GenIm::type_el aType=  GenIm::real4;
     std::string aNameTypeOut = "real4";
     int aNbChan;
+
+    TheActionOnHelp = NirupActionOnHelp;
+
+/*
+for (int ak=0 ; ak<argc ; ak++)
+    std::cout << "NNnn [" << argv[ak] << "]\n";
+*/
 
     ElInitArgMain
     (
@@ -781,13 +1007,17 @@ int Nikrup_main(int argc,char ** argv)
           if (aNbOut>1)
              aNameK = "Nkrp-" + ToString(aK) + aNameOut;
 
+          L_Arg_Opt_Tiff aL;
+          aL = aL+Arg_Tiff(Tiff_Im::ANoStrip());
+
           Tiff_Im aTifOut
                  (
                     aNameK.c_str(),
                     aSzOut,
                     aType,
                     Tiff_Im::No_Compr,
-                    aPIT
+                    aPIT,
+                    aL
                  );
           Output anOutK = aTifOut.out();
 
@@ -937,6 +1167,168 @@ int Contrast_main(int argc,char ** argv)
     return EXIT_SUCCESS;
 }
 
+
+int TournIm_main(int argc,char ** argv)
+{
+    std::string aNameIm;
+    std::string aNameOut;
+    int  aNumGeom = 1;
+    ElInitArgMain
+    (
+         argc,argv,
+         LArgMain()  << EAMC(aNameIm,"Name of Input image", eSAM_IsExistFile),
+         LArgMain()
+                     << EAM(aNumGeom,"NumGeom",true,"0=>Id,1=>90(def), 2=>180,3=>270,[4-7]=>Sym", eSAM_NoInit)
+                     << EAM(aNameOut,"Out",true,"Destination")
+    );
+
+    Tiff_Im aTif =  Tiff_Im::StdConvGen(aNameIm,-1,true);
+    std::vector<Im2DGen *>  aVIm = aTif.ReadVecOfIm();
+    Pt2di aSz = aVIm[0]->sz();
+    std::cout << "SZ IN " << aSz << "\n";
+
+    Fonc_Num aFTrans = Virgule(FY,aSz.y-1-FX);
+    std::string aPref = "T90-";
+
+    if (aNumGeom==0) 
+    {
+        aPref = "T0-";
+        aFTrans = Virgule(FX,FY);
+    }
+    else if (aNumGeom==1) 
+    {
+        aFTrans = Virgule(FY,aSz.y-1-FX);
+    }
+    else if (aNumGeom==2)
+    {
+        aPref = "T180-";
+        aFTrans = Virgule(aSz.x-1-FX,aSz.y-1-FY);
+    }
+    else if (aNumGeom==3)
+    {
+        aPref = "T270-";
+        aFTrans = Virgule(aSz.x-1-FY,FX);
+    }
+    else if (aNumGeom==4) 
+    {
+        aPref = "SymX-";
+        aFTrans = Virgule(aSz.x-1-FX,FY);
+    }
+    else if (aNumGeom==6) 
+    {
+        aPref = "SymY-";
+        aFTrans = Virgule(FX,aSz.y-1-FY);
+    }
+    else
+    {
+        ELISE_ASSERT(false,"Unhandled value for NumGeom");
+    }
+
+    if (!EAMIsInit(&aNameOut))
+        aNameOut = DirOfFile(aNameIm) + aPref+ StdPrefix(NameWithoutDir(aNameIm))+".tif";
+
+    L_Arg_Opt_Tiff aLarg;
+    aLarg = aLarg+  Arg_Tiff(Tiff_Im::ANoStrip());
+    Tiff_Im aTifOut
+            (
+                aNameOut.c_str(),
+                ((aNumGeom%2)==1)  ? Pt2di(aSz.y,aSz.x) : Pt2di(aSz.x,aSz.y),
+                aTif.type_el(),
+                Tiff_Im::No_Compr,
+                aTif.phot_interp(),
+                aLarg
+            );
+    std::cout << "SZ OUT " << aTifOut.sz() << "\n";
+
+    Fonc_Num aF;
+    int aKIm=0;
+
+
+
+    // aFTrans  = Virgule(FY,aSz.y-1-FX);
+    for (auto aI : aVIm)
+    {
+
+        Fonc_Num aNewF = aI->in()[aFTrans];
+        aF = (aKIm) ? Virgule(aF,aNewF) : aNewF;
+        aKIm++;
+    }
+/*
+    int aX0,aX1,aY0,aY1;
+    ELISE_COPY(
+         aTifOut.all_pts(),
+         aFTrans, // Virgule(FY,aSz.x-1-FX),
+         Virgule(VMin(aX0)|VMax(aX1),VMin(aY0)|VMax(aY1))
+    );
+    std::cout << "XXX " << aX0 << " " << aX1 << ";; Y " << aY0 << " " << aY1 << "\n";
+*/
+    ELISE_COPY(aTifOut.all_pts(),aF,aTifOut.out());
+
+    return EXIT_SUCCESS;
+}
+
+/**********  Test a bunch of idea about filters *******/
+
+int DivFilters_main(int argc,char ** argv)
+{
+    std::string aNameIn;
+    std::vector<std::string> aParamSupMoinsInf;
+
+    ElInitArgMain
+    (
+         argc,argv,
+         LArgMain()  << EAMC(aNameIn,"Name of Input image", eSAM_IsExistFile),
+         LArgMain()  << EAM(aParamSupMoinsInf,"SMI",true,"Sup Moins Inf [SzW]", eSAM_NoInit)
+    );
+
+    if (!MMVisualMode)
+    {
+        Im2D<float,double> aIm=  Im2D<float,double>::FromFileStd(aNameIn);
+        TIm2D<float,double>  aDIm(aIm);
+        Pt2di aSzIm = aIm.sz();
+
+        if (EAMIsInit(&aParamSupMoinsInf))
+        {
+             Im2D<float,double> aImNbInfSup(aSzIm.x,aSzIm.y);
+             int aSzW;  FromString(aSzW,aParamSupMoinsInf.at(0));
+             Pt2di aP;
+             for (aP.y=aSzW ; aP.y<aSzIm.y-aSzW  ; aP.y++)
+             {
+                 for (aP.x=aSzW ; aP.x<aSzIm.x-aSzW  ; aP.x++)
+                 {
+                      int aNbSup=0;
+                      int aNbInf=0;
+                      float aV0 = aDIm.get(aP);
+                      for (int aDy=-aSzW; aDy<=aSzW ; aDy++)
+                      {
+                          for (int aDx=-aSzW; aDx<=aSzW ; aDx++)
+                          {
+                              if ((aDx!=0) || (aDy!=0))
+                              {
+                                  Pt2di aDP(aDx,aDy);
+                                  Pt2di aQ = aP+aDP;
+                                  float aV1 = aDIm.get(aQ) + aDx/10.0 + aDy/100.0;
+                                  if (aV1>aV0)
+                                  {
+                                      aNbSup++;
+                                  }
+                                  else
+                                  {
+                                      aNbInf++;
+                                  }
+                              }
+                          }
+                      }
+                      double aProp = (aNbInf-aNbSup)/double(aNbInf+aNbSup);
+                      double V5 = (aProp>0) ? 0.5 : -0.5;
+                      aImNbInfSup.SetR(aP,std::abs(aProp-V5));
+                 }
+             }
+             Tiff_Im::CreateFromIm(aImNbInfSup,"InfSup-"+StdPrefix(aNameIn)+".tif");
+        }
+    }
+    return EXIT_SUCCESS;
+}
 
 
 

@@ -35,6 +35,7 @@ typedef struct AJobCorel
 }AJobCorel;
 
 typedef bool(*dsPt2drCompFunc)( Pt2dr const &,  Pt2dr const &);
+typedef bool(*dsPt2diCompFunc)( Pt2di const &,  Pt2di const &);
 
 extern void dispTriSurImg(Tri2d TriMaitre, pic * ImgMaitre ,Tri2d Tri2nd, pic * Img2nd, Pt2dr centre, double size, vector<Pt2dr> & listPtsInteret, bool dispAllPtsInteret = false);
 extern Video_Win * display_image( Im2D<U_INT1,INT4> *ImgIm2D,
@@ -57,6 +58,8 @@ extern void sortDescendPt2drX(vector<Pt2dr> & input);
 extern void sortDescendPt2drY(vector<Pt2dr> & input);
 extern void sortAscendPt2drX(vector<Pt2dr> & input);
 extern void sortAscendPt2drY(vector<Pt2dr> & input);
+
+
 extern std::string intToString ( int number );
 extern void MakeXMLPairImg(vector<CplString> & cplImg, string & outXML);
 extern vector<CplString> fsnPairImg(vector<CplString> & cplImg);

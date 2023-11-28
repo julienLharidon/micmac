@@ -40,6 +40,8 @@ Header-MicMac-eLiSe-25/06/2007*/
 #include "StdAfx.h"
 #include "../src/uti_phgrm/MICMAC/MICMAC.h"
 
+extern bool ERupnik_MM();
+
 /** @addtogroup GpGpuDoc */
 /*@{*/
 
@@ -64,6 +66,34 @@ Header-MicMac-eLiSe-25/06/2007*/
         return &(aV[0])    - aBox._p0.y+aSzV.y;
         //return anIm.data();
     }
+
+template <class Type> void  SaveIm(const std::string & aName,Type ** aDataIn,const Box2di & aBoxIn)
+{
+   Pt2di aP0 = aBoxIn._p0;
+   Pt2di aSz = aBoxIn.sz();
+
+   // Create a temporary image
+   Im2D<Type,typename El_CTypeTraits<Type>::tBase >  anImOut(aSz.x,aSz.y);
+   Type ** aDataOut = anImOut.data();
+
+
+   for (int aY=0 ; aY<aSz.y ; aY++)
+   {
+       memcpy
+       (
+	    aDataOut[aY],
+	    aDataIn[aY+aP0.y]+aP0.x,
+	    aSz.x * sizeof(Type)
+       );
+   }
+
+   L_Arg_Opt_Tiff aLArg;
+   aLArg = aLArg + Arg_Tiff(Tiff_Im::ANoStrip());
+
+   Tiff_Im::CreateFromIm(anImOut,aName,aLArg);
+}
+
+
 
 /********************************************************************/
 /*                                                                  */
@@ -146,10 +176,24 @@ class cGLI_CalibRadiom
 {
      public :
           cGLI_CalibRadiom (const cXML_RatioCorrImage aXml) :
-              mR  (aXml.Ratio())
+	      mR  (aXml.Ratio()),
+	      mRTif(0),
+	      mRTIm(0)
+	  {
+	  }
+          cGLI_CalibRadiom (const std::string aName) :
+	      mR(1.0),
+	      mRTif(new Tiff_Im( Tiff_Im::StdConvGen(aName,-1,true))),
+	      mRTIm(new TIm2D<REAL4,REAL>(mRTif->sz()))
           {
+		ELISE_COPY(mRTIm->all_pts(), mRTif->in(), mRTIm->out());
           }
-          double mR;
+
+	  double                    mR;
+	  Tiff_Im            	  * mRTif;
+	  TIm2D<REAL4,REAL> 	  * mRTIm;
+
+
 };
 
 void cAppliMICMAC::ResetCalRad()
@@ -233,7 +277,11 @@ cGPU_LoadedImGeom::cGPU_LoadedImGeom
     mOneImage = true;
 
     if (! aCMS)
+    {
+       mPdsMS = 1.0;
+       mCumSomPdsMS = 1.0;
        return;
+    }
 
     const std::vector<cOneParamCMS> & aVP = aCMS->OneParamCMS();
 
@@ -255,6 +303,7 @@ cGPU_LoadedImGeom::cGPU_LoadedImGeom
         mMSGLI[aK]->mMyDataIm0 = mDataIm[aK];
         mMSGLI[aK]->mMaster = this;
     }
+
 
     for (int aK=0 ; aK<int(aVP.size()) ; aK++)
     {
@@ -307,6 +356,15 @@ double cGPU_LoadedImGeom::CorrRadiom(double aVal)
    return aVal / mCalR->mR ;
 }
 
+double cGPU_LoadedImGeom::CorrRadiom(double aVal, const Pt2dr &aP)
+{
+    if(mCalR->mRTIm)
+    {
+	return aVal / mCalR->mRTIm->Val(aP.x,aP.y) ;
+    }
+    else
+	return aVal / mCalR->mR ;
+}
 
 Pt2di  cGPU_LoadedImGeom::SzV0() const
 {
@@ -444,9 +502,12 @@ bool   cGPU_LoadedImGeom::InitValNorms(int anX,int anY,int aNbScaleIm)
        mMoy  = MoyIm(anX,anY,aNbScaleIm);
        //mMoy   = mDSomO[anY][anX] / mNbVals;
        //  double aDMoy = mEpsAddMoy + mMoy * mEpsMulMoy;
+       // Magouille a cause des mEpsAddMoy, mEpsMulMoy qui en vrai sont tjr == 0 !!!!
        double aDMoy = mAppli.DeltaMoy(mMoy);
 
+
        // mSigma  = mDSomO2[anY][anX] / mNbVals - QSquare(mMoy) + QSquare(aDMoy);
+
        mSigma  = MoyQuadIm(anX,anY,aNbScaleIm)  - QSquare(mMoy) + QSquare(aDMoy);
        mMoy += aDMoy;
 
@@ -484,7 +545,6 @@ double  cGPU_LoadedImGeom::MoyIm(int anX,int anY,int aNbScaleIm) const
         aRes += aGLI->mDSomO [anY][anX] * aGLI->mPdsMS;
 
     }
-
 
     aRes /= mMSGLI[aNbScaleIm-1]->mCumSomPdsMS;
     if (0)
@@ -543,13 +603,77 @@ double Cov(const cGPU_LoadedImGeom & aGeoJ) const;
 */
 
 
+bool   cGPU_LoadedImGeom::CorreCensus(double & aCorrel,int anX,int anY,const  cGPU_LoadedImGeom & aGeoJ,int aNbScaleIm) const
+{
+
+   static int aCptCC = 0;
+
+   if (! mDOK_Ortho[anY][anX])
+      return false;
+
+   bool ModeQuant = (mAppli.CC()->TypeCost()==eMCC_CensusQuantitatif);
+
+   double anEcGlob=0;
+   double aSomPds = 0;
+   bool isDense = false;
+
+   for (int aKS=0 ; aKS<aNbScaleIm ; aKS++)
+   {
+      tDataGpu  aDI = mMSGLI[aKS]->mDOrtho;
+      tDataGpu  aDJ = aGeoJ.mMSGLI[aKS]->mDOrtho;
+      // const cCorrelMultiScale*  aCMS = mAppli.CMS();
+      float aVCI = aDI[anY][anX];
+      float aVCJ = aDJ[anY][anX];
+
+      double aScSomEc = 0;
+      Pt2di aSzW =  mMSGLI[aKS]->mOPCms->SzW();
+
+      int IncrX = isDense ? 1 : aSzW.x;
+      int IncrY = isDense ? 1 : aSzW.y;
+      int aNbX =  isDense ? 1+2* aSzW.x  : 3;
+
+      for (int aDY=-aSzW.y ; aDY<=aSzW.y ;aDY+=IncrY)
+      {
+          float * aLI = aDI[anY+aDY] + anX - aSzW.x;
+          float * aLJ = aDJ[anY+aDY] + anX - aSzW.x;
+          if (ModeQuant)
+          {
+              for (int aCpt = aNbX ; aCpt ; aCpt--)
+              {
+                  aScSomEc += ElAbs(EcartNormalise(aVCI,*aLI)-EcartNormalise(aVCJ,*aLJ));
+                  aLI+=IncrX;
+                  aLJ+=IncrX;
+              }
+          }
+      }
+      double aPds = isDense ? mMSGLI[aKS]->mPdsMS : mMSGLI[aKS]->mOPCms->Pds() ;
+      anEcGlob += aScSomEc * aPds;
+      aSomPds += aPds;
+   }
+   // Min pour meme interv que correl
+   anEcGlob =  ElMin(2.0,(anEcGlob/aSomPds) * mAppli.CC()->Dyn().Val());
+   aCorrel =  1-anEcGlob;
+{
+// std::cout << " cGPU_LoadedImGeom::Correl " << mAppli.CC()->Dyn().Val() << " " << mCumSomPdsMS  << "\n"; getchar();
+}
+
+   aCptCC++;
+
+   return true;
+}
 
 bool   cGPU_LoadedImGeom::Correl(double & aCorrel,int anX,int anY,const  cGPU_LoadedImGeom & aGeoJ,int aNbScaleIm) const
 {
+// if (MPD_MM())
 
         if (! mDOK_Ortho[anY][anX])
             return false;
-                double aMI  = MoyIm(anX,anY,aNbScaleIm);
+        if (mAppli.CC())
+        {
+            return CorreCensus(aCorrel,anX,anY,aGeoJ,aNbScaleIm);
+        }
+
+        double aMI  = MoyIm(anX,anY,aNbScaleIm);
         double aDmI = mAppli.DeltaMoy(aMI);
         double aMII =  MoyQuadIm(anX,anY,aNbScaleIm) - ElSquare(aMI) + ElSquare(aDmI);
 
@@ -989,22 +1113,25 @@ bool  cAppliMICMAC::InitZ(int aZ,eModeInitZ aMode)
 
     mImOkTerCur.raz();
 
+    // XY01-UtiTer => Box of image at Z level , init at empty box
     mX0UtiTer = mX1Ter + 1;
     mY0UtiTer = mY1Ter + 1;
     mX1UtiTer = mX0Ter;
     mY1UtiTer = mY0Ter;
 
+    // Compute Box &  Masq Terrain
     for (int anX = mX0Ter ; anX <  mX1Ter ; anX++)
     {
         for (int anY = mY0Ter ; anY < mY1Ter ; anY++)
         {
+             // In ortho if in terrain and Z in intervall
              mDOkTer[anY][anX] =
                                    (mZIntCur >= mTabZMin[anY][anX])
                                    && (mZIntCur <  mTabZMax[anY][anX])
                                    && IsInTer(anX,anY)
                                    ;
 
-
+	     //  If Ok update the box
               if ( mDOkTer[anY][anX])
               {
                      ElSetMin(mX0UtiTer,anX);
@@ -1019,19 +1146,24 @@ bool  cAppliMICMAC::InitZ(int aZ,eModeInitZ aMode)
     mX1UtiTer ++;
     mY1UtiTer ++;
 
+    // If box was not updated, then it is empty
     if (mX0UtiTer >= mX1UtiTer)
             return false;
 
     int aKFirstIm = 0;
     U_INT1 ** aDOkIm0TerDil = mDOkTerDil;
+    // Case mGIm1IsInPax : Im1 doesnt depend of pax (bundle geom of epip like geometry)
+    // generate some optimisation
     if (mGIm1IsInPax)
     {
+	    // If we have already been here, we dont neet to reload first image
             if (mFirstZIsInit)
             {
-                aKFirstIm = 1;
+               aKFirstIm = 1;
             }
             else
             {
+            // First time we must reload the whole first  images 
                 mX0UtiTer = mX0Ter;
                 mX1UtiTer = mX1Ter;
                 mY0UtiTer = mY0Ter;
@@ -1040,16 +1172,20 @@ bool  cAppliMICMAC::InitZ(int aZ,eModeInitZ aMode)
             }
     }
 
+    //   
+    // XY01-UtiDilTer => dilatation of  XY01-UtiTer by  mCurSzVMax
     mX0UtiDilTer = mX0UtiTer - mCurSzVMax.x;
     mY0UtiDilTer = mY0UtiTer - mCurSzVMax.y;
     mX1UtiDilTer = mX1UtiTer + mCurSzVMax.x;
     mY1UtiDilTer = mY1UtiTer + mCurSzVMax.y;
 
+    //  XY01-UtiLocIm =>  Box  of image1 in referentiel of I1
     mX0UtiLocIm = mX0UtiTer - mDilX0Ter;
     mX1UtiLocIm = mX1UtiTer - mDilX0Ter;
     mY0UtiLocIm = mY0UtiTer - mDilY0Ter;
     mY1UtiLocIm = mY1UtiTer - mDilY0Ter;
 
+    // XY01-UtiDilLocIm => dilatation of XY01-UtiDilTer
     mX0UtiDilLocIm = mX0UtiDilTer - mDilX0Ter;
     mX1UtiDilLocIm = mX1UtiDilTer - mDilX0Ter;
     mY0UtiDilLocIm = mY0UtiDilTer - mDilY0Ter;
@@ -1068,6 +1204,7 @@ bool  cAppliMICMAC::InitZ(int aZ,eModeInitZ aMode)
     {
           ELISE_ASSERT(aGLI_00!=0,"Incohe eModeMom_12_2_22 with no Im in cAppliMICMAC::InitZ");
     }
+
 
     for (int aKIm= aKFirstIm ; aKIm<mNbIm ; aKIm++)
     {
@@ -1317,25 +1454,61 @@ if (0)
              int aY0 = anY - mCurSzV0.x;
              int aY1 = anY + mCurSzV0.x;
 
-
+             std::string mode = "normal";
+//             /* NORMAL
+             std::vector<float> imageM;
              for (int aXV=aX0 ; aXV<=aX1 ; aXV++)
              {
                   for (int aYV=aY0 ; aYV<=aY1 ; aYV++)
                   {
                        double aSV = 0;
                        double aSVV = 0;
+                       std::vector<double> vectMediane;
                        for (int aKIm=0 ; aKIm<aNbImCur ; aKIm++)
                        {
                             double aV = aCurVLI[aKIm]->ValNorm(aXV,aYV);
 // std::cout << "VvV = " << aV << "\n";
                             aSV += aV;
                             aSVV += QSquare(aV) ;
+                            vectMediane.push_back(aV);
                        }
-                       anEC2 += (aSVV-QSquare(aSV)/aNbImCur);
+
+                       if(mode=="normal")
+                           anEC2 += (aSVV-QSquare(aSV)/aNbImCur);
+                       else if(mode=="moyenne")
+                       {
+                           aSV/=aNbImCur;
+                           imageM.push_back(aSV);
+                       }
+                       else if (mode == "mediane")
+                       {
+                           std::sort(vectMediane.begin(), vectMediane.end());
+                           if (vectMediane.size()%2==0)
+                               imageM.push_back((vectMediane[vectMediane.size()/2]+vectMediane[vectMediane.size()/2-1])/2);
+                           else
+                               imageM.push_back(vectMediane[(vectMediane.size()-1)/2]);
+                       }
                   }
              }
+
 // std::cout << "NOCMS " << anEC2 << "\n";
-             aCost = anEC2 / ((aNbImCur -1) * mNbPtsWFixe);
+
+             if(mode=="normal")
+                 aCost = anEC2 / ((aNbImCur -1) * mNbPtsWFixe);
+             else
+             {
+                 double aSVmoy = 0;
+                 double aSVVmoy = 0;
+                 for (size_t aI=0 ; aI<imageM.size();++aI)
+                 {
+                     aSVmoy += imageM[aI];
+                     aSVVmoy += QSquare(imageM[aI]);
+                 }
+                 aCost = (aSVVmoy-QSquare(aSVmoy)/aNbImCur)/((aNbImCur -1) *mNbPtsWFixe);
+
+                 if (mode == "moyenne") std::cout << "aCost MOYENNE " << aCost << std::endl;
+                 if (mode == "mediane") std::cout << "aCost MEDIANE " << aCost << std::endl;
+             }
           }
 
 if (0)
@@ -1365,9 +1538,16 @@ double EcartNormalise(double aI1,double aI2)
     // X = I1/I2
     if (aI1 < aI2)   // X < 1
         return aI1/aI2 -1;   // X -1
+    // 0<= aI2 <= aI1
+    if (aI1==0)
+    {
+       return 0;
+    }
 
     return 1-aI2/aI1;  // 1 -1/X
 }
+
+const double MCPMulCorel = 1.0;
 
 
 void cAppliMICMAC::DoOneCorrelIm1Maitre(int anX,int anY,const cMultiCorrelPonctuel * aCMP,int aNbScaleIm,bool VireExtre,double aPdsAttPix)
@@ -1426,13 +1606,20 @@ void cAppliMICMAC::DoOneCorrelIm1Maitre(int anX,int anY,const cMultiCorrelPonctu
                   {
                        double aVk = mVLI[aK]->ImOrtho(anX,anY);
                        double aVal = EcartNormalise(aV0,aVk);
-                       aVNorm.push_back(AdaptCostPonct(round_ni(aVal*TheDynMCP)));
+
+                       aVNorm.push_back(AdaptCostPonct(round_ni(aVal*TheDynMCP*MCPMulCorel)));
                        if (aPdsAttPix)
                        {
                            aNbCostPix++;
-
-                           double aVCorK = mVLI[aK]->CorrRadiom(aVk);
+			
+			               double aVCorK = mVLI[aK]->CorrRadiom(aVk,mGeomDFPx->RDiscToR2(Pt2dr(anX,anY)));
                            aCostPix += ElAbs(EcartNormalise(aVCorK,aV0));
+
+			               if(ERupnik_MM())
+                           {
+        			   	        std::cout << "ewelina, " << mVLI[aK]->PDV()->Name()  << ", PTer=" << mGeomDFPx->RDiscToR2(Pt2dr(anX,anY)) 
+                                                         << ", aVk=" << aVk << ", aVCorK=" << aVCorK << ", Cor=" << aVk/aVCorK << "\n";
+                           }
                        }
                   }
                   else
@@ -1470,8 +1657,8 @@ void cAppliMICMAC::DoOneCorrelIm1Maitre(int anX,int anY,const cMultiCorrelPonctu
 
 
 
-    void cAppliMICMAC::DoOneCorrelMaxMinIm1Maitre(int anX,int anY,bool aModeMax,int aNbScaleIm)
-    {
+void cAppliMICMAC::DoOneCorrelMaxMinIm1Maitre(int anX,int anY,bool aModeMax,int aNbScaleIm)
+{
         if (mEBI) // Etiq Best Image
         {
             if (mNbIm>1)
@@ -1517,13 +1704,13 @@ void cAppliMICMAC::DoOneCorrelIm1Maitre(int anX,int anY,const cMultiCorrelPonctu
                 (isOk) ? mStatGlob->CorrelToCout(aRes) : mAhDefCost
                 );
         }
-    }
+}
 
 
 
 void cAppliMICMAC::DoGPU_Correl
         (
-            const Box2di & aBox,
+            const Box2di & ,// aBox,
             const cMultiCorrelPonctuel * aMCP,
             double aPdsPix
         )
@@ -1561,58 +1748,57 @@ void cAppliMICMAC::DoGPU_Correl
             }
         }
 
+	{
+             for (int aZ=mZMinGlob ; aZ<mZMaxGlob ; aZ++)
+             {
+                 bool OkZ = InitZ(aZ,aModeInitZ);
+                 if (OkZ)
+                 {
+                     for (int anX = mX0UtiTer ; anX <  mX1UtiTer ; anX++)
+                     {
+                         for (int anY = mY0UtiTer ; anY < mY1UtiTer ; anY++)
+                         {
 
-        for (int aZ=mZMinGlob ; aZ<mZMaxGlob ; aZ++)
-        {
-                        bool OkZ = InitZ(aZ,aModeInitZ);
-            if (OkZ)
-            {
-                for (int anX = mX0UtiTer ; anX <  mX1UtiTer ; anX++)
-                {
-                    for (int anY = mY0UtiTer ; anY < mY1UtiTer ; anY++)
-                    {
+                             int aNbScaleIm =  NbScaleOfPt(anX,anY);
 
-                        int aNbScaleIm =  NbScaleOfPt(anX,anY);
+                             if (mCurEtUseWAdapt)
+                             {
+                                  ElSetMin(aNbScaleIm,1+mTImSzWCor.get(Pt2di(anX,anY)));
+                             }
+                             if (mDOkTer[anY][anX])
+                             {
 
-                        if (mCurEtUseWAdapt)
-                        {
-                             ElSetMin(aNbScaleIm,1+mTImSzWCor.get(Pt2di(anX,anY)));
-                        }
-/*
-*/
-                        if (mDOkTer[anY][anX])
-                        {
+                                 switch (aModeAgr)
+                                 {
+                                     case eAggregSymetrique :
+                                         DoOneCorrelSym(anX,anY,aNbScaleIm);
+                                     break;
 
-                            switch (aModeAgr)
-                            {
-                            case eAggregSymetrique :
-                                DoOneCorrelSym(anX,anY,aNbScaleIm);
-                            break;
+                                     case eAggregIm1Maitre :
+                                          DoOneCorrelIm1Maitre(anX,anY,aMCP,aNbScaleIm,false,aPdsPix);
+                                     break;
 
-                            case eAggregIm1Maitre :
-                                 DoOneCorrelIm1Maitre(anX,anY,aMCP,aNbScaleIm,false,aPdsPix);
-                            break;
+                                     case  eAggregMaxIm1Maitre :
+                                         DoOneCorrelMaxMinIm1Maitre(anX,anY,true,aNbScaleIm);
+                                     break;
 
-                            case  eAggregMaxIm1Maitre :
-                                DoOneCorrelMaxMinIm1Maitre(anX,anY,true,aNbScaleIm);
-                                break;
+                                     case  eAggregMinIm1Maitre :
+                                         DoOneCorrelMaxMinIm1Maitre(anX,anY,false,aNbScaleIm);
+                                     break;
 
-                            case  eAggregMinIm1Maitre :
-                                DoOneCorrelMaxMinIm1Maitre(anX,anY,false,aNbScaleIm);
-                                break;
+                                     case eAggregMoyMedIm1Maitre :
+                                          DoOneCorrelIm1Maitre(anX,anY,aMCP,aNbScaleIm,true,aPdsPix);
+                                     break;
 
-                            case eAggregMoyMedIm1Maitre :
-                                 DoOneCorrelIm1Maitre(anX,anY,aMCP,aNbScaleIm,true,aPdsPix);
-                            break;
-
-                            default :
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+                                 default :
+                                     break;
+                                 }
+                             }
+                         }
+                     }
+                 }
+             }
+	}
 }
 
 #ifdef  CUDA_ENABLED
@@ -1898,8 +2084,13 @@ void cAppliMICMAC::DoCorrelAdHoc
 
         DoInitAdHoc(aBox);
 
+        mCC = aTC.CensusCost().PtrVal();
 
-        if (aTC.GPU_Correl().IsInit())
+	if (aTC.ScoreLearnedMMVII().IsInit())
+        {
+            DoCostLearnedMMVII(aBox,aTC.ScoreLearnedMMVII().Val());
+        }
+        else if (aTC.GPU_Correl().IsInit())
         {
             DoGPU_Correl(aBox,(cMultiCorrelPonctuel*)0,0);
         }
@@ -1927,14 +2118,150 @@ void cAppliMICMAC::DoCorrelAdHoc
         {
             DoCorrelRobusteNonCentree(aBox,aTC.Correl_NC_Robuste().Val());
         }
-        else if (aTC.MultiCorrelPonctuel().IsInit())
+        else if (aTC.MasqueAutoByTieP().IsInit())
+        {
+            DoMasqueAutoByTieP(aBox,aTC.MasqueAutoByTieP().Val());
+        }
+        else if (mCC) // (aTC.CensusCost().IsInit())
+        {
+             ELISE_ASSERT
+             (
+                 ModeGeomIsIm1InvarPx(*this) ,
+                 "Census require ModeGeomIm for now"
+             );
+
+             if (GeomImages() == eGeomImage_EpipolairePure)
+             {
+                DoCensusCorrel(aBox,aTC.CensusCost().Val());
+             }
+             else
+             {
+                DoGPU_Correl(aBox,nullptr,0);
+                // ELISE_ASSERT ( false, "Not epipolar geometry for census ");
+             }
+        }
+	// Case where we generate the ortho photos and call processes
+	else if (aTC.MutiCorrelOrthoExt().IsInit())
+	//	MutiCorrelOrthoExt
+	{
+             const cMutiCorrelOrthoExt aMCOE = aTC.MutiCorrelOrthoExt().Val();
+             int mDeltaZ = aMCOE.DeltaZ().Val();
+             std::string aPrefixGlob = FullDirMEC() + "MMV1Ortho_Pid" + ToString(mm_getpid()) ;
+             for (int aZ0=mZMinGlob ; aZ0<mZMaxGlob ; aZ0+=mDeltaZ)
+             {
+                  int aZ1= ElMin(mZMaxGlob,aZ0+mDeltaZ);
+		  Box2di  aBoxEmpty(Pt2di(0,0),Pt2di(0,0));
+		  std::vector<Box2di>  aVecBoxDil;
+		  std::vector<Box2di>  aVecBoxUti;
+                  for (int aZ=aZ0 ; aZ<aZ1 ; aZ++)
+                  {
+                        std::string aPrefixZ =    aPrefixGlob + "_Z" + ToString(aZ-aZ0) ;
+                        bool OkZ = InitZ(aZ,eModeNoMom);  // Generate orthos and mask at given Z
+			if (OkZ)
+                        {
+                            Box2di  aBoxDil(Pt2di(mX0UtiDilTer,mY0UtiDilTer),Pt2di(mX1UtiDilTer,mY1UtiDilTer));
+                            Box2di  aBoxUti(Pt2di(mX0UtiTer,mY0UtiTer),Pt2di(mX1UtiTer,mY1UtiTer));
+
+			    // Memorize vector of boxes
+			    aVecBoxDil.push_back(aBoxDil);
+			    aVecBoxUti.push_back(aBoxUti);
+
+                            SaveIm(aPrefixZ+"_OkT.tif",mDOkTer,aBoxUti);
+                            //std::vector<std::vector<cGPU_LoadedImGeom *> > mVScaIm
+			    //  Save ortho and Masks  for all images
+			    for (int aKIm=0 ; aKIm<int(mVLI.size()) ; aKIm++)
+                            {
+                                 for (int aKScale=0; aKScale<mNbScale ; aKScale++)
+                                 {
+                                     // cGPU_LoadedImGeom & aGLI_0 = *(mVLI[aKIm]);
+                                     cGPU_LoadedImGeom & aGLI_K =  *(mVScaIm[aKScale][aKIm]);
+                                     std::string aPrefixZIm = aPrefixZ + "_I" + ToString(aKIm) + "_S"+ ToString(aKScale);
+				     SaveIm(aPrefixZIm+"_O.tif",aGLI_K.DataOrtho(),aBoxDil);
+				     SaveIm(aPrefixZIm+"_M.tif",aGLI_K.DataOKOrtho(),aBoxDil);
+                                 }
+                            }
+			    // aVecBox.push_back(
+                        }
+			else
+			{
+                            // Generate information for no data
+			    aVecBoxDil.push_back(aBoxEmpty);
+			    aVecBoxUti.push_back(aBoxEmpty);
+                            std::string aNameNone  = aPrefixZ + "_NoData";
+			    ELISE_fp aFile(aNameNone.c_str(),ELISE_fp::WRITE);
+			    aFile.close();
+			}
+		  }
+
+		  //  Call external command
+		  std::string   aCom =  aMCOE.Cmd().Val() // "MMVII  DM4MatchMultipleOrtho "
+			                +  " " + aPrefixGlob  
+					+  " " + ToString(aZ1-aZ0)          // Number of Ortho
+					+  " " + ToString(int(mVLI.size()))  // Number of Images
+					+  " " + ToString(mNbScale)  // Number of Scale
+					+  " " + ToString(  mCurSzV0)     // Size of Window
+					+  " " + ToString( mGIm1IsInPax)     // Are we in mode Im1 Master
+		                 ;
+		  if (aMCOE.Options().IsInit())
+                     aCom = aCom + " " + QUOTE(aMCOE.Options().Val());
+                  //   std::cout << aCom << "\n";
+		  System(aCom);
+		  // Fill cube with computed similarities
+                  for (int aZ=aZ0 ; aZ<aZ1 ; aZ++)
+                  {
+                      int aKBox = (aZ-aZ0);
+		      const Box2di & aBoxU = aVecBoxUti.at(aKBox);
+		      const Box2di & aBoxDil = aVecBoxDil.at(aKBox);
+		      bool  CorDone = (aBoxU.sz() != Pt2di(0,0));
+		      if (CorDone)
+		      {
+			      // Read similarity
+                          std::string aNameSim =    aPrefixGlob + "_Z" + ToString(aZ-aZ0) + "_Sim.tif"  ;
+			  Im2D_REAL4  aImSim = Im2D_REAL4::FromFileStd(aNameSim);
+			  TIm2D<REAL4,REAL8> aTImSim(aImSim);
+
+			      // Read masq terrain
+                          std::string aNameOkT =    aPrefixGlob + "_Z" + ToString(aZ-aZ0) + "_OkT.tif"  ;
+			  Im2D_U_INT1  aImOkT = Im2D_U_INT1::FromFileStd(aNameOkT);
+			  TIm2D<U_INT1,INT4> aTImOkT(aImOkT);
+
+
+			  // Parse image to fill cost for optimizer
+			  Pt2di aPUti;
+                          for (aPUti.x = aBoxU._p0.x ; aPUti.x <  aBoxU._p1.x ; aPUti.x++)
+                          {
+                               for (aPUti.y=aBoxU._p0.y ; aPUti.y<aBoxU._p1.y ; aPUti.y++)
+                               {
+                                     bool Ok1 = aTImOkT.get(aPUti-aBoxU._p0);
+				     /*
+                                     bool Ok2 = mDOkTer[aPUti.y][aPUti.x];
+                                     ELISE_ASSERT(Ok1==Ok2,"aImOkT.get coh");
+				     */
+                                     if (Ok1)
+				     {
+                                         Pt2di aPDil = aPUti - aBoxDil._p0;
+				         double aSim =  aTImSim.get(aPDil);
+                                         mSurfOpt->SetCout(aPUti,&aZ,aSim);
+				     }
+			       }
+			  }
+		      }
+                  }
+		  // Purge temporary files
+	          std::string aComPurge = SYS_RM + std::string(" ") + aPrefixGlob + "*";
+	          System(aComPurge);
+             }
+	}
+
+        // On peut avoir a la fois MCP et mCC (par ex)
+        if (aTC.MultiCorrelPonctuel().IsInit())
         {
             const cMultiCorrelPonctuel * aMCP = aTC.MultiCorrelPonctuel().PtrVal();
             const cMCP_AttachePixel * aAP = aMCP->MCP_AttachePixel().PtrVal();
             double aPdsPix= 0 ;
             if (aAP)
             {
-               aPdsPix=  aAP->Pds();
+               aPdsPix=  aAP->Pds() * MCPMulCorel;
                for (int aKIm= 0 ; aKIm<int(mVLI.size()) ; aKIm++)
                {
                     std::string aName = mVLI[aKIm]->PDV()->Name();
@@ -1951,7 +2278,7 @@ void cAppliMICMAC::DoCorrelAdHoc
                        }
                        else
                        {
-                           ELISE_ASSERT(false,"MCP_AttachePixel handles only xml");
+			   aCal = new cGLI_CalibRadiom(aNameF); 
                        }
                        mDicCalRad[aName] = aCal;
                     }
@@ -1961,19 +2288,17 @@ void cAppliMICMAC::DoCorrelAdHoc
             }
             DoGPU_Correl(aBox,aMCP,aPdsPix);
         }
-        else if (aTC.MasqueAutoByTieP().IsInit())
-        {
-            DoMasqueAutoByTieP(aBox,aTC.MasqueAutoByTieP().Val());
-        }
-        else if (aTC.CensusCost().IsInit())
-        {
-             DoCensusCorrel(aBox,aTC.CensusCost().Val());
-        }
 
 }
 
 void ShowStat(const std::string & aMes,std::vector<float> & aVC)
 {
+   if(aVC.empty())
+   {
+        std::cout << aMes << " empty" << "\n";
+        return;
+   }
+
    double aV0 = KthValProp(aVC,0.25);
    double aV1 = KthValProp(aVC,0.75);
 
@@ -2008,7 +2333,7 @@ void cAppliMICMAC::GlobDoCorrelAdHoc
         }
         const cTypeCAH & aTC  = mCorrelAdHoc->TypeCAH();
 
-        if (aTC.CensusCost().IsInit())
+        if ((aTC.CensusCost().IsInit()) &&  (GeomImages() == eGeomImage_EpipolairePure))
         {
             int aK=0;
             for

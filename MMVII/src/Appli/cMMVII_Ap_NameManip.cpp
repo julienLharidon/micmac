@@ -1,30 +1,31 @@
-#include "include/MMVII_all.h"
+#include "cMMVII_Appli.h"
+
 
 namespace MMVII
 {
 
 cMMVII_Ap_NameManip::cMMVII_Ap_NameManip() :
-   mCurLut (0)
+   mCurLut (nullptr)
 {
 }
 
 cMMVII_Ap_NameManip::~cMMVII_Ap_NameManip()
 {
-     MMVII_INTERNAL_ASSERT_medium(mCurLut==0,"~cMMVII_Ap_NameManip => mCurLut");
+     MMVII_INTERNAL_ASSERT_medium(mCurLut==nullptr,"~cMMVII_Ap_NameManip => mCurLut");
 }
 
 void cMMVII_Ap_NameManip::GetCurLut()
 {
-     MMVII_INTERNAL_ASSERT_medium(mCurLut==0,"cMMVII_Ap_NameManip::GetCurLut");
+     MMVII_INTERNAL_ASSERT_medium(mCurLut==nullptr,"cMMVII_Ap_NameManip::GetCurLut");
      mCurLut = mGoClut.EmprunterOne();
 }
 
 void cMMVII_Ap_NameManip::RendreCurLut()
 {
-     MMVII_INTERNAL_ASSERT_medium(mCurLut!=0,"cMMVII_Ap_NameManip::RendreCurLut");
+     MMVII_INTERNAL_ASSERT_medium(mCurLut!=nullptr,"cMMVII_Ap_NameManip::RendreCurLut");
      mCurLut->UnInit();
      mGoClut.RendreOne(mCurLut);
-     mCurLut = 0;
+     mCurLut = nullptr;
 }
 
 
@@ -38,21 +39,20 @@ const char *  cMMVII_Ap_NameManip::SkipLut(const char * aC,int aVal)
 
 void cMMVII_Ap_NameManip::SplitString(std::vector<std::string > & aRes,const std::string & aStr,const std::string & aSpace)
 {
-
      GetCurLut();
      mCurLut->Init(aSpace,1);
 
-
-
      const char * aC = aStr.c_str();
-     aC = SkipLut(aC,1);
+     if (mCurLut->Val(*aC)==1)
+        aRes.push_back("");
      while (*aC)
      {
+          aC = SkipLut(aC,1);
           const char * aC0 = aC;
           aC = SkipLut(aC,0);
           std::string aStr(aC0,aC);
           aRes.push_back(aStr);
-          aC = SkipLut(aC,1);
+          // aC = SkipLut(aC,1);
      }
      // const char * aDT = aLUT->Table() ;
      RendreCurLut();

@@ -812,6 +812,12 @@ Fonc_Num CosRx(Fonc_Num);  // cos sqrt x
 double SinCardRx(double);  // cos sqrt x
 Fonc_Num SinCardRx(Fonc_Num);  // cos sqrt x
 
+double IsInf(double);  // boolean is it inf ?
+Fonc_Num IsInf(Fonc_Num);  
+double IsNan(double);  // boolean is it nan ?
+Fonc_Num IsNan(Fonc_Num);  
+double IsBadNum(double);  // boolean is it inf or nan ?
+Fonc_Num IsBadNum(Fonc_Num);  
 
 
     // Operateur utile a la fonction de conversion des Fish Eye Linear
@@ -841,6 +847,15 @@ Fonc_Num  f2SAtRxS2SRx(Fonc_Num);
 double Dl_Der2SAtRxS2SRx(double x);   
 double Std_Der2SAtRxS2SRx(double x);   
 double Der2SAtRxS2SRx(double x);   // Der f2SAtRxS2SRx
+
+
+double PrecStereographique(double x);
+double Der_PrecStereographique(double x);
+double SqM2CRx_StereoG(double x);
+double Der_SqM2CRx_StereoG(double x);
+double Inv_PrecStereographique(double x);
+Fonc_Num Der_PrecStereographique(Fonc_Num f);
+Fonc_Num Der_SqM2CRx_StereoG(Fonc_Num f);
 
 
     // Operateur utile a la fonction de conversion des Fish Eye Linear
@@ -908,11 +923,13 @@ extern   double    AtanXY(double,double);
 extern Fonc_Num FoncNormalisee_S1S2 (Flux_Pts aFl,Fonc_Num aFPds,Fonc_Num aF);
 extern Fonc_Num FoncNormalisee_S1S2 (Flux_Pts aFl,Fonc_Num aF); // FPds=1.0
 
+#ifdef _MSC_VER
 #if ( ELISE_windows & !ELISE_MinGW & _MSC_VER < 1800 )
 inline double log2(const double & aD)
 {
        return log(aD) / log(2.0);
 }
+#endif
 #endif
 
 

@@ -108,6 +108,7 @@
     <eCalibAutomFour19x2>                 </eCalibAutomFour19x2>
     <eCalibAutomEbner>                 </eCalibAutomEbner>
     <eCalibAutomBrown>                 </eCalibAutomBrown>
+    <eCalibAutomFishEyeStereographique>     </eCalibAutomFishEyeStereographique>
     <eCalibAutomNone>                 </eCalibAutomNone>
 </enum>
 
@@ -128,6 +129,22 @@
     <eVerifDZ> </eVerifDZ>
 <!--  Residu Per Im -->
     <eVerifResPerIm> </eVerifResPerIm>
+</enum>
+
+
+<enum Name="eTypeResulPtsBundle">
+    <eTRPB_Ok>      </eTRPB_Ok>
+    <eTRPB_InsufPoseInit>      </eTRPB_InsufPoseInit>
+    <eTRPB_PdsResNull> </eTRPB_PdsResNull>
+    <eTRPB_NotInMasq3D> </eTRPB_NotInMasq3D>
+    <eTRPB_BSurH>   </eTRPB_BSurH>
+    <eTRPB_Behind>   </eTRPB_Behind>
+    <eTRPB_VisibIm> </eTRPB_VisibIm>
+    <eTRPB_OutIm> </eTRPB_OutIm>
+    <eTRPB_PbInterBundle> </eTRPB_PbInterBundle>
+    <eTRPB_RatioDistP2Cam> </eTRPB_RatioDistP2Cam>
+    <eTRPB_Unknown> </eTRPB_Unknown>
+    <eTRPB_NbVals> </eTRPB_NbVals>
 </enum>
 
 
@@ -255,6 +272,27 @@
     <SigmaMin     Nb="1" Type="double" >          </SigmaMin>
     <MaxResidu Nb="?" Type="double">             </MaxResidu>
 </GpsRelativeWeighting>
+
+
+<Xml_OneObsPlane  Nb="1" Class="true" ToReference="true">
+     <!-- Code  (P.Vect-Cste)/Sigma=0 , Vects sera calcule comme unitaire -->
+     <Sigma Type="double" Nb="1">  </Sigma>
+     <Cste  Type="double" Nb="1"> </Cste>
+     <Vect  Type="Pt3dr" Nb="1"> </Vect>
+</Xml_OneObsPlane>
+
+<Xml_ObsPlaneOnPose  Nb="1" Class="true" ToReference="true">
+      <NameIm Nb="1" Type="std::string"> </NameIm>
+      <Obs1Plane Nb="+" RefType="Xml_OneObsPlane">  </Obs1Plane>
+</Xml_ObsPlaneOnPose>
+
+<Xml_FileObsPlane Nb="1" Class="true" ToReference="true">
+      <Obs1Im Nb="*" RefType="Xml_ObsPlaneOnPose"  Container="std::map" 
+                     KeyType="std::string" 
+                     KeyGetVal="NameIm"
+     >  
+     </Obs1Im>
+</Xml_FileObsPlane>
 
 
 
@@ -605,7 +643,16 @@
               <GpsOffset Nb="*">
                   <ValInit Nb="1" Type="Pt3dr"> </ValInit>
                   <Id Nb="1" Type="std::string"> </Id>
+                  <!-- Si pas d'incertitude, aucun rappel sur la valeur initiale -->
+                  <Inc Nb="?" Type="Pt3dr"> </Inc>
               </GpsOffset>
+
+              <DataObsPlane Nb="*">
+                  <Id Nb="1" Type="std::string"> </Id>
+                  <NameFile Nb="1" Type="std::string"> </NameFile>
+                  <Weight  Nb="?"  Type="double"  Def="1.0"> </Weight>
+                  <Data Nb="1"   RefType="Xml_FileObsPlane">  </Data>
+              </DataObsPlane>
 
               <CalibrationCameraInc Nb="*">
 	           <Name Nb="1" Type="std::string"> </Name>
@@ -748,6 +795,7 @@
                     <FilterConnecBy Nb="?" Type="std::string"> </FilterConnecBy>
                     
                     <MEP_SPEC_MST Nb="?"> 
+		         <MSTBlockRigid Nb="?" Type="std::string" > </MSTBlockRigid> <!-- Name file bloc --> 
                          <Show Nb="?" Type="bool" Def="false"> </Show> 
 
                     <!-- On privilegie systematiquement les poses pour lesquelles on trouve un
@@ -842,6 +890,7 @@
 
 		        <PosId Nb="?" Type="std::string"> </PosId> <!-- Le string est ignore --> 
 		        <PosFromBDOrient Nb="?" Type="std::string"> </PosFromBDOrient>
+		        <PosFromBlockRigid Nb="?" Type="std::string"> </PosFromBlockRigid> <!-- Name file bloc --> 
 		        <PosFromBDAppuis Nb="?"> 
 			      <Id Nb="1" Type="std::string"> </Id>
 			      <NbTestRansac Nb="1" Type="int"> </NbTestRansac>
@@ -952,7 +1001,24 @@ se limite a tester les 2 algo et a selectionner le meilleur. A priori peut pas f
 
 
         <SectionChantier Nb="1">
+              <!-- This section is used when we want to force a pose to be closed to a value -->
+              <RappelPose Nb="?">
+                  <IdOrient Nb="1" Type="std::string"> </IdOrient>
+                  <SigmaC  Nb="1" Type="double">  </SigmaC> <!-- Ground Units -->
+                  <SigmaR  Nb="1" Type="double">  </SigmaR> <!-- Radian -->
+                  <PatternApply  Nb="1" Type="cElRegex_Ptr">  </PatternApply>
+              </RappelPose>
 
+              <!-- Si >=0, l'attribut de ce numero est utilise comme ponderation de points dans le nouveau format -->
+              <NumAttrPdsNewF Nb="?" Type="int" Def="-1"> </NumAttrPdsNewF>
+
+              <RatioMaxDistCS  Type="double" Nb="?" Def="30.0" > </RatioMaxDistCS>
+              <!-- Permet d'eliminer les tie points de maniere reproductible
+                   [7,1,13,4]  => elimine ceux dont le numero est egal a 1%7 et a 4 % 13
+              -->
+              <DebugVecElimTieP  Type="std::string" Nb="?" > </DebugVecElimTieP>
+
+              <DoStatElimBundle Nb="?" Type="int"> </DoStatElimBundle>
               <UseExportImageResidu  Nb="?"> 
                    <SzByPair Nb="?" Type="double" Def="30"> </SzByPair> 
                    <SzByPose Nb="?" Type="double" Def="50"> </SzByPose> 
@@ -1008,6 +1074,11 @@ se limite a tester les 2 algo et a selectionner le meilleur. A priori peut pas f
               -->
              <ThresholdWarnPointsBehind Nb="?" Type="double" Def="0.01"></ThresholdWarnPointsBehind>
 
+             <!-- Used to test alternative solution to linear solution of least square -->
+             <ExportMatrixMarket Nb="?" Type="bool" Def="false"> </ExportMatrixMarket>
+
+              <!-- Used to avoird too sctrict elimination of point on Z criteria -->
+	     <ExtensionIntervZ Nb="?" Type="double"> </ExtensionIntervZ>
         </SectionChantier>
 
 
@@ -1115,6 +1186,7 @@ normalises en echelle et/ou en translation -->
                                    <BascOnCentre Nb="?">
                                         <PoseCentrale Nb="?" Type="std::string"> </PoseCentrale>
                                         <EstimateSpeed Type="bool" Nb="?" Def="false"> </EstimateSpeed>
+                                        <ForceVertical Type="double" Nb="?"> </ForceVertical>
                                    </BascOnCentre>
                                    <BascOnAppuis Nb="?">
                                         <NameRef Nb="1" Type="std::string"> </NameRef>   
@@ -1349,6 +1421,10 @@ normalises en echelle et/ou en translation -->
 
                      </ObsBlockCamRig>
 
+                     <ObsCenterInPlane Nb="*">
+                         <Id Nb="1" Type="std::string"> </Id>
+                     </ObsCenterInPlane>
+
                       <!-- Ici il s'agit de point d'appuis "sur", -->
 		      <ObsAppuis Nb="*">
 		             <!-- Mesure "naturelle" = Terrain -->
@@ -1391,6 +1467,8 @@ normalises en echelle et/ou en translation -->
 			     <PondSurf Nb="?" RefType="PonderationPackMesure"> </PondSurf>
                              <!-- TRI VALEUR Si on le donne : x =Z, y = Poids compens z=seuil -->
                              <RappelOnZ Nb="?">  
+			           <!-- Si KeyGrpApply est init, ne s'applique que quand toutes les cameras sont du meme KeyGrpApply -->
+			           <KeyGrpApply Nb="?" Type="std::string"> </KeyGrpApply>
                                    <Z Nb="1" Type="double"> </Z>
                                    <!-- Incertitude pour l'estimation et la compensation -->
                                    <IncC Nb="1" Type="double"> </IncC>
@@ -1552,6 +1630,7 @@ normalises en echelle et/ou en translation -->
 		          <PatternSel Nb="?" Type="std::string" Def=".*" > </PatternSel>
 			  <NameFileXml    Nb="?" Type="std::string"  > </NameFileXml>
 			  <NameFileTxt    Nb="?" Type="std::string"  > </NameFileTxt>
+			  <NameFileJSON    Nb="?" Type="std::string"  > </NameFileJSON>
 			  <TextComplTxt Nb="?" Type="std::string">  </TextComplTxt>
 		     </ExportPtsFlottant>
 

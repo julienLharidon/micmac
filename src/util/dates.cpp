@@ -135,14 +135,18 @@ int MakeOneXmlXifInfo_main(int argc,char ** argv)
         LArgMain()  << EAM(toto,"toto",true)
     );
 
+
     ELISE_fp::MkDirSvp(DirOfFile(aNameXml));
+
     cMetaDataPhoto aMTD = cMetaDataPhoto::CreateExiv2(aNameIm);
-    
 
-    cXmlXifInfo aXML =  MDT2Xml(aMTD);
 
-    MakeFileXML(aXML,aNameXml);
-    MakeFileXML(aXML,StdPrefix(aNameXml)+".dmp");
+        cXmlXifInfo aXML =  MDT2Xml(aMTD);
+
+        MakeFileXML(aXML,aNameXml);
+        MakeFileXML(aXML,StdPrefix(aNameXml)+".dmp");
+
+
 
     return EXIT_SUCCESS;
 }
@@ -1021,8 +1025,16 @@ Pt2di  cMetaDataPhoto::TifSzIm(bool Svp) const
 	// ELISE_ASSERT(Svp || (mXifSzIm.x>0) ,"cMetaDataPhoto::Date UnInit");
 	if (mTifSzIm.x<0)
 	{
-		Tiff_Im aTF = Tiff_Im::StdConvGen(mNameIm,1,true,true);
-		mTifSzIm = aTF.sz();
+            if (Tiff_Im::IsTiff(mNameIm.c_str(),true) )
+            {
+	        Tiff_Im aTF(mNameIm.c_str());
+	        mTifSzIm = aTF.sz();
+            }
+            else
+            {
+	        Tiff_Im aTF = Tiff_Im::StdConvGen(mNameIm,1,true,true);
+	        mTifSzIm = aTF.sz();
+            }
 	}
 	return mTifSzIm; 
 }
@@ -1263,7 +1275,7 @@ private  :
 	        mStrExe             (aStrExe + " "),
 		mStrLangE           (STRLANG+ mStrExe),
 		mStrTmp             (aStrTmp),
-		mAutomDate          (new cElRegex(aStrDate,15)),
+        mAutomDate          (new cElRegex(aStrDate,15)),
 		mOrderDate          (aOrderDate),
 		mAutomFoc           (new cElRegex(aStrFocal,15)),
 		mAutomF35           (new cElRegex(aStrF35,15)),
@@ -1469,10 +1481,10 @@ cMetaDataPhoto cXifDecoder::GetMTDIm(const std::string & aNameIm)
 				GetValsNumFromLineExprReg(aXifDec.mAutomDate,aXifDec.mFileTxt, "",aXifDec.mOrderDate, &aNbMatch);
 
 			if (aNbMatch==1)
-			{
+            {
 				aDate = cElDate
 					(
-					round_ni(aVDate[2]),round_ni(aVDate[1]),round_ni(aVDate[0]),
+                    round_ni(aVDate[2]),round_ni(aVDate[1]),round_ni(aVDate[0]),
 					cElHour(round_ni(aVDate[3]),round_ni(aVDate[4]),round_ni(aVDate[5]))
 					);
 				GotDate = true;

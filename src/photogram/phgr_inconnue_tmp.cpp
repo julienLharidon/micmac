@@ -362,12 +362,14 @@ cRapOnZ::cRapOnZ
      double aZ,
      double aIncertCompens,
      double aIncertEstim,
-     const std::string & aLayerIm
+     const std::string & aLayerIm,
+     const std::string & aKeyGrpApply
 ) :
    mZ   (aZ),
    mIC  (aIncertCompens),
    mIE  (aIncertEstim),
-   mLayerIm (aLayerIm)
+   mLayerIm (aLayerIm),
+   mKeyGrpApply (aKeyGrpApply)
 {
 }
 
@@ -377,6 +379,10 @@ const std::string & cRapOnZ::LayerIm() const
    return mLayerIm;
 }
 
+const std::string & cRapOnZ::KeyGrpApply() const
+{
+   return mKeyGrpApply;
+}
 
 
 double cRapOnZ::Z() const {return  mZ;}
@@ -703,6 +709,7 @@ double CondMat(ElMatrix<tSysCho> & aMat,bool Sym3,bool SSym)
    return aCond;
 }
 
+
 double cBufSubstIncTmp::DoSubst
      (  // X et Y notation de la doc, pas ligne ou colonnes
           cParamCalcVarUnkEl * aCalcUKn,
@@ -774,6 +781,12 @@ if(DebugCamBil)
 
    aCond *=  mLambda.L2();
    aCond = sqrt(aCond) / (mLambda.tx() * mLambda.ty());
+
+if (DEBUG_LSQ)
+{
+    std::cout << "CoooOoond= " <<aCond << " aLimCond=" << aLimCond << "\n";
+    getchar();
+}
 
    if ((aLimCond>0)  && (aCond>aLimCond))
    {
@@ -1082,6 +1095,13 @@ void cSubstitueBlocIncTmp::RazNonTmp()
    cBufSubstIncTmp::TheBuf()->RazNonTmp(mBlocTmp.Set(),mSBlNonTmp);
 }
     
+void cSubstitueBlocIncTmp::InitSsBlocSpecCond(cSsBloc **  aSsBlocSpecCond)
+{
+    ELISE_ASSERT(mVSBlTmp.size()==1,"cSubstitueBlocIncTmp::InitSsBlocSpec");
+    *aSsBlocSpecCond =  &(mVSBlTmp[0]);
+    // std::cout << "aaaaSsBlocSpecCond " << aSsBlocSpecCond << "\n";
+    // getchar();
+}
 
 void cSubstitueBlocIncTmp::DoSubstBloc(cParamCalcVarUnkEl * aPCVU,bool doRaz,double LimCond)
 {
@@ -1109,6 +1129,8 @@ double  cSubstitueBlocIncTmp::Cond() const
 
 const double cResiduP3Inc::TheDefBSurH = 1.0;
 
+double GlobExternRatioMaxDistCS = 30.0;
+
 cParamPtProj::cParamPtProj(double aSeuilBsH,double aSeuilBsHRefut,bool aDebug,double aSeuilOkBehind) :
    mBsH       (cResiduP3Inc::TheDefBSurH),
    mDebug     (aDebug),
@@ -1116,6 +1138,7 @@ cParamPtProj::cParamPtProj(double aSeuilBsH,double aSeuilBsHRefut,bool aDebug,do
    mSeuilOkBehind  (aSeuilOkBehind),
    mSeuilBsHRefut  (aSeuilBsHRefut),
    mProjIsInit (false),
+   mRatioMaxDistCS (GlobExternRatioMaxDistCS),
    wDist       (true),
    mInitBasePPP (false),
    mInitHautPPP (false)
@@ -1370,7 +1393,8 @@ bool OkReproj
           const std::vector<double> &  aVPds,
           const Pt3dr &                aPTer,
           int & aKP,
-          bool  OkBehind
+          bool  OkBehind,
+          std::string & Why
     )
 {
 
@@ -1395,6 +1419,7 @@ bool OkReproj
  // Semble + robuste de se baser sur la visibilite car reprojection peut etre degeneree
            if (! aCam.PIsVisibleInImage(aPTer,&anArg))
            {
+              Why = anArg.mWhy;
               aKP = aK;
 
               return false;
@@ -1406,6 +1431,7 @@ bool OkReproj
 }
 
 bool ResidualStepByStep = false;
+
 
 Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
        (
@@ -1419,6 +1445,7 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
            std::string *             aMesPb
        )
 {
+  
    if (aMesPb) *aMesPb="NoPb";
 
    aParam.mHasResolMoy = false;
@@ -1434,6 +1461,7 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
 
 
    static int aCpt = 0; aCpt++;
+// if (MPD_MM()) std::cout << "aCptaCptaCptaCpt " << aCpt << "\n";
 
 
    for (int aK=0 ; aK<int(aVCC.size()) ; aK++)
@@ -1524,20 +1552,19 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
       aParam.mBsH  = 1.35 * aParam.mEc2;
 
 
+
       if (aParam.mBsH < aParam.mSeuilBsHRefut)
       {
          OKInter = false;
          if (aMesPb)
          {
-              *aMesPb= std::string("BSurH Insuf : ") + ToString(aParam.mBsH);
+              *aMesPb= std::string("BSurH-Insuf : ") + ToString(aParam.mBsH);
          }
          return Pt3dr(0,0,0);
       }
    
       if ((aParam.mBsH < aParam.mSeuilBsH) && (! aRAZ))
       {
-
-
           aParam.mProjIsInit = true;
       }
       else
@@ -1612,12 +1639,34 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
 
 
       int aKPb=-1;
-      if (! OkReproj(aVCC,aVPds,aRes,aKPb,(aParam.mBsH<aParam.mSeuilOkBehind)))
+      std::string aWhy;
+      if (! OkReproj(aVCC,aVPds,aRes,aKPb,(aParam.mBsH<aParam.mSeuilOkBehind),aWhy))
       {
          OKInter = false;
          if (aMesPb)
          {
-             *aMesPb = std::string("Mes Out of Im, for Im num : ") + ToString(aKPb);
+             // std::cout << "Whhhhyyyy " << aWhy << "\n";
+             if (aWhy=="Behind")
+             {
+                *aMesPb = std::string("BehindCam, for Im num : ") + ToString(aKPb);
+             }
+             else
+             {
+                if (MPD_MM())
+                {
+                    if (     (aWhy!= "PreCondOut")
+                          && (aWhy!= "ScanedOut")
+                          && (aWhy!= "NotInImage")
+                          && (aWhy!= "DistCheck")
+                       )
+                    {
+                         // ELISE_ASSERT(false,"Why NotVisible not handled");
+			//   std::cout <<  "REPPPROJjjj PB\n";
+                    }
+                }
+		// if (*aMesPb =="NoPb")
+                *aMesPb = std::string("MesNotVisIm, for Im num : ") + ToString(aKPb);
+             }
          }
 
          return Pt3dr(0,0,0);
@@ -1628,7 +1677,7 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
          OKInter = false;
          if (aMesPb)
          {
-             *aMesPb = std::string("Intersection faisceau non definie ???");
+             *aMesPb = std::string("Intersectionfaisceaunondefinie ???");
          }
 
          return Pt3dr(0,0,0);
@@ -1674,6 +1723,36 @@ Pt3dr  cManipPt3TerInc::CalcPTerInterFaisceauCams
       aParam.mHasResolMoy = true;
       aParam.mSomPds = aSP;
       
+      // Test les ratio de distances pour eviter en amont un probleme de conditionnement
+      if (1) // (DEBUG_LSQ)
+      {
+          std::vector<double> aVD;
+          
+          for (int aK=0 ; aK<int(aVCC.size()) ; aK++)
+          {
+              CamStenope * aCS = aVCC[aK]->DownCastCS();
+              if (aCS)
+              {
+                 aVD.push_back(euclid(aRes-aCS->PseudoOpticalCenter()));
+              }
+               // std::cout << "DDdddd " << euclid(aRes-aVCC[aK]->DownCastCS()->PseudoOpticalCenter()) << "\n";
+          }
+          if ((aVD.size() == aVCC.size()) && (aVD.size() >=2))
+          {
+              std::sort(aVD.begin(),aVD.end());
+              double aRatio = aVD[1] / aVD[0];
+              if (aRatio > aParam.mRatioMaxDistCS)
+              {
+                 OKInter = false;
+                 if (aMesPb)
+                 {
+                    *aMesPb = std::string("RatioDistP2CamTooHigh");
+                 }
+                 return Pt3dr(0,0,0);
+              }
+          }
+      }
+
       OKInter = true;
       return aRes;
    }
@@ -1705,6 +1784,11 @@ void ShowDebugFaisceau(double aCond,double aBH,int aCpt)
 
 bool UPL_DCC() {return false;}
 
+
+extern cSsBloc * mSsBlocSpecCond;
+
+
+
 const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
                            (
                               const cArg_UPL& anArg,
@@ -1721,7 +1805,7 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
                            )
 {
    cParamCalcVarUnkEl aPCVU;
-   cParamCalcVarUnkEl * aPCVUPtr =    mSet.Sys()->IsCalculingVariance() ? &aPCVU : NullPCVU;
+   cParamCalcVarUnkEl * aPCVUPtr =   (mSet.Sys() && mSet.Sys()->IsCalculingVariance()) ? &aPCVU : NullPCVU;
    double aLimBsHOKBehind = 1e-2;
    double aCondMax = -1;
    if (anArg.mRop)
@@ -1846,9 +1930,6 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
 
     mP3Inc->InitEqP3iVal(aPTer);
 
-
-
-    // if (AddEq)
     {
         ELISE_ASSERT(aVPdsIm.size()==mVCamVis.size(),"UsePointLiaison");
 	int aNbNN =0;
@@ -1861,7 +1942,9 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
 
                Pt3dr aCOpt = aBGC3d->OpticalCenterOfPixel(aNuple.PK(aK));
                if (euclid(mResidus.mPTer-aCOpt)<1e-5)
+	       {
                  aVPdsIm[aK] = 0;
+	       }
             }
 	    if (aVPdsIm[aK]>0) 
             {
@@ -1874,11 +1957,13 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
            )
         {
             mResidus.mOKRP3I = false;
+            mResidus.mMesPb = "NoNulPoint";
             return mResidus;
         }
     }
+ 
 
-    // const std::vector<Pt2dr> &  aResidu = AddEquationProjCam(aNuple,aPds);
+    mSubst.InitSsBlocSpecCond(&mSsBlocSpecCond);
     mResidus.mEcIm.clear();
     for (int aK=0 ; aK<int(mVCamVis.size()) ; aK++)
     {
@@ -1898,6 +1983,7 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
            mResidus.mEcIm.push_back(Pt2dr(1e5,1e5));
         }
     }
+    mSsBlocSpecCond = 0;
 
     if (mEqSurf)
     {
@@ -1939,11 +2025,17 @@ const cResiduP3Inc& cManipPt3TerInc::UsePointLiaisonGen
 	}
     }
 
+    
+/*
+DEBUG_LSQ
+*/
 
     if (UPL_DCC()) std::cout << "HHHHHHHHhhhhhhhhhh " << AddEq << "\n";
     if (AddEq)
     {
-       mSubst.DoSubstBloc(aPCVUPtr,true,(mPPP.mProjIsInit?aCondMax:-1));
+       double aCMax = mPPP.mProjIsInit?aCondMax:-1;
+       // if (MPD_MM()) aCMax= 100;
+       mSubst.DoSubstBloc(aPCVUPtr,true,aCMax);
     }
 
     return mResidus;

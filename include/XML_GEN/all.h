@@ -104,12 +104,13 @@ std::string current_program_fullname();   // mm3d's full name (absolute path + e
 std::string current_program_subcommand(); // mm3d's subcommand (Tapioca, Apero, etc.)
 int MMNbProc();
 bool MPD_MM(); // Est ce que c'est ma machine, afin de ne pas polluer les autres en phase de test !!!!
+bool ERupnik_MM();
 
-#if(ELISE_QT_VERSION >= 4)
+#if ELISE_QT
 	string MMQtLibraryPath();
 	void setQtLibraryPath( const string &i_path );
 	void initQtLibraryPath();
-#endif
+#endif // ELISE_QT
 
 inline bool isUsingSeparateDirectories();
 extern const string temporarySubdirectory; // = "Tmp-MM-Dir/" (see src/photogram/ChantierNameAssoc.cpp)
@@ -131,6 +132,7 @@ std::string MM3dBinFile_quotes(const std::string &);
 //   MMDir() + std::string("include" ELISE_STR_DIR "XML_MicMac" ELISE_STR_DIR "Apero-Cloud.xml ")
 std::string XML_MM_File(const std::string &);
 std::string Basic_XML_MM_File(const std::string &);
+std::string Specif_XML_MM_File(const std::string &);
 std::string Basic_XML_User_File(const std::string & aName);
 std::string XML_User_Or_MicMac(const std::string & aName);
 
@@ -209,6 +211,11 @@ class cInterfChantierNameManipulateur
 
 
 
+        std::string   NameAppuiEpip(const std::string & anOri,const std::string & aIm1,const std::string & aIm2) ;
+        std::string   NameImEpip(const std::string & anOri,const std::string & aIm1,const std::string & aIm2) ;
+        std::string   NameOrientEpipGen(const std::string & anOri,const std::string & aIm1,const std::string & aIm2) ;
+
+
         ElPackHomologue StdPackHomol(const std::string & anExt,const std::string & aI1,const std::string &aI2);
         std::string  StdNameHomol(const std::string & anExt,const std::string & aI1,const std::string &aI2);
 
@@ -219,6 +226,7 @@ class cInterfChantierNameManipulateur
 //  !!!! CONVENTION DIFFERENTES ENTRE StdCamStenOfNames  et les deux AUTRES , 
 //  !! NAME puis ORI
          CamStenope *  StdCamStenOfNames(const std::string & aNameIm,const std::string & anOri);  // => Ori-XX/Orientation...
+         CamStenope *  StdCamStenOfNamesSVP(const std::string & aNameIm,const std::string & anOri); // => return 0 si Ori non existed
 
 //  !!!  ORI pui NAME
          std::string  StdNameCamGenOfNames(const std::string & anOri,const std::string & aNameIm);
@@ -1115,6 +1123,16 @@ cXml_ParamBascRigide   EL2Xml(const cSolBasculeRig &);
 cTypeCodageMatr ExportMatr(const ElMatrix<double> & aMat);
 ElMatrix<double> ImportMat(const cTypeCodageMatr & aCM);
 
+// Return the cParamOrientSHC of a given name
+cParamOrientSHC * POriFromBloc(cStructBlockCam & aBloc,const std::string & aName,bool SVP);
+// Return the Rotation that transformate from Cam Coord to Block coordinates (in fact coord of "first" cam)
+ElRotation3D  RotCamToBlock(const cParamOrientSHC & aPOS);
+// Return the Rotation that transformate from Cam1 Coord to Cam2 Coord
+ElRotation3D  RotCam1ToCam2(const cParamOrientSHC & aPOS1,const cParamOrientSHC & aPOS2);
+
+
+
+
 cXml_Rotation El2Xml(const ElRotation3D & aRot);
 ElRotation3D Xml2El(const cXml_Rotation & aXml);
 ElRotation3D Xml2ElRot(const cXml_O2IRotation & aXml);
@@ -1501,7 +1519,7 @@ class cAppliListIm
 
 // inline functions
 
-bool isUsingSeparateDirectories(){ return MMUserEnv().UseSeparateDirectories().Val(); }
+bool isUsingSeparateDirectories(){ return MMUserEnv().UseSeparateDirectories().ValWithDef(false); }
 
 
 // === Gestionnaire de nom pour les fusions ===============
@@ -1584,8 +1602,7 @@ bool IsMacType(eTypeMMByP aType);
 
 void AutoDetermineTypeTIGB(eTypeImporGenBundle & aType,const std::string & aName);
 
-
-
+double UneUniteEnRadian(eUniteAngulaire aUnit);
 
 
 
@@ -1595,7 +1612,7 @@ void AutoDetermineTypeTIGB(eTypeImporGenBundle & aType,const std::string & aName
 
 /*Footer-MicMac-eLiSe-25/06/2007
 
-Ce logiciel est un programme informatique servant �  la mise en
+Ce logiciel est un programme informatique servant �  la mise en
 correspondances d'images pour la reconstruction du relief.
 
 Ce logiciel est régi par la licence CeCILL-B soumise au droit français et
@@ -1611,17 +1628,17 @@ seule une responsabilité restreinte pèse sur l'auteur du programme,  le
 titulaire des droits patrimoniaux et les concédants successifs.
 
 A cet égard  l'attention de l'utilisateur est attirée sur les risques
-associés au chargement,  �  l'utilisation,  �  la modification et/ou au
-développement et �  la reproduction du logiciel par l'utilisateur étant
-donné sa spécificité de logiciel libre, qui peut le rendre complexe �
-manipuler et qui le réserve donc �  des développeurs et des professionnels
+associés au chargement,  �  l'utilisation,  �  la modification et/ou au
+développement et �  la reproduction du logiciel par l'utilisateur étant
+donné sa spécificité de logiciel libre, qui peut le rendre complexe �
+manipuler et qui le réserve donc �  des développeurs et des professionnels
 avertis possédant  des  connaissances  informatiques approfondies.  Les
-utilisateurs sont donc invités �  charger  et  tester  l'adéquation  du
-logiciel �  leurs besoins dans des conditions permettant d'assurer la
+utilisateurs sont donc invités �  charger  et  tester  l'adéquation  du
+logiciel �  leurs besoins dans des conditions permettant d'assurer la
 sécurité de leurs systèmes et ou de leurs données et, plus généralement,
-�  l'utiliser et l'exploiter dans les mêmes conditions de sécurité.
+�  l'utiliser et l'exploiter dans les mêmes conditions de sécurité.
 
-Le fait que vous puissiez accéder �  cet en-tête signifie que vous avez
+Le fait que vous puissiez accéder �  cet en-tête signifie que vous avez
 pris connaissance de la licence CeCILL-B, et que vous en avez accepté les
 termes.
 Footer-MicMac-eLiSe-25/06/2007*/

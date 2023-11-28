@@ -51,7 +51,6 @@ class Seg2d;
 class cElTriangleComp;
 template <class Type> class Pt3d;
 
-
 inline INT  scal(INT v1 ,INT v2 ) { return v1 * v2;}
 inline REAL scal(REAL v1,REAL v2) { return v1 * v2;}
 
@@ -178,6 +177,8 @@ template <class Type> class Pt2d : public  ElStdTypeScal<Type>
      typedef Type        TypeScal;
      typedef Pt2d<Type>  TypeEff;
      static Pt2d  El0 () {return Pt2d(0,0);}
+
+     typename ElStdTypeScal<Type>::TypeScalReel Vol() const{return x*this->T2R(y);}
 
      typedef Pt2d<typename ElStdTypeScal<Type>::TypeVarProvReel> TypeProvPtScalR;
 
@@ -339,6 +340,7 @@ template <class Type> class Pt2d : public  ElStdTypeScal<Type>
      Output WhichMax();
      Output WhichMin();
 
+     Pt2d<Type> AbsP() const {return Pt2d<Type>(ElAbs(x),ElAbs(y));}
 
      private :
           void Verif_adr_xy();
@@ -628,6 +630,10 @@ class ElSimilitude : public cElMap2D
           Pt2dr  _sc;
 };
 
+ElSimilitude  L2EstimSimHom(const class ElPackHomologue & aPack);
+
+
+
 class cElHomographie;
 class ElAffin2D : public cElMap2D
 {
@@ -786,8 +792,7 @@ template <class TPds,class TVal> inline TVal barry(TPds pds1,const TVal & p1,con
 {
      return p1*pds1  + p2*(1-pds1);
 }
-
-#if (ELISE_ACTIVE_ASSER)
+#if defined (ELISE_ACTIVE_ASSER) && (ELISE_ACTIVE_ASSER > 0)
 template <class Type> void assert_not_nul(const Pt2d<Type> & pt)
 {
     ELISE_ASSERT((pt.x != 0) || (pt.y !=0),"Unexptected Nul point");
@@ -851,7 +856,13 @@ template <class Type> class Pt3d : public  ElStdTypeScal<Type>
 
      Pt3d<Type>(const Pt2d<Type>&,Type z); // to please visual
 
+     Pt3d<Type> mcbyc(const Pt3d<Type> & p2) const
+                {return Pt3d(x*p2.x,y*p2.y,z*p2.z);}
+     Pt3d<Type> dcbyc(const Pt3d<Type> & p2) const
+                {return Pt3d(x/p2.x,y/p2.y,z/p2.z);}
 
+     static Pt3d<Type> RandC() {return Pt3d<Type>(NRrandC(),NRrandC(),NRrandC());}
+     static Pt3d<Type> Rand3() {return Pt3d<Type>(NRrandom3(),NRrandom3(),NRrandom3());}
 
      Pt3d(Type X,Type Y,Type Z);
      Pt3d<Type> operator + (const Pt3d<Type> & p2) const;
@@ -861,6 +872,9 @@ template <class Type> class Pt3d : public  ElStdTypeScal<Type>
 
      Pt3d<Type> operator - (const Pt3d & p2) const;
      Pt3d<Type> operator - () const;
+     typename ElStdTypeScal<Type>::TypeScalReel Vol() const{return x*(y*this->T2R(z));}
+     Pt3d<Type> PVolTarget(double aVolTarget) const {return (*this) * pow(aVolTarget/Vol(),1/3.0);}
+     Pt3d<Type> PVolUnite() const {return PVolTarget(1.0);}
 
      typename ElStdTypeScal<Type>::TypeBool  operator == (const Pt3d<Type> & p2) const {return (x==p2.x) && (y==p2.y) && (z==p2.z);}
 
@@ -882,7 +896,6 @@ template <class Type> class Pt3d : public  ElStdTypeScal<Type>
      static Pt3d<Type> FromTab(const Type *);
      std::vector<Type> ToTab() const;
      static Pt3d<Type> FromTab(const std::vector<Type> &);
-
 
      Pt3d<Type> AbsP() const {return Pt3d<Type>(ElAbs(x),ElAbs(y),ElAbs(z));}
      /*
@@ -1217,6 +1230,7 @@ template <class Type> class Box2d
 
 typedef Box2d<INT> Box2di;
 typedef Box2d<REAL>  Box2dr;
+cElMap2D *  MapPolFromHom(const ElPackHomologue & aPack,const Box2dr & aBox,int aDeg,int aRabDegInv);
 Pt2di BoxPClipedIntervC(const Box2di &,const Pt2di &);
 
 extern std::istream & operator >> (std::istream & ifs,Box2dr  &aBox);
@@ -1551,9 +1565,9 @@ class cChSysCo : public cTransfo3D
            static cChSysCo * Alloc(const std::string & aName,const std::string & aDir) ;
 
            void ChangCoordCamera(const std::vector<ElCamera *> & aVCam,bool ForceRot);
-     private :
            //   cChSysCo(const cChangementCoordonnees &,const std::string &) ;
            cChSysCo(cSysCoord * aSrc,cSysCoord * aCibl);
+     private :
            ~cChSysCo();
            cSysCoord * mSrc;
            cSysCoord * mCibl;

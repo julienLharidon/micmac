@@ -44,22 +44,27 @@ Header-MicMac-eLiSe-25/06/2007*/
 #include <algorithm>
 #include <iterator>
 
+int cPicSize::mTargetNumWindows=-1;//make an error if not initialized
+std::vector<cPicSize> cPic::mAllSizes;
 
-cPicSize::cPicSize(Pt2di aSz,int aNumWindows) :
+
+cPicSize::cPicSize(Pt2di aSz) :
     mPicSz(aSz)
 {
     float aXYratio=((float)aSz.x)/aSz.y;
-    mNbWin.x=sqrt((double)aNumWindows)*sqrt(aXYratio)+1;
-    mNbWin.y=sqrt((double)aNumWindows)/sqrt(aXYratio)+1;
+    mNbWin.x=sqrt((double)mTargetNumWindows)*sqrt(aXYratio)+1;
+    mNbWin.y=sqrt((double)mTargetNumWindows)/sqrt(aXYratio)+1;
     mWinSz.x=((float)mPicSz.x)/mNbWin.x+0.5;
     mWinSz.y=((float)mPicSz.y)/mNbWin.y+0.5;
     mUsageBuffer=mNbWin.x/10;//where the arbitrary buffer size is calculated
     //std::cout<<"Size constr: "<<this<<"   "<<aSz<<" => "<<mNbWin<<std::endl;
 }
 
-cPicSize::cPicSize(const cPicSize &other) : mPicSz(other.mPicSz),mWinSz(other.mWinSz),mNbWin(other.mNbWin)
+void cPicSize::print()
 {
-   //std::cout<<"Size copy constr: "<<&other<<"->"<<this<<"   "<<mPicSz<<" => "<<mNbWin<<std::endl;
+    std::cout<<"  * "<<getPicSz()
+         <<" => "<<getNbWin()
+         <<" windows of "<<getWinSz()<<" pixels"<<endl;
 }
 
 int cPointOnPic::mPointOnPicCounter=0;
@@ -260,7 +265,7 @@ bool cHomol::appearsOnCouple1way(cPic * aPicA,cPic * aPicB)
 
 
 
-//checks if the same picture is not in both Homol
+//checks if the same image is not in both Homol
 bool cHomol::checkMerge(cHomol* aHomol)
 {
     for (unsigned int i=0;i<mPointOnPics.size();i++)
@@ -273,26 +278,39 @@ bool cHomol::checkMerge(cHomol* aHomol)
 
 //----------------------------------------------------------------------------
 
-cPic::cPic(std::string aDir,std::string aName,std::vector<cPicSize*> & allSizes,int aNumWindows) :
-    mName(aName),mPicSize(0)//,mNbWinUsed(0)
+long cPic::mNbIm=0;
+
+cPic::cPic(std::string aDir, std::string aName, Pt2di fixedSz) :
+    mName(aName),mPicSize(0),mId(mNbIm++)//,mNbWinUsed(0)
 {
     Tiff_Im aPic( Tiff_Im::StdConvGen(aDir+"/"+aName,1,false)); //to read file in Tmp-MM-Dir if needed
-    Pt2di aPicSize=aPic.sz();
+    Pt2di aPicSz=aPic.sz();
+    if (fixedSz.x&fixedSz.y) aPicSz = fixedSz;
     bool found=false;
-    for (unsigned int i=0;i<allSizes.size();i++)
-      if (allSizes[i]->getPicSz()==aPicSize)
+    for (unsigned int i=0;i<mAllSizes.size();i++)
+      if (mAllSizes[i].getPicSz()==aPicSz)
       {
         found=true;
-        mPicSize=allSizes[i];
+        mPicSize=&(mAllSizes[i]);
         break;
       }
     if (!found)
     {
-      allSizes.push_back(new cPicSize(aPicSize,aNumWindows));
-      mPicSize=allSizes.back();
+      cPicSize aPicSize = cPicSize(aPicSz);
+      bool sizeOk = aPicSize.getNbWin().x&&aPicSize.getNbWin().y&&aPicSize.getWinSz().x&&aPicSize.getWinSz().y;
+      if (!sizeOk)
+      {
+          std::cout<<"Bad size for image "<<aName<<":\n";
+          aPicSize.print();
+      }
+      ELISE_ASSERT(sizeOk,"ERROR: bad image size!");
+
+      mAllSizes.push_back(aPicSize);
+      mPicSize=&(mAllSizes.back());
     }
     //cout<<"Pic windows: "<<mPicSize->getNbWin().x<<" "<<mPicSize->getNbWin().y<<endl;
-    mWinUsed.resize(mPicSize->getNbWin().x*mPicSize->getNbWin().y,false);
+    if (mPicSize)
+        mWinUsed.resize(mPicSize->getNbWin().x*mPicSize->getNbWin().y,false);
 }
 
 cPic::cPic(cPic * aPic) :
@@ -421,8 +439,7 @@ void cPic::selectHomols()
         if (x>=getPicSize()->getNbWin().x) x=getPicSize()->getNbWin().x-1;
         if (y>=getPicSize()->getNbWin().y) y=getPicSize()->getNbWin().y-1;
         //cout<<"old "<<x<<" "<<y<<" "<<aPoP->getHomol()->getPointOnPics().size()<<endl;
-
-        if (winBestMulti[y][x]<aPoP->getHomol()->getPointOnPicsSize()) //plante ici
+        if (winBestMulti[y][x]<aPoP->getHomol()->getPointOnPicsSize())
         {
             winBestMulti[y][x]=aPoP->getHomol()->getPointOnPicsSize();
             winBestPoP[y][x]=aPoP;
@@ -437,7 +454,7 @@ void cPic::selectHomols()
             cPointOnPic *aBestSelectedPointOnPic=winBestPoP[y][x];
             if (aBestSelectedPointOnPic)
             {
-                //add this homol to every picture it is in!
+                //add this homol to every image it is in!
                 cHomol * aHomol=aBestSelectedPointOnPic->getHomol();
                 
                 for (unsigned int i=0;i<aHomol->getPointOnPicsSize();i++)
@@ -459,10 +476,21 @@ void cPic::selectAllHomols()
 }
 
 
-void cPic::fillPackHomol(cPic* aPic2,string & aDirImages,cInterfChantierNameManipulateur * aICNM,std::string & aKHOut)
+void cPic::fillPackHomol(cPic* aPic2,string & aDirImages,cInterfChantierNameManipulateur * aICNM,std::string & aKHOut, bool append)
 {
+    std::string aNameOut1 = aDirImages + aICNM->Assoc1To2(aKHOut,getName(),aPic2->getName(),true);
+    std::string aNameOut2 = aDirImages + aICNM->Assoc1To2(aKHOut,aPic2->getName(),getName(),true);
+
+    const float alreadyInTolerancyPx = 1.0;
     ElPackHomologue aPackOut1;
     ElPackHomologue aPackOut2;
+    if (append)
+    {
+        if (ELISE_fp::exist_file(aNameOut1))
+            aPackOut1 = ElPackHomologue::FromFile(aNameOut1);
+        if (ELISE_fp::exist_file(aNameOut2))
+            aPackOut2 = ElPackHomologue::FromFile(aNameOut2);
+    }
     std::map<double,cPointOnPic*>::iterator itPointsOnPic;
     for (itPointsOnPic=mAllSelectedPointsOnPic.begin();
          itPointsOnPic!=mAllSelectedPointsOnPic.end();
@@ -473,22 +501,39 @@ void cPic::fillPackHomol(cPic* aPic2,string & aDirImages,cInterfChantierNameMani
         if (!aPointOnPic2) continue;
         Pt2dr aP1=aPointOnPic1->getPt();
         Pt2dr aP2=aPointOnPic2->getPt();
-        ElCplePtsHomologues aCple1(aP1,aP2);
-        aPackOut1.Cple_Add(aCple1);
-        ElCplePtsHomologues aCple2(aP2,aP1);
-        aPackOut2.Cple_Add(aCple2);
+        if (append)
+        {
+            const ElCplePtsHomologues *nearestP1 = aPackOut1.Cple_Nearest(aP1);
+            bool tooClose1 = nearestP1&&(fabs(nearestP1->P1().x-aP1.x)<alreadyInTolerancyPx)&&
+                    (fabs(nearestP1->P1().y-aP1.y)<alreadyInTolerancyPx);
+            if (!tooClose1)
+            {
+                ElCplePtsHomologues aCple1(aP1,aP2);
+                aPackOut1.Cple_Add(aCple1);
+            }
+            const ElCplePtsHomologues *nearestP2 = aPackOut2.Cple_Nearest(aP2);
+            bool tooClose2 = nearestP2&&(fabs(nearestP2->P1().x-aP2.x)<alreadyInTolerancyPx)&&
+                    (fabs(nearestP2->P1().y-aP2.y)<alreadyInTolerancyPx);
+            if (!tooClose2)
+            {
+                ElCplePtsHomologues aCple2(aP2,aP1);
+                aPackOut2.Cple_Add(aCple2);
+            }
+        } else  {
+            ElCplePtsHomologues aCple1(aP1,aP2);
+            aPackOut1.Cple_Add(aCple1);
+            ElCplePtsHomologues aCple2(aP2,aP1);
+            aPackOut2.Cple_Add(aCple2);
+        }
     }
     
     if (aPackOut1.size()>3)
     {
-        std::string aNameOut1 = aDirImages + aICNM->Assoc1To2(aKHOut,getName(),aPic2->getName(),true);
-        std::string aNameOut2 = aDirImages + aICNM->Assoc1To2(aKHOut,aPic2->getName(),getName(),true);
         //std::cout<<aNameOut1<<": "<<aPackOut1.size()<<" pairs."<<endl;
         //std::cout<<aNameOut2<<": "<<aPackOut2.size()<<" pairs."<<endl;
         aPackOut1.StdPutInFile(aNameOut1);
         aPackOut2.StdPutInFile(aNameOut2);
     }
-    
 }
 
 std::vector<int> cPic::getStats(bool before)
@@ -516,7 +561,6 @@ bool compareNumberOfHomolPics (cPic* aPic1,cPic* aPic2)
 {
     return (aPic1->getAllPointsOnPicSize()<aPic2->getAllPointsOnPicSize());
 }
-
 
 //----------------------------------------------------------------------------
 
@@ -554,44 +598,29 @@ std::string CompiledKey2::getFile(std::string param1,std::string param2)
 }
 
 
-
-
-
-
-void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
-                     std::string aDirImages,
+void computeAllHomol(std::string aDirImages,
                      std::string aPatIm,
                      const std::vector<std::string> &aSetIm,
+                     Pt2di fixSz,
                      std::list<cHomol> &allHomolsIn,
                      CompiledKey2 &aCKin,
                      std::map<std::string,cPic*> &allPics,
-                     std::vector<cPicSize*> &allPicSizes,
                      bool veryStrict,
                      int aNumWindows)
 {
+    cPicSize::mTargetNumWindows=aNumWindows;
     for (unsigned int i=0;i<aSetIm.size();i++)
-    {
-        //std::cout<<" - "<<aSetIm[i]<<"\n";
-        //Tiff_Im aPic(aSetIm[i].c_str());
-        /*Tiff_Im aPic(Tiff_Im::StdConvGen(aDirImages+"/"+aSetIm[i],1,false)   );
-        Pt2di aPicSize=aPic.sz();
-        std::cout<<aPicSize<<"\n";*/
-        //allPics.push_back(new cPic(aDirImages,aSetIm[i],allPicSizes,aNumWindows));
-        allPics.insert(std::make_pair<std::string,cPic*>(aSetIm[i]+aCKin.getSuffix(),new cPic(aDirImages,aSetIm[i],allPicSizes,aNumWindows)));
-        //cPic* aPic=allPics[aSetIm[i]+aCKin.getSuffix()];
-    }
+        allPics.insert(std::make_pair<std::string,cPic*>(aSetIm[i]+aCKin.getSuffix(),new cPic(aDirImages,aSetIm[i],fixSz)));
 
     ELISE_ASSERT(aSetIm.size()>0,"ERROR: No image found!");
 
+    ELISE_ASSERT(cPic::getAllSizes()->size()>0,"ERROR: No suitable size found!");
+
     std::cout<<"All sizes: \n";
-    for (unsigned int i=0;i<allPicSizes.size();i++)
-    {
-        std::cout<<"  * "<<allPicSizes[i]->getPicSz()<<" => "<<allPicSizes[i]->getNbWin()<<" windows of "<<allPicSizes[i]->getWinSz()<<" pixels"<<endl;
-    }
+    for (unsigned int i=0;i<cPic::getAllSizes()->size();i++)
+        cPic::getAllSizes()->at(i).print();
 
     //read all homol points --------------------------------------------
-
-
     std::cout<<"Read packs of homol points:"<<endl;
 
     std::map<std::string,cPic*>::iterator itPic1,itPic2;
@@ -600,8 +629,8 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
     //for (unsigned int i=0;i<allPics.size();i++)
     {
         cPic *pic1=(*itPic1).second;//allPics[i];
-        std::cout<<" Picture "<<pic1->getName()<<": ";
-        //get all pictures having pac with pic1
+        std::cout<<" Image "<<pic1->getName()<<": ";
+        //get all images having pac with pic1
 
         if (!ELISE_fp::IsDirectory(aCKin.getDir(pic1->getName(),aPatIm)))
         {
@@ -629,6 +658,7 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
                 ElPackHomologue aPackIn1 =  ElPackHomologue::FromFile(aNameIn1);
                 //cout<<aNameIn1<<"  Pack size: "<<aPackIn1.size()<<"\n";
                 nb_homol_raw+=aPackIn1.size();
+                pic1->getNbRawLinks()->insert(std::make_pair<cPic*&, long>(pic2,aPackIn1.size()));
                 for (ElPackHomologue::const_iterator itP=aPackIn1.begin(); itP!=aPackIn1.end() ; ++itP)
                 {
                     Pt2dr aP1 = itP->P1();
@@ -666,7 +696,7 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
                         if (aPointOnPic2) aPointOnPic2->getHomol()->print();
                     }*/
 
-                    if (aPointOnPic1 && (!aPointOnPic2))
+                    if (aPointOnPic1 && (!aPointOnPic2)) // added on pic1 but haven't added on pic 2
                     {
                         aPointOnPic1->getHomol()->add(pic2,aP2);
                         if (veryStrict) aPointOnPic1->getHomol()->addAppearsOnCouple(pic1,pic2);
@@ -678,15 +708,6 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
                     }
                     else if (aPointOnPic1 && aPointOnPic2 &&(aPointOnPic1->getHomol()!=aPointOnPic2->getHomol()))
                     {
-
-                        /*if ((aPointOnPic1 && (aPointOnPic1->getHomol()->getId()==8897))||
-                            (aPointOnPic2 && (aPointOnPic2->getHomol()->getId()==8897)))
-                        {
-                            std::cout<<"Try merging: "<<std::endl;
-                        if (aPointOnPic1) aPointOnPic1->getHomol()->print();
-                        if (aPointOnPic2) aPointOnPic2->getHomol()->print();
-                        }*/
-
                         if (
                                 !(aPointOnPic1->getHomol()->checkMerge(aPointOnPic2->getHomol()))
                            )
@@ -720,13 +741,6 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
                         allHomolsIn.back().add(pic2,aP2);
                         if (veryStrict) allHomolsIn.back().addAppearsOnCouple(pic1,pic2);
 
-                        /*if (((fabs(aP1.x-494.410)<0.1)&&(fabs(aP1.y-1894.23)<0.1))
-                           ||((fabs(aP2.x-494.410)<0.1)&&(fabs(aP2.y-1894.23)<0.1)))
-                        {
-                            cout<<aNameIn1<<endl;
-                            allHomolsIn.back().print();
-                        }*/
-
                     }else if (aPointOnPic1 && aPointOnPic2 &&(aPointOnPic1->getHomol()==aPointOnPic2->getHomol()))
                     {
                         if (veryStrict) aPointOnPic1->getHomol()->addAppearsOnCouple(pic1,pic2);
@@ -743,21 +757,97 @@ void computeAllHomol(cInterfChantierNameManipulateur * aICNM,
 
 }
 
+void networkExport(std::map<std::string,cPic*> &allPics, int aFactPH)
+{
+    std::ostringstream oss;
+    oss<<"var nodes = [\n";
+    std::map<std::string,cPic*>::iterator itPic1;
+    std::map<cPic*,long>::iterator itPic2;
+    for (itPic1=allPics.begin();itPic1!=allPics.end();++itPic1)
+    {
+        cPic* aPic=(*itPic1).second;
+        oss<<"  {id: "<<aPic->getId()<<", 'label': '"<<aPic->getName()<<"', 'group': 1},\n";
+    }
+    oss<<"];\n";
+    oss<<"var edges = [\n";
+    for (itPic1=allPics.begin();itPic1!=allPics.end();++itPic1)
+    {
+        cPic* aPic1=(*itPic1).second;
+        for (itPic2=aPic1->getNbRawLinks()->begin();itPic2!=aPic1->getNbRawLinks()->end();++itPic2)
+        {
+            cPic* aPic2=(*itPic2).first;
+            if ((*itPic2).second>=10)
+                oss<<"  {'from': "<<aPic1->getId()<<", 'to': "<<aPic2->getId()<<", value: "<<1+(*itPic2).second/aFactPH<<"},\n";
+        }
+    }
+    oss<<"];\n";
+
+    std::cout<<"To display network, use micmac_Documentation/NEW-DATA/schnaps_disp_graph/disp_graph.html\n";
+
+    std::ofstream aNetworkfile;
+    aNetworkfile.open("data.js");
+    if (!aNetworkfile.is_open())
+    {
+        std::cout<<"Impossible to create \""<<"data.js"<<"\" file!\n";
+        return;
+    }
+    aNetworkfile<<oss.str();
+    aNetworkfile.close();
+}
+
+void drawCoverHist(std::map<std::string,cPic*> &allPics, int aNumWindows)
+{
+    std::vector<float> covBins={0,0,0,0,0,0,0,0,0,0};//0%-10%, 10%-20%...
+    std::map<std::string,cPic*>::iterator itPic1;
+    for (itPic1=allPics.begin();itPic1!=allPics.end();++itPic1)
+    {
+        cPic* pic1=(*itPic1).second;
+        int bin = pic1->getPercentWinUsed(aNumWindows)/10;
+        if (bin<0) bin=0;
+        if (bin>((int)covBins.size())-1) bin=covBins.size()-1;
+        ++covBins.at(bin);
+    }
+    const double histW = 80.0;
+    int maxBin = 1;
+    for (unsigned i=0; i<covBins.size(); i++)
+        if (covBins[i]>maxBin) maxBin = covBins[i];
+    std::cout<<"\nImage coverage histogram:\n";
+    std::ios state(nullptr);
+    state.copyfmt(std::cout);
+    for (unsigned i=0; i<covBins.size(); i++)
+    {
+        int binW = histW*covBins[i]/maxBin + 1;
+        std::cout<<"  * "<<setw(3)<<10*i<<"% - "<<setw(3)<<10*(i+1)<<"% ";
+        std::cout<<"|";
+        for (int j=1; j<binW; j++)
+            std::cout<<"=";
+        for (int j=binW; j<=histW; j++)
+            std::cout<<" ";
+        std::cout<<"  "<<setw(1)<<covBins[i]<<" images\n";
+    }
+    std::cout.copyfmt(state);
+}
+
 int schnaps_main(int argc,char ** argv)
 {
     std::string aFullPattern;//pattern of all images
     std::string aInHomolDirName="";//input Homol dir suffix
     std::string aOutHomolDirName="_mini";//output Homol dir suffix
     std::string aPoubelleName="Schnaps_poubelle.txt";
-    int aNumWindows=1000;//minimal homol points in each picture
+    bool appendToHomolOut=false;
+    int aNumWindows=1000;//minimal homol points in each image
     bool ExpTxt=false;//Homol are in dat or txt
     bool veryStrict=false;
     bool doShowStats=false;
     bool ExeWrite=true;
     bool DoNotFilter=false;
+    Pt2di fixSz=Pt2di(0,0);
     double aMinPercentCoverage=30;//if %coverage<aMinPercentCoverage, add to poubelle!
     bool aMove=false;//if true, move poubelle images to a folder named "Poubelle/"
+    int aMinimalMultiplicity=1;
     std::string aNameTrashFolder = "";
+    bool aNetworkExport=false;//export html network image
+    int aFactPH(10);
 
     std::cout<<"Schnaps : reduction of homologue points in image geometry\n"
             <<"S trict           \n"
@@ -774,18 +864,23 @@ int schnaps_main(int argc,char ** argv)
        //mandatory arguments
        LArgMain()  << EAMC(aFullPattern, "Pattern of images",  eSAM_IsPatFile),
        //optional arguments
-       LArgMain()  << EAM(aInHomolDirName, "HomolIn", true, "Input Homol directory suffix (without \"Homol\")")
-                   << EAM(aNumWindows, "NbWin", true, "Minimal homol points in each picture (default: 1000)")
-                   << EAM(ExeWrite,"ExeWrite",true,"Execute write output homol dir, def=true",eSAM_InternalUse)
+       LArgMain()  << EAM(aInHomolDirName, "HomolIn", true, "Input Homol directory suffix")
+                   << EAM(aNumWindows, "NbWin", true, "Minimal homol points in each image (default: 1000)")
+                   << EAM(ExeWrite,"ExeWrite",true,"Do write output homol dir, def=true",eSAM_InternalUse)
                    << EAM(aOutHomolDirName, "HomolOut", true, "Output Homol directory suffix (default: _mini)")
+                   << EAM(appendToHomolOut, "AppendHomolOut", true, "Append to existing HomolOut for multi-step computaton (default: false)")
                    << EAM(ExpTxt,"ExpTxt",true,"Ascii format for in and out, def=false")
                    << EAM(veryStrict,"VeryStrict",true,"Be very strict with homols (remove any suspect), def=false")
                    << EAM(doShowStats,"ShowStats",true,"Show Homol points stats before and after filtering, def=false")
-                   << EAM(DoNotFilter,"DoNotFilter",true,"Write homol after recomposition, without filterning, def=false")
-                   << EAM(aPoubelleName,"PoubelleName",true,string("Where to write suspicious pictures names, def=\"")+aPoubelleName+"\"")
+                   << EAM(DoNotFilter,"DoNotFilter",true,"Write homol after recomposition, without filtering, def=false")
+                   << EAM(fixSz,"FixSz",true,"Use a fixed size for image, do not read size in files")
+                   << EAM(aPoubelleName,"PoubelleName",true,string("Output filename with the list of suspicious images, def=\"")+aPoubelleName+"\"")
                    << EAM(aMinPercentCoverage,"minPercentCoverage",true,"Minimum % of coverage to avoid adding to poubelle, def=30")
                    << EAM(aMove,"MoveBadImgs",true,"Move bad images to a trash folder called Poubelle, Def=false")
-                   << EAM(aNameTrashFolder,"OutTrash",true,"Output name of trash folder if moving bad images, Def=Poubelle")
+                   << EAM(aNameTrashFolder,"OutTrash",true,"Output name of trash folder if MoveBadImgs, Def=Poubelle")
+                   << EAM(aMinimalMultiplicity,"MiniMulti",true,"Minimal Multiplicity of selected points, Def=1")
+                   << EAM(aNetworkExport,"NetworkExport",true,"Export Network (in js), Def=false")
+                   << EAM(aFactPH,"DivPH",true,"in exported network, denominator to decrease the number of tie point which is used for displaying strength of a relation between 2 images, def 10.")
       );
 
     if (MMVisualMode) return EXIT_SUCCESS;
@@ -794,7 +889,6 @@ int schnaps_main(int argc,char ** argv)
     {
 		aNameTrashFolder = "Poubelle";
 	}
-
 
     std::cout<<"Number of searching windows: "<<aNumWindows<<std::endl;
 
@@ -810,7 +904,6 @@ int schnaps_main(int argc,char ** argv)
 
     cInterfChantierNameManipulateur * aICNM=cInterfChantierNameManipulateur::BasicAlloc(aDirImages);
     const std::vector<std::string> aSetIm = *(aICNM->Get(aPatIm));
-
 
     // Init Keys for homol files
     std::list<cHomol> allHomolsIn;
@@ -828,26 +921,26 @@ int schnaps_main(int argc,char ** argv)
     CompiledKey2 aCKin(aICNM,aKHIn);
     CompiledKey2 aCKout(aICNM,aKHOut);
 
-    //create pictures list, and pictures size list ---------------------
+    //create images list, and images size list ---------------------
     //std::vector<cPic*> allPics;
     std::map<std::string,cPic*> allPics;
-    
-    std::vector<cPicSize*> allPicSizes;
 
-    std::cout<<"Found "<<aSetIm.size()<<" pictures."<<endl;
+    std::cout<<"Found "<<aSetIm.size()<<" images."<<endl;
 
+    computeAllHomol(aDirImages,aPatIm,aSetIm,fixSz,allHomolsIn,aCKin,allPics,veryStrict,aNumWindows);
 
-    computeAllHomol(aICNM,aDirImages,aPatIm,aSetIm,allHomolsIn,aCKin,allPics,allPicSizes,veryStrict,aNumWindows);
+    if (aNetworkExport)
+        networkExport(allPics,aFactPH);
 
-    
-    /*cout<<"Cleaning Homol list..."<<std::endl;
-    for (std::list<cHomol*>::iterator itHomol=allHomolsIn.begin();itHomol!=allHomolsIn.end();)
+    if (aMinimalMultiplicity>1)
     {
-        if ((*itHomol)->isBad())
-            allHomolsIn.erase(itHomol);
-        else
-            itHomol++;
-    }*/
+        for (std::list<cHomol>::iterator itHomol=allHomolsIn.begin();itHomol!=allHomolsIn.end();++itHomol)
+        {
+            cHomol &aHomol=(*itHomol);
+            if (aHomol.getPointOnPicsSize()<(unsigned)aMinimalMultiplicity)
+                aHomol.setBad();
+        }
+    }
 
     if (veryStrict)
     {
@@ -879,7 +972,7 @@ int schnaps_main(int argc,char ** argv)
                         #ifdef ReductHomolImage_VeryStrict_DEBUG
                         cout<<"   "<<aNameIn<<": ";
                         #endif
-                        //check that homol has been seen in this couple of pictures
+                        //check that homol has been seen in this couple of images
                         if (!aHomol.appearsOnCouple1way(aPic1,aPic2))
                         {
                             #ifdef ReductHomolImage_VeryStrict_DEBUG
@@ -910,16 +1003,6 @@ int schnaps_main(int argc,char ** argv)
     }
 
     std::cout<<"Found "<<allHomolsIn.size()<<" Homol points (incl. "<<aNumBadHomol<<" bad ones): "<<100*aNumBadHomol/allHomolsIn.size()<<"% bad!\n";
-
-    /*cout<<"Cleaning Homol list..."<<std::endl;
-    for (std::list<cHomol*>::iterator itHomol=allHomolsIn.begin();itHomol!=allHomolsIn.end();)
-    {
-        if ((*itHomol)->isBad())
-            allHomolsIn.erase(itHomol);
-        else
-            itHomol++;
-    }*/
-
 
     #ifdef ReductHomolImage_DEBUG
     std::cout<<"Found "<<allHomolsIn.size()<<" Homol points :\n";
@@ -954,24 +1037,6 @@ int schnaps_main(int argc,char ** argv)
     }
     std::cout<<std::endl;
     #endif
-
-    /*std::cout<<"Search for particular homol:\n";
-    std::list<cHomol*>::iterator itHomol;
-    std::vector<cPointOnPic*>::iterator itPointOnPic;
-    for (itHomol=allHomolsIn.begin();itHomol!=allHomolsIn.end();++itHomol)
-    {
-        for (itPointOnPic=(*itHomol)->getPointOnPics().begin();
-             itPointOnPic!=(*itHomol)->getPointOnPics().end();
-             ++itPointOnPic)
-        {
-            if (((*itPointOnPic)->getPt().x==4695.720000)
-                    &&((*itPointOnPic)->getPt().y==1305.77))
-            {
-                (*itHomol)->print();
-            }
-        }
-    }*/
-
 
     if (!DoNotFilter)
     {
@@ -1010,34 +1075,13 @@ int schnaps_main(int argc,char ** argv)
         }
     }
 
-    /*
-    cPic *aPic=allPics[4];
-    std::cout<<"Homol init sur "<<aPic->getName()<<":\n";
-    std::list<cPointOnPic*>::iterator itPointOnPic;
-    for (itPointOnPic=aPic->getAllPointsOnPic()->begin();
-         itPointOnPic!=aPic->getAllPointsOnPic()->end();
-         ++itPointOnPic)
-    {
-        (*itPointOnPic)->getHomol()->print();
-    }
-    std::cout<<"Homol select sur "<<aPic->getName()<<":\n";
-    //std::list<cPointOnPic*>::iterator itPointOnPic;
-    for (itPointOnPic=aPic->getAllSelectedPointsOnPic()->begin();
-         itPointOnPic!=aPic->getAllSelectedPointsOnPic()->end();
-         ++itPointOnPic)
-    {
-        (*itPointOnPic)->getHomol()->print();
-    }
-    */
-
-
-    int nbBadPictures=0;
+    int nbBadImages=0;
     if (ExeWrite)
     {
         std::cout<<"Write new Packs:\n";
-        std::ofstream aFileBadPictureNames;
-        aFileBadPictureNames.open(aPoubelleName.c_str());
-        if (!aFileBadPictureNames.is_open())
+        std::ofstream aFileBadImageNames;
+        aFileBadImageNames.open(aPoubelleName.c_str());
+        if (!aFileBadImageNames.is_open())
         {
             std::cout<<"Impossible to create \""<<aPoubelleName<<"\" file!\n";
             return -1;
@@ -1045,11 +1089,11 @@ int schnaps_main(int argc,char ** argv)
         for (itPic1=allPics.begin();itPic1!=allPics.end();++itPic1)
         {
             cPic* pic1=(*itPic1).second;
-            std::cout<<" - "<<pic1->getName()<<": "<<pic1->getPercentWinUsed(aNumWindows)<<"% of the picture covered ("<<pic1->getAllSelectedPointsOnPicSize()<<" points)";
+            std::cout<<" - "<<pic1->getName()<<": "<<pic1->getPercentWinUsed(aNumWindows)<<"% of the image covered ("<<pic1->getAllSelectedPointsOnPicSize()<<" points)";
             if (pic1->getPercentWinUsed(aNumWindows)<aMinPercentCoverage)
             {
-                nbBadPictures++;
-                aFileBadPictureNames<<pic1->getName()<<"\n";
+                nbBadImages++;
+                aFileBadImageNames<<pic1->getName()<<"\n";
                 cout<<" rejected!";
                 if(aMove)
                 {
@@ -1070,10 +1114,10 @@ int schnaps_main(int argc,char ** argv)
                 //std::string aNameOut2 = aDirImages + aCKout.get(pic2->getName(),pic1->getName());
                 //std::cout<<"For "<<aNameOut1<<" and "<<aNameOut2<<": "<<endl;
 
-                pic1->fillPackHomol(pic2,aDirImages,aICNM,aKHOut);
+                pic1->fillPackHomol(pic2,aDirImages,aICNM,aKHOut,appendToHomolOut);
             }
         }
-        aFileBadPictureNames.close();
+        aFileBadImageNames.close();
     }
 
     if (doShowStats)
@@ -1099,19 +1143,16 @@ int schnaps_main(int argc,char ** argv)
 
     if (ExeWrite)
     {
-        std::cout<<nbBadPictures<<" pictures rejected."<<std::endl;
-        std::cout<<"\nYou can look at \""<<aPoubelleName<<"\" for a list of suspicious pictures.\n";
+        std::cout<<nbBadImages<<"/"<<allPics.size()<<" images rejected."<<std::endl;
+        std::cout<<"\nYou can look at \""<<aPoubelleName<<"\" for a list of suspicious images.\n";
     }
+
+    drawCoverHist(allPics, aNumWindows);
   
     //cleaning
     for (itPic1=allPics.begin();itPic1!=allPics.end();++itPic1)
         delete itPic1->second;
     allPics.clear();
-    for (unsigned int i=0;i<allPicSizes.size();i++)
-        delete allPicSizes[i];
-    allPicSizes.clear();
-   
-    std::cout<<"Quit"<<std::endl;
 
     return EXIT_SUCCESS;
 }

@@ -64,6 +64,7 @@
 	   <eMCC_GrCensus >          </eMCC_GrCensus>
            <eMCC_CensusBasic >       </eMCC_CensusBasic>
            <eMCC_CensusCorrel >      </eMCC_CensusCorrel>
+           <eMCC_CensusQuantitatif >      </eMCC_CensusQuantitatif>  <!-- Somme des ratio / pix central -->
            <eMCC_CensusMixCorrelBasic >      </eMCC_CensusMixCorrelBasic>
    </enum>
 
@@ -292,6 +293,7 @@
       <PxApply      Nb="?"  Type="ePxApply" Def="eApplyPx12">       </PxApply>
       <PatternSelFiltre Nb="?" Type="cElRegex_Ptr">    </PatternSelFiltre>
       <NbIteration Nb="?" Type="int" Def="1"> </NbIteration>
+      <NbItereIntern Nb="?" Type="int" Def="1"> </NbItereIntern>
       <AmplitudeSignal Nb="?" Type="double" Def="255"> </AmplitudeSignal>
       <UseIt Nb="?" Type="bool" Def="true"> </UseIt>
   </SpecFitrageImage>
@@ -310,6 +312,7 @@
 -->
   <XML_RatioCorrImage Nb="1" Class="true" ToReference="true">
       <Ratio Nb="1" Type="double"> </Ratio>
+      <NbPt Nb="?" Type="int"> </NbPt>
   </XML_RatioCorrImage>
 
 
@@ -824,6 +827,9 @@ est obligatoirement un Tiff; si false ce peut etre eventuellement un raw data,
 -->
      <Section_MEC Nb="1">
 
+         <!-- Used to avoird too sctrict elimination of point on Z criteria -->
+        <ExtensionIntervZ Nb="?" Type="double"> </ExtensionIntervZ>
+
          <!-- Option applicable a la geometrie terrain, en image c'est de touet facon
         la cas... Permet de faire des fichiers + generiques -->
 
@@ -952,12 +958,21 @@ est obligatoirement un Tiff; si false ce peut etre eventuellement un raw data,
 
 
 
-                <TypeCAH Nb="1" Union="true">
+                <!-- Plus union car peut avoir CensusCost + MultiCorrelPonctuel-->
+
+                <TypeCAH Nb="1" >
                         <CensusCost Nb="?" AccessorFils="false">
+                              <!-- Utilisable pour rehausser la dynamique tres basse des points census-->
+                              <Dyn    Type="double" Def="1.0" Nb="?">  </Dyn>
+
+                              <!-- Unused
                               <PdsCrown  Type="double" Def="0.5" Nb="?"> </PdsCrown>
+                              -->
                               <TypeCost Type="eModeCensusCost" Nb="1">   </TypeCost>
                               <Verif Type="bool" Nb="?" Def="false">   </Verif>
+                              <!-- Dans Census basic -->
                               <AttenDist  Type="double" Def="0.0" Nb="?"> </AttenDist>
+                              <!-- Uniquement si on mixte avec correl standard -->
                               <SeuilHautCorMixte Type="double" Def="0.8" Nb="?"> </SeuilHautCorMixte>
                               <SeuilBasCorMixte Type="double" Def="0.6" Nb="?">  </SeuilBasCorMixte>
                         </CensusCost>
@@ -973,6 +988,12 @@ est obligatoirement un Tiff; si false ce peut etre eventuellement un raw data,
                         <GPU_Correl Nb="?" AccessorFils="false">    
                                 <Unused Nb="?" Type="std::string"> </Unused>
                         </GPU_Correl>
+
+                        <MutiCorrelOrthoExt Nb="?" AccessorFils="false">    
+                                <Cmd Nb="?" Type="std::string" Def="MMVII  DM4MatchMultipleOrtho "> </Cmd>
+                                <Options Nb="?" Type="std::string"> </Options>
+                                <DeltaZ Nb="?" Type="int" Def="50"> </DeltaZ>
+                        </MutiCorrelOrthoExt>
 
                         <!-- Afin de conserver le max de simplicite -->
                         <GPU_CorrelBasik Nb="?" AccessorFils="false">    
@@ -992,6 +1013,13 @@ est obligatoirement un Tiff; si false ce peut etre eventuellement un raw data,
                                 </MCP_AttachePixel>
                         </MultiCorrelPonctuel>
 
+			<ScoreLearnedMMVII Nb="?" AccessorFils="false">
+                              <FileModeleCost Nb="1" Type="std::string">           </FileModeleCost>
+                              <CostDyn        Nb="?" Type="double" Def="0.3333">   </CostDyn>
+                              <CostExp        Nb="?" Type="double" Def="0.5">      </CostExp>
+                              <Cmp_FileMC     Nb="?" Type="std::string">           </Cmp_FileMC>
+                              <Cmp_NbDisc     Nb="?" Type="int"    Def="200">      </Cmp_NbDisc>
+                        </ScoreLearnedMMVII>
 
                         <Correl_Ponctuel2ImGeomI Nb="?" AccessorFils="false">    
                               <RatioI1I2 Nb="?" Type="double" Def="1.0"> </RatioI1I2>

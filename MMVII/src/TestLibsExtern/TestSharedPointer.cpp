@@ -1,4 +1,4 @@
-#include "include/MMVII_all.h"
+
 
 #include <algorithm>
 #include <tuple>
@@ -7,14 +7,44 @@
 #include <unordered_map>
 #include <functional>
 
-#include <boost/array.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
+//#include <Eigen/Dense>
 
-#include <Eigen/Dense>
+#include "cMMVII_Appli.h"
 
 namespace MMVII
 {
+/*  TRY to manipulate pointer to member function to know if a method has been overloaded
+   
+template <typename Type> class cClassTestVirtPtrA
+{
+    public :
+       virtual std::string  TheMethod() {return "A";}
+       bool  Override() 
+       {
+              // void * aP1 =  &this->TheMethod ;
+              // void * aP2 =  &MMVII::cClassTestVirtPtrA<Type>::TheMethod;
+              // return (aP1==aP2);
+              return  &this->TheMethod == &MMVII::cClassTestVirtPtrA<Type>::TheMethod;
+       }
+};
+template <typename Type> class cClassTestVirtPtrB :public cClassTestVirtPtrA<Type>
+{
+    public :
+};
+template <typename Type> class cClassTestVirtPtrC :public cClassTestVirtPtrA<Type>
+{
+    public :
+       std::string  TheMethod() override {return "C";}
+};
+void TestcClassTestVirtPtrA()
+{
+       cClassTestVirtPtrA<double> A;
+       cClassTestVirtPtrB<double> B;
+       cClassTestVirtPtrC<double> C;
+       std::cout << A.Override()  << " " <<  A.Override()  << " " << A.Override()  << "\n";
+}
+*/
+
 
 class cTestMMV2Obj : public cMemCheck
 {
@@ -25,7 +55,7 @@ class cTestMMV2Obj : public cMemCheck
         }
         static int NbObj() {return TheNbObj;}
     // protected :
-        cTestMMV2Obj()
+        cTestMMV2Obj() 
         {
            TheNbObj++;
         }
@@ -42,9 +72,9 @@ void TestCountSharePointer()
 
        std::shared_ptr<cTestMMV2Obj> p2 = p0;
        p2 = p1;
-       std::cout << "NB OBJ " << cTestMMV2Obj::NbObj() << " =? 2\n";
+       StdOut() << "NB OBJ " << cTestMMV2Obj::NbObj() << " =? 2" << std::endl;
     }
-    std::cout << "NB OBJ " << cTestMMV2Obj::NbObj() << " =? 0\n";
+    StdOut() << "NB OBJ " << cTestMMV2Obj::NbObj() << " =? 0" << std::endl;
 }
 
     //===============================================
@@ -57,7 +87,7 @@ class cDataFonc1V : public  cTestMMV2Obj
            virtual ~cDataFonc1V() {}
            virtual double GetVal(double anX) const = 0;
            virtual cFonc1V Derive() const = 0;
-           virtual void Show(std::ostream &) const = 0;
+           virtual void Show(cMultipleOfs &) const = 0;
 
            virtual bool IsCste0() const {return false;}
            virtual bool IsCste1() const {return false;}
@@ -88,7 +118,7 @@ class cDataFonc1V_Cste  : public cDataFonc1V
 
          double GetVal(double) const {return mCste;}
          cFonc1V Derive() const {return cFonc1V(0.0);}
-         void Show(std::ostream & os) const {os << mCste;}
+         void Show(cMultipleOfs& os) const {os << mCste;}
 
          bool IsCste0() const {return mCste==0;}
          bool IsCste1() const {return mCste==1;}
@@ -105,16 +135,16 @@ cFonc1V::cFonc1V(double aCste) :
 class cDataFonc1V_X  : public cDataFonc1V
 {
       public :
-           cDataFonc1V_X() {std::cout << "CREATE X\n";}
-           ~cDataFonc1V_X() {std::cout << "Kill X\n";}
+           cDataFonc1V_X() {} 
+           ~cDataFonc1V_X() {} 
 
            double GetVal(double aVal) const {return aVal;}
            cFonc1V Derive() const {return cFonc1V(1.0);}
-           void Show(std::ostream & os) const {os << "X";}
+           void Show(cMultipleOfs & os) const {os << "X";}
       private  :
 };
 
-static cFonc1V X(new cDataFonc1V_X);
+static cFonc1V X() { return (new cDataFonc1V_X);}
 
 
 
@@ -126,7 +156,7 @@ class cDataFonc1V_Som  : public cDataFonc1V
 
          double  GetVal(double aVal) const {return mF1->GetVal(aVal)+mF2->GetVal(aVal);}
          cFonc1V  Derive() const {return mF1->Derive()+mF2->Derive();}
-         void Show(std::ostream & os) const 
+         void Show(cMultipleOfs& os) const 
          {
                os << "(";
                mF1->Show(os); 
@@ -152,12 +182,12 @@ void  TestSharedPointer()
    // new  cFonc1V(3.14);
    // new  cDataFonc1V_Cste(3.14);
    {
-       cFonc1V aF = X+3+(X+4);
-       std::cout << "F(10) = " << aF.GetVal(10) << " Count= " << cTestMMV2Obj::NbObj() << "\n";
-       std::cout << "F'(10) = " << aF.Derive().GetVal(10)  << "\n";
-       aF->Show(std::cout) ; std::cout << "\n";
+       cFonc1V aF = X()+3+(X()+4);
+       StdOut() << "F(10) = " << aF.GetVal(10) << " Count= " << cTestMMV2Obj::NbObj() << std::endl;
+       StdOut() << "F'(10) = " << aF.Derive().GetVal(10)  << std::endl;
+       aF->Show(StdOut()) ; StdOut() << std::endl;
    }
-   std::cout  << " Compte final " << cTestMMV2Obj::NbObj() << "\n";
+   StdOut()  << " Compte final " << cTestMMV2Obj::NbObj() << std::endl;
 }
 
 
@@ -166,59 +196,30 @@ void  TestSharedPointer()
 /*            cAppli_MMVII_TestCpp11                         */
 /*                                                           */
 /*************************************************************/
-template<class Archive>
-void serialize(Archive & ar, cPt2dr & aP, const unsigned int version)
-{
-    ar & aP.x();
-    ar & aP.y();
-}
 
-void TestBoostSerial()
-{
- // create class instance
-    std::ofstream ofs("filename");
-    const cPt2dr aP(1,2);
+///  Test some functionnalities of CP11 of later
 
-    // save data to archive
-    {
-        boost::archive::text_oarchive oa(ofs);
-        // write class instance to archive
-        oa << aP;
-    	// archive and stream closed when destructors are called
-    }
+/**  This class is essentially for internal use of MPD, wanted to test
+    if I understood well some new features of C++, also check if my current
+     g++ versions support them
+*/
 
-    // ... some time later restore the class instance to its orginal state
-    cPt2dr aNewP(0,0);
-    {
-        // create and open an archive for input
-        std::ifstream ifs("filename");
-        boost::archive::text_iarchive ia(ifs);
-        // read class state from archive
-        ia >> aNewP;
-        // archive and stream closed when destructors are called
-    }
-    std::cout  << " AAATestBoostSerial " << aNewP.x() << " " <<  aNewP.y() << "\n";
-}
 
 class cAppli_MMVII_TestCpp11 : public cMMVII_Appli
 {
      public :
-        cAppli_MMVII_TestCpp11(int argc,char** argv) ;
-        int Exe();
+        cAppli_MMVII_TestCpp11(const std::vector<std::string> &  ,const cSpecMMVII_Appli & aSpec) ;
+        int Exe() override ;
+        cCollecSpecArg2007 & ArgObl(cCollecSpecArg2007 & anArgObl) override {return anArgObl;}
+        cCollecSpecArg2007 & ArgOpt(cCollecSpecArg2007 & anArgOpt) override {return anArgOpt;}
+
 };
 
-cAppli_MMVII_TestCpp11::cAppli_MMVII_TestCpp11 (int argc,char **argv) :
-    cMMVII_Appli
-    (
-        argc,
-        argv,
-        DirCur(),
-        cArgMMVII_Appli
-        (
-        )
-    )
+cAppli_MMVII_TestCpp11::cAppli_MMVII_TestCpp11 (const std::vector<std::string> &  aVArgs,const cSpecMMVII_Appli & aSpec) :
+  cMMVII_Appli (aVArgs,aSpec)
 {
 }
+
 
 // Voir override et  final, pour verifier que le surcharge virtuelle est conforme a nos attentes
 
@@ -282,7 +283,7 @@ double Div(double a,double b) {return a/b;}
 class cUnikP
 {
    public :
-      ~cUnikP(){std::cout << "KilledP=" << mMes << "\n";}
+      ~cUnikP(){StdOut() << "KilledP=" << mMes << std::endl;}
       cUnikP(const std::string & aMes) : mMes(aMes) {}
       std::string mMes;
 };
@@ -303,12 +304,12 @@ int cAppli_MMVII_TestCpp11::Exe()
    {
         std::unique_ptr<cUnikP> aP (new cUnikP("T1"));
    }
-   std::cout << "END BLOCK T1\n";
+   StdOut() << "END BLOCK T1" << std::endl;
    {
         std::unique_ptr<cUnikP> aP2 = Transfer("T2");
-        std::cout << " IN  BLOCK T2\n";
+        StdOut() << " IN  BLOCK T2" << std::endl;
    }
-   std::cout << "END BLOCK T2\n";
+   StdOut() << "END BLOCK T2" << std::endl;
 
    cPt2dr aP{1,2};
    std::vector<cPt2dr> aVP{{1,2},{3,1},{1,1}};  // Uniform initialization synta
@@ -328,37 +329,39 @@ int cAppli_MMVII_TestCpp11::Exe()
 
    std::string s = R"(\w\\\w)"; // Raw string , \ is \ !!
    std::string s2 = R"**(\w"()"\\\w)**"; // Raw string  avec "()" etc dedans ... 
-   std::cout << "TEST RAW STRING " << s  << "###"  << s2 << "\n";
+   StdOut() << "TEST RAW STRING " << s  << "###"  << s2 << std::endl;
 
    auto aTuple = std::make_tuple(1,2.0,"3+2=5");
-   std::cout << " T0=> " << std::get<0>(aTuple) << " T2=>" << std::get<2>(aTuple) << " " << "\n";
+   StdOut() << " T0=> " << std::get<0>(aTuple) << " T2=>" << std::get<2>(aTuple) << " " << std::endl;
    
-   std::cout << " Type1=> " << typeid(std::get<1>(aTuple)).name()  << "\n";
+   StdOut() << " Type1=> " << typeid(std::get<1>(aTuple)).name()  << std::endl;
 
 
-   char * C= nullptr;  // Un pointeur nul universel, + clean que (char *) 0
+   char * C= nullptr; IgnoreUnused(C); // Un pointeur nul universel, + clean que (char *) 
+
    cCtsrCallCstr aT;
-   std::cout << "cCtsrCallCstr => " << aT.mV << "\n";
+   StdOut() << "cCtsrCallCstr => " << aT.mV << std::endl;
    // PrintSzVect({1,2}); => Pb avec template et initializer , pas sur pb moo ou g++ ?
    PrintSzVectI({1,2});  // Ok sans template
    // Les const expression sont garanties evaluables a la compile
    constexpr auto i = 3+4;
-   typedef decltype (1/2.0) mDouble;  // declaration de type a partir d'une expression
+   typedef decltype (1/2.0) tDouble;  // declaration de type a partir d'une expression
+   tDouble aUnusedtDouble; IgnoreUnused(aUnusedtDouble);
    // i++;
    // auto l = constexpr 3+4;
    // l++;
-   constexpr  int j = 2*i;
+   constexpr  int j = 2*i;  IgnoreUnused(j);
    // const constexpr l = 2;
    // constexpr int k = ExternalFonc(); => pas evaluable a la compile
    // Range
    std::vector<int>  aVI;
    for (auto & it : aVI)
    {
-       std::cout << it << "\n";
+       StdOut() << it << std::endl;
        it += 2;
    }
    // Range for "enum" values
-   for (const auto x : { 2,3,5,7,11 }) std::cout << "Prime ? "  << x << '\n';
+   for (const auto x : { 2,3,5,7,11 }) StdOut() << "Prime ? "  << x << std::endl;
 
    // >> and double range
    std::vector<std::vector<int>>  aVVI;
@@ -366,24 +369,25 @@ int cAppli_MMVII_TestCpp11::Exe()
    {
        for (const auto & it2 : it1)
        {
+             if ((it2) && false) std::cout << "???? " ;
        }
    }
 
 
    std::forward_list<int> aFLPrime{2,3,5,7,11,13};
-   for (const auto &  it : aFLPrime) std::cout << " " << it ;
-   std::cout <<  std::endl;
+   for (const auto &  it : aFLPrime) StdOut() << " " << it ;
+   StdOut() <<  std::endl;
 
    std::unordered_map<std::string,int> aUMap{{"Un",1},{"deux",2},{"trois",3},{"Quatre",4}};
-   for (const auto &  it : aUMap) std::cout << " " << it.first<<","<<it.second ;
-   std::cout <<  std::endl;
-   std::cout << "aUMap[Un]=" <<aUMap["Un"] << " aUMap[un]=" << aUMap["un"] << "\n";
-   std::cout << " SZUM " << sizeof(aUMap) <<  std::endl;
+   for (const auto &  it : aUMap) StdOut() << " " << it.first<<","<<it.second ;
+   StdOut() <<  std::endl;
+   StdOut() << "aUMap[Un]=" <<aUMap["Un"] << " aUMap[un]=" << aUMap["un"] << std::endl;
+   StdOut() << " SZUM " << sizeof(aUMap) <<  std::endl;
 
 
    // Pas sur supporte par g++ ??? 
    auto Div2 = std::bind(Div,std::placeholders::_1,2.0);
-   std::cout <<  " 5/2.0= " << Div2(5.0) << std::endl;
+   StdOut() <<  " 5/2.0= " << Div2(5.0) << std::endl;
    // auto Div2 = std::bind(Div,std::_1,2.0);
    // auto Div2 = std::bind(Div,std::_1,2.0);
    //auto Div2 = bind(Div,_1,2.0);
@@ -393,19 +397,15 @@ int cAppli_MMVII_TestCpp11::Exe()
    //  revoir les function object, pas trop compris ....
    // voir unique_ptr  (+ ou - comme auto_ptr ?) pour les ptr temporaires a un bloc d'execution
 
-   
-
    TestSharedPointer();
-   TestBoostSerial();
    return EXIT_SUCCESS;
-
 }
 
 
 
-tMMVII_UnikPApli Alloc_MMVII_Cpp11(int argc,char ** argv)
+tMMVII_UnikPApli Alloc_MMVII_Cpp11(const std::vector<std::string> &  aVArgs,const cSpecMMVII_Appli & aSpec)
 {
-   return tMMVII_UnikPApli(new cAppli_MMVII_TestCpp11(argc,argv));
+   return tMMVII_UnikPApli(new cAppli_MMVII_TestCpp11(aVArgs,aSpec));
 }
 
 
@@ -414,9 +414,10 @@ cSpecMMVII_Appli  TheSpecTestCpp11
      "Cpp11",
       Alloc_MMVII_Cpp11,
       "This command execute some test for to check my understanding of C++11",
-      "Test",
-      "None",
-      "Console"
+      {eApF::Test,eApF::NoGui},
+      {eApDT::None},
+      {eApDT::Console},
+      __FILE__
 );
 
 

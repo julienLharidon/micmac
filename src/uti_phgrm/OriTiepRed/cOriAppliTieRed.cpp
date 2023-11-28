@@ -58,6 +58,8 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
      mSzTile                  (2000),
      mDistPMul                (200.0),
      mMulVonGruber            (1.5),
+     mSH                      (""),
+     mGBLike                  (false),
      mCallBack                (false),
      mMulBoxRab               (0.15),
      mParal                   (true),
@@ -71,6 +73,7 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
      mDefResidual             (10.0),
      mDoCompleteArc           (false),
      mUsePrec                 (true)
+
 {
    // Read parameters 
    if (! CalledFromInside)
@@ -95,6 +98,8 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
                      << EAM(mDebug,"Debug",true,"Debug, tunging purpose")
                      << EAM(mDoCompleteArc,"DCA",true,"Do Complete Arc (Def=ModeIm)")
                      << EAM(mUsePrec,"UseP",true,"Use precdente point to avoir redondance, Def=true, only for tuning")
+                     << EAM(mSH,"SH",true,"Homol Postfix, def=\"\"")
+                     << EAM(mGBLike,"GBLike",true,"Generik Bundle or like, no orient at all")
    );
 
 
@@ -138,6 +143,14 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
        cElemAppliSetFile anEASF(mPatImage);
        // anEASF.Init(mPatImage);
        mFilesIm = anEASF.SetIm();
+
+       // Precaution anti developpement en paral des tif dans les sous process
+       for (const auto & aN : *mFilesIm)
+       {
+           // std::cout << aN << "\n";
+           cMetaDataPhoto  aMDP = cMetaDataPhoto::CreateExiv2(aN);
+           aMDP.TifSzIm();
+       }
    }
    if (! EAMIsInit(&mDoCompleteArc))
    {
@@ -151,7 +164,7 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
    // std::cout << "## Get Nb Images " <<  mFilesIm->size() << "\n";
 
 
-   mNM = cVirtInterf_NewO_NameManager::StdAlloc(mDir,mCalib);
+   mNM = cVirtInterf_NewO_NameManager::StdAlloc(mSH,mDir,mCalib);
 
    std::vector<double> aVResol;
    Pt2dr aPInf( 1E50, 1E50);
@@ -174,7 +187,9 @@ cAppliTiepRed::cAppliTiepRed(int argc,char **argv,bool CalledFromInside)  :
        }
        // CamStenope * aCsOr = mNM->OutPutCamera(aNameIm);
 
-       CamStenope * aCsCal = aCsOr ? aCsOr : mNM->CalibrationCamera(aNameIm) ;
+       CamStenope * aCsCal = nullptr;
+       if (!mGBLike)
+          aCsCal = aCsOr ? aCsOr : mNM->CalibrationCamera(aNameIm) ;
        bool IsMaster = (mMasterIm==aNameIm);
        cCameraTiepRed * aCam = new cCameraTiepRed(*this,aNameIm,aCsOr,aCsCal,(mMasterIm==aNameIm));
        aCam->SetNum(aKI);
@@ -358,6 +373,7 @@ void cAppliTiepRed::GenerateSplit()
     std::list<std::string> aLCom;
 
 
+
     int aCpt=0;
     // Parse the tiles
     for (int aKx=0 ; aKx<aNb.x ; aKx++)
@@ -416,6 +432,7 @@ void cAppliTiepRed::GenerateSplit()
              }
         }
     }
+
 
     if (mParal)
        cEl_GPAO::DoComInParal(aLCom);

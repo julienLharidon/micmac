@@ -1,7 +1,8 @@
 # scripts to run before build
+image: Visual Studio 2015
 before_build:
   - echo Running cmake...
-  - set QTDIR=C:\Qt\5.8\msvc2015_64
+  - set QTDIR=C:\Qt\5.11.3\msvc2015_64
   - set PATH=%PATH%;%QTDIR%\bin
   - set INSTALL_DIR_LOCAL=%CD%
   - mkdir build
@@ -39,11 +40,11 @@ artifacts:
   path: micmac_win.zip
   name: micmac_win
 
-deploy:
-  description: 'AppVeyor build'
-  artifact: micmac_win
-  auth_token:
-    secure: /bJuMkK+l78lspexK/xcdi0TsITsIuiuW7nNnY8Aw1cI+k33h4epHXs2z/f6sJjJ
-  provider: GitHub
-  on:
-    appveyor_repo_tag: true
+#deploy:
+#  description: 'AppVeyor build'
+#  artifact: micmac_win
+#  auth_token:
+#    secure: /bJuMkK+l78lspexK/xcdi0TsITsIuiuW7nNnY8Aw1cI+k33h4epHXs2z/f6sJjJ
+#  provider: GitHub
+#  on:
+#    appveyor_repo_tag: true

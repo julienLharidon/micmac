@@ -52,27 +52,45 @@ LArgMain &     cCommonMartiniAppli::ArgCMA()
 }
 
 cCommonMartiniAppli::cCommonMartiniAppli() :
-    mNameOriCalib (""),
-    mPrefHom      (""),
-    mExtName      (""),
-    mInOri        (""),
-    mAcceptUnSym  (false),
-    mQuick        (true),
-    mShow         (false),
-    mArg          (new LArgMain),
-    mPostInit     (false),
-    mNM           (0),
-    mNameNOMode   (TheStdModeNewOri)
+    mNameOriCalib      (""),
+    mPrefHom           (""),
+    mExtName           (""),
+    mExpTxt            (false),
+    mInOri             (""),
+    mOriOut            (""),
+    mOriGPS            (""),
+    mOriCheck          (""),
+    mDebug             (false),
+    mAcceptUnSym       (true),
+    mQuick             (true),
+    mShow              (false),
+    mTStdNbMaxTriplet   (20),
+    mTQuickNbMaxTriplet(8),
+    mTNbMinTriplet     (5),
+    mArg               (new LArgMain),
+    mPostInit          (false),
+    mNM                (0),
+    mNameNOMode        (TheStdModeNewOri)
 {
+
       (*mArg) 
               << EAM(mNameOriCalib,"OriCalib",true,"Orientation for calibration ", eSAM_IsExistDirOri)
               << EAM(mPrefHom,"SH",true,"Prefix Homologue , Def=\"\"")  // SH par homogeneite avec autre commandes 
               << EAM(mExtName,"ExtName",true,"User's added Prefix , Def=\"\"")  // SH par homogeneite avec autre commandes 
+              << EAM(mExpTxt,"ExpTxt",true,"Homol in text format? , Def=\"false\"")  
               << EAM(mNameNOMode,"ModeNO",true,"Mode Def=Std (TTK StdNoTTK OnlyHomogr)")  
               << EAM(mInOri,"InOri",true,"Existing orientation if any")  
+              << EAM(mOriOut,"OriOut",true,"Output orientation dir")  
+              << EAM(mOriGPS,"OriGPS",true,"Orientation where find gps data when exists")  
+              << EAM(mOriCheck,"OriCheck",true,"Reference Orientation  to check results")
+              << EAM(mDebug,"Debug",true,"Debug ....")  
               << EAM(mAcceptUnSym,"AUS",true,"Accept non symetric homologous point;")  
               << EAM(mQuick,"Quick",true,"If true (default) do less test")  
+              << EAM(mTStdNbMaxTriplet,"StdNbPtTrip",true,"Max num of triplets per edge (Std mode)")  
+              << EAM(mTQuickNbMaxTriplet,"QNbPtTrip",true,"Max num of triplets per edge (Quick mode), Def=8")  
+              << EAM(mTNbMinTriplet,"NbTrip",true,"Min num of points to calculate a triplet")  
               << EAM(mShow,"Show",true,"If true (non default) print (a lot of) messages")  ;
+
 }
 
 void cCommonMartiniAppli::PostInit() const
@@ -87,7 +105,7 @@ void cCommonMartiniAppli::PostInit() const
 cNewO_NameManager *  cCommonMartiniAppli::NM(const std::string & aDir) const
 {
    if (mNM==0) 
-      mNM =  new cNewO_NameManager(mExtName,mPrefHom,mQuick,aDir,mNameOriCalib,"dat");
+      mNM =  new cNewO_NameManager(mExtName,mPrefHom,mQuick,aDir,mNameOriCalib,mExpTxt ? "txt" : "dat" ,mOriOut);
    return mNM;
 }
 
@@ -95,6 +113,26 @@ eTypeModeNO  cCommonMartiniAppli::ModeNO() const
 {
    PostInit();
    return mModeNO;
+}
+
+bool  cCommonMartiniAppli::GpsIsInit()
+{
+   return EAMIsInit(&mOriGPS);
+}
+
+bool  cCommonMartiniAppli::CheckIsInit()
+{
+   return EAMIsInit(&mOriCheck);
+}
+
+Pt3dr cCommonMartiniAppli::GpsVal(cNewO_OneIm * anIm)
+{
+   return anIm->NM().ICNM()->StdCamStenOfNames(anIm->Name(),mOriGPS)->VraiOpticalCenter();
+}
+
+CamStenope * cCommonMartiniAppli::CamCheck(cNewO_OneIm * anIm)
+{
+   return anIm->NM().ICNM()->StdCamStenOfNames(anIm->Name(),mOriCheck);
 }
 
 
@@ -106,9 +144,19 @@ std::string    cCommonMartiniAppli::ComParam()
    if (EAMIsInit(&mExtName))       aCom += " ExtName="   + mExtName;
    if (EAMIsInit(&mNameNOMode))    aCom += " ModeNO="    + mNameNOMode;
    if (EAMIsInit(&mInOri))         aCom += " InOri="     + mInOri;
+   if (EAMIsInit(&mOriOut))        aCom += " OriOut="    + mOriOut;
    if (EAMIsInit(&mAcceptUnSym))   aCom += " AUS="       + ToString(mAcceptUnSym);
    if (EAMIsInit(&mQuick))         aCom += " Quick="     + ToString(mQuick);
    if (EAMIsInit(&mShow))          aCom += " Show="      + ToString(mShow);
+   if (EAMIsInit(&mOriGPS))        aCom += " OriGPS="    + mOriGPS;
+   if (EAMIsInit(&mOriCheck))      aCom += " OriCheck="    + mOriCheck;
+   if (EAMIsInit(&mDebug))         aCom += " Debug="     + ToString(mDebug);
+   if (EAMIsInit(&mTStdNbMaxTriplet)) aCom += " StdNbPtTrip="     + ToString(mTStdNbMaxTriplet);
+   if (EAMIsInit(&mTQuickNbMaxTriplet)) aCom += " QNbPtTrip="     + ToString(mTQuickNbMaxTriplet);
+   if (EAMIsInit(&mTNbMinTriplet)) aCom += " NbTrip="     + ToString(mTNbMinTriplet);
+   // MPD corrige oubli !!!
+   if (EAMIsInit(&mExpTxt)) aCom += " ExpTxt="     + ToString(mExpTxt);
+
 
    return aCom;
 }
@@ -257,7 +305,14 @@ cAppli_Martini::cAppli_Martini(int argc,char ** argv,bool Quick) :
     if (EAMIsInit(&mInOri))
        StdCorrecNameOrient(mInOri,anEASF.mDir);
 
-    cNewO_NameManager aNM(mExtName,mPrefHom,mQuick,anEASF.mDir,mNameOriCalib,"dat");
+    if (EAMIsInit(&mOriGPS))
+       StdCorrecNameOrient(mOriGPS,anEASF.mDir);
+
+    if (EAMIsInit(&mOriCheck))
+       StdCorrecNameOrient(mOriCheck,anEASF.mDir);
+
+
+    cNewO_NameManager aNM(mExtName,mPrefHom,mQuick,anEASF.mDir,mNameOriCalib,mExpTxt ? "txt" : "dat",mOriOut);
     const cInterfChantierNameManipulateur::tSet * aVIm = anEASF.SetIm();
     for (int aK=0 ; aK<int(aVIm->size()) ; aK++)
     {

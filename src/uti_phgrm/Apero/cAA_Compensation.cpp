@@ -39,6 +39,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 #include "Apero.h"
 
 
+static bool   mPhaseContrainte = false;
 
 //  AJOUT DES OBSERVATIONS
 
@@ -106,6 +107,12 @@ for (int aK=0 ; aK<aNbIter; aK++)
        AddObservationsCentres(anSO.ObsCentrePDV(),IsLastIter,aSO);
    }
 
+   {
+       for (const auto & aOCIP : anSO.ObsCenterInPlane())
+       {
+           AddObservationsPlane(*GetDOPOfName(aOCIP.Id()));
+       }
+   }
 
    {
         AddObservationsRelGPS(anSO.ObsRelGPS());
@@ -161,6 +168,12 @@ for (int aK=0 ; aK<aNbIter; aK++)
        AddObservationsRigidGrp(anSO.ObsRigidGrpImage(),IsLastIter,aSO);
    }
 
+   {
+      for (const auto & aPose : mVecPose)
+      {
+          aPose->UseRappelOnPose();
+      }
+   }
 
    {
        AddObservationsContrCamGenInc(anSO.ContrCamGenInc(),IsLastIter,aSO);
@@ -176,6 +189,51 @@ for (int aK=0 ; aK<aNbIter; aK++)
        mFpRT = 0;
    }
 }
+
+
+void cAppliApero::AddObservationsBaseGpsInit()
+{
+
+   for (auto & aPair : mDicoOffGPS)
+   {
+
+      cAperoOffsetGPS * anOffs = aPair.second;
+      const cGpsOffset &  aGO = anOffs->ParamCreate();
+      if (aGO.Inc().IsInit())
+      {
+          cBaseGPS * aBG =   anOffs->BaseUnk();
+
+          Pt3dr aPInc = aGO.Inc().Val();
+          double aTab[3];
+          aPInc.to_tab(aTab);
+           // Pt3dr aPInc(1e6,1e6,1e6);
+          for (int aK=0 ; aK< 3 ; aK++)
+          {
+              if (aTab[aK] > 0)
+              {
+                 if (! mPhaseContrainte)
+                 {
+                      cMultiContEQF  aRes;
+                      aBG->AddFoncRappInit(aRes,aK,aK+1,1);
+                      mSetEq.AddContrainte(aRes,false,ElSquare(1/aTab[aK]));
+                 }
+              }
+              // Convention "<0" ~ a contrainte stricte
+              else if (aTab[aK]<0)
+              {
+                 if (mPhaseContrainte)
+                 {
+                     cMultiContEQF  aRes;
+                     aBG->AddFoncRappInit(aRes,aK,aK+1,-1);
+                     mSetEq.AddContrainte(aRes,true,-1);
+                 }
+              }
+
+          }
+       }
+    }
+}
+
 
 void cAppliApero::AddObservationsRigidBlockCam
      (
@@ -322,7 +380,7 @@ void cAppliApero::AddObservationsLiaisons(const std::list<cObsLiaisons> & aL,boo
           {
               const cRappelOnZ & aRaz = itOL->RappelOnZ().Val();
               double anI = aRaz.IncC();
-              aRAZ = new cRapOnZ(aRaz.Z(),anI,aRaz.IncE().ValWithDef(anI),aRaz.LayerMasq().ValWithDef(""));
+              aRAZ = new cRapOnZ(aRaz.Z(),anI,aRaz.IncE().ValWithDef(anI),aRaz.LayerMasq().ValWithDef(""),aRaz.KeyGrpApply().ValWithDef(""));
           }
 
           cPackObsLiaison * aPackL = GetEntreeNonVide(mDicoLiaisons,anId,"AddObservationsLiaisons"); 
@@ -351,13 +409,28 @@ void cAppliApero::AddObservationsAppuisFlottants(const std::list<cObsAppuisFlott
       mSomDistFlot=0.0;
       mSomEcPtsFlot = Pt3dr(0,0,0);
       mSomAbsEcPtsFlot = Pt3dr(0,0,0);
+      mSomRmsEcPtsFlot = Pt3dr(0,0,0);
       mMaxAbsEcPtsFlot = Pt3dr(0,0,0);
       aBAF->AddObs(*itOAF,aSO);
 
       if (mNbPtsFlot)
       {
-          std::cout << "=== GCP STAT ===  Dist,  Moy="<< (mSomDistFlot/mNbPtsFlot) << " Max=" << mMaxDistFlot << "\n";
-          std::cout <<  " XYZ , MoyAbs=" << (mSomAbsEcPtsFlot/mNbPtsFlot) << " Max=" << mMaxAbsEcPtsFlot << " Bias=" << (mSomEcPtsFlot/mNbPtsFlot) << "\n";
+          Pt3dr  aMeanEc = mSomEcPtsFlot/mNbPtsFlot;
+          double aMeanEcXY = mSomDistXYFlot/mNbPtsFlot;
+          double aMeanEcXYZ = mSomDistFlot/mNbPtsFlot;
+          Pt3dr  aRMS2 = mSomRmsEcPtsFlot/mNbPtsFlot;
+          Pt3dr  aRMS = Pt3dr(sqrt(aRMS2.x),sqrt(aRMS2.y),sqrt(aRMS2.z));
+          double aRMSXY = euclid(Pt2dr(aRMS.x,aRMS.y));
+          double aCoef = sqrt(mNbPtsFlot/(mNbPtsFlot-1)); //unbiased STD coef
+          Pt3dr  aSTDEc = Pt3dr(sqrt(aRMS2.x-pow(aMeanEc.x,2))*aCoef,
+                                sqrt(aRMS2.y-pow(aMeanEc.y,2))*aCoef,
+                                sqrt(aRMS2.z-pow(aMeanEc.z,2))*aCoef);
+          double aSTDEcXY = sqrt(aRMS2.x+aRMS2.y-pow(aMeanEcXY,2))*aCoef;
+          double aSTDEcXYZ = sqrt(aRMS2.x+aRMS2.y+aRMS2.z-pow(aMeanEcXYZ,2))*aCoef;
+          std::cout << "=== GCP STAT ===  Dist,  Moy="<< (aMeanEcXYZ) << " Max=" << mMaxDistFlot << "\n";
+          std::cout <<  "[X,Y,Z],      MoyAbs=" << (mSomAbsEcPtsFlot/mNbPtsFlot) << " Max=" << mMaxAbsEcPtsFlot << " Mean=" << aMeanEc << " STD=" << aSTDEc << " Rms=" << aRMS << "\n";
+          std::cout <<  "[Plani,alti], Mean=[" << aMeanEcXY << "," << aMeanEc.z << "] STD=[" << aSTDEcXY << "," << aSTDEc.z << "] RMS=[" << aRMSXY << "," << aRMS.z << "]\n";
+          std::cout <<  "Norm,         Mean=" << aMeanEcXYZ << " STD= " << aSTDEcXYZ << " RMS=" << euclid(aRMS) << "\n";
       }
    }
 }
@@ -366,11 +439,15 @@ void cAppliApero::AddEcPtsFlot(const Pt3dr & anEc)
 {
    mNbPtsFlot++;
    double aD = euclid(anEc);
+   double aDXY = euclid(Pt2dr(anEc.x,anEc.y));
    mMaxDistFlot= ElMax(mMaxDistFlot,aD);
    mSomDistFlot += aD;
+   mSomDistXYFlot += aDXY;
    mSomEcPtsFlot = anEc + mSomEcPtsFlot;
    Pt3dr aEcAbs = Pt3dr(ElAbs(anEc.x),ElAbs(anEc.y),ElAbs(anEc.z));
-   mSomAbsEcPtsFlot = aEcAbs + mSomAbsEcPtsFlot  ;
+   mSomAbsEcPtsFlot = aEcAbs + mSomAbsEcPtsFlot;
+   Pt3dr aEcSquare = Pt3dr(pow(anEc.x,2.0),pow(anEc.y,2.0),pow(anEc.z,2.0));
+   mSomRmsEcPtsFlot = aEcSquare + mSomRmsEcPtsFlot;
    mMaxAbsEcPtsFlot = Sup(mMaxAbsEcPtsFlot,aEcAbs);
 }
 
@@ -459,6 +536,112 @@ const std::string & TheNameFileTxtConvName()
     static std::string TMC="Sensib-ConvName.txt";
     return TMC;
 }
+
+const std::string & TheNameFileXmlConvNameIm()
+{
+    static std::string TMC="Sensib-ConvName-Im.xml";
+    return TMC;
+}
+
+std::map<std::string,std::string>  LecSensibName(const std::string & aNameFile,const std::string & aPref)
+{
+    std::map<std::string,std::string> aRes;
+    ELISE_fp  aFile(aNameFile.c_str(),ELISE_fp::READ);
+
+    std::string aPat = std::string(" (") + aPref + ".*) => (.*)";
+    cElRegex anAutom(aPat,10);
+    bool endof=false;
+    std::string aLine;
+
+    while (!endof)
+    {
+        if (aFile.fgets(aLine,endof))
+        {
+             if (anAutom.Match(aLine))
+             {  
+                std::string anId = anAutom.KIemeExprPar(1);
+                std::string aVal = anAutom.KIemeExprPar(2);
+                aRes[anId] = aVal;
+             }
+        }
+    }
+    return aRes;
+}
+ 
+std::map<std::string,std::vector<cSensibDateOneInc> >
+    LecSensibDicIm(const std::string & aNameConv,const std::string & aNameXml)
+{
+    std::map<std::string,std::vector<cSensibDateOneInc> > aRes;
+
+    std::map<std::string,std::string> aConv =   LecSensibName ( aNameConv,"Ima");
+    cXmlNameSensibs     aXmlSN = StdGetFromAp(aNameXml,XmlNameSensibs);
+
+    for (const auto & aS1I : aXmlSN.SensibDateOneInc())
+    {
+        auto anIter = aConv.find(aS1I.NameBloc());
+        if (anIter != aConv.end())
+        {
+             aRes[anIter->second].push_back(aS1I);
+        }
+    }
+
+    return aRes;
+}
+
+const cSensibDateOneInc * GetSensib(const std::vector<cSensibDateOneInc> & aVec,const std::string & anId,bool SVP=false)
+{
+    auto anIter = std::find_if
+                  (
+                      aVec.begin(),
+                      aVec.end(),
+                      [anId](const cSensibDateOneInc & aS1) {return aS1.NameInc() == anId;}
+                  );
+     if (anIter == aVec.end())
+     {
+         ELISE_ASSERT(SVP,"Cannot find in GetSensib");
+         return nullptr;
+     }
+
+     return  &(*anIter);
+}
+
+
+std::map<std::string,std::pair<Pt3dr,Pt3dr>> GetSCenterOPK(const std::string & aNameConv,const std::string & aNameXml)
+{
+     std::map<std::string,std::pair<Pt3dr,Pt3dr> > aRes;
+
+     for (const auto & aVec : LecSensibDicIm(aNameConv,aNameXml))
+     {
+          Pt3dr aSCenter
+                (
+                    GetSensib(aVec.second,"Cx")->SensibParamInv(),
+                    GetSensib(aVec.second,"Cy")->SensibParamInv(),
+                    GetSensib(aVec.second,"Cz")->SensibParamInv()
+                 );
+          Pt3dr aSOPK
+                (
+                    GetSensib(aVec.second,"T12")->SensibParamInv(),
+                    GetSensib(aVec.second,"T02")->SensibParamInv(),
+                    GetSensib(aVec.second,"T01")->SensibParamInv()
+                 );
+          if (0)
+          {
+               std::cout << "SSSss " << aVec.first << aSCenter << aSOPK << "\n";
+          }
+          aRes[aVec.first] = std::pair<Pt3dr,Pt3dr>(aSCenter,aSOPK);
+     }
+
+     return aRes;
+}
+std::map<std::string,std::pair<Pt3dr,Pt3dr>>    StdGetSCenterOPK(const std::string &  aDir)
+{
+   return GetSCenterOPK(aDir+"/Sensib-ConvName.txt",aDir+"/Sensib-Data.dmp");
+}
+
+
+
+
+
 std::string  TheNameFileExpSens(bool Bin)
 {
     return "Sensib-Data" + std::string(Bin ? ".dmp" : ".xml");
@@ -492,6 +675,7 @@ Fonc_Num Correl(Fonc_Num Cov,Fonc_Num Var1, Fonc_Num Var2)
 
 void cAppliApero::OneIterationCompensation(const cIterationsCompensation & anIter,const cEtapeCompensation & anEC,bool IsLast)
 {
+    mPhaseContrainte = true;
     if (mSqueezeDOCOAC)
     {
         ELISE_ASSERT(mSqueezeDOCOAC==1,"Multiple mSqueezeDOCOAC");
@@ -520,10 +704,14 @@ std::cout << "DONNNNE AOAF : NonO ==============================================
         itC->second->InitAvantCompens();
     }
 
-
+    AddObservationsBaseGpsInit();
     ActiveContraintes(true);
+
     mSetEq.SetPhaseEquation();
     ActiveContraintes(false);
+    mPhaseContrainte=false;
+
+    AddObservationsBaseGpsInit();
 
 
     for (int aKP=0 ; aKP<int(mVecPose.size()) ; aKP++)
@@ -594,6 +782,7 @@ std::cout << "DONNNNE AOAF : NonO ==============================================
        std::string aNameConv =  aPrefESPA + TheNameFileTxtConvName();
 
        ofstream  aStdConvTxt (aNameConv.c_str());
+       cSauvegardeNamedRel  aRelIm;
        if (! aStdConvTxt.is_open())
        {
 		    std::cout << "FILE=" << aNameConv << "\n";
@@ -613,6 +802,7 @@ std::cout << "DONNNNE AOAF : NonO ==============================================
        for (int aK=0 ; aK<int(mNamesIdIm.size()) ; aK++)
        {
           aStdConvTxt<< " " << IdOfIma(aK) << " => " << mNamesIdIm[aK]  << "\n";
+          aRelIm.Cple().push_back(cCpleString(IdOfIma(aK), mNamesIdIm[aK]));
        }
 
        Im2D_REAL4 aMCov(aNbV,aNbV);
@@ -650,10 +840,62 @@ std::cout << "DONNNNE AOAF : NonO ==============================================
 
        //fclose(aFConvTxt);
        aStdConvTxt.close();
+       MakeFileXML(aRelIm,aPrefESPA+ TheNameFileXmlConvNameIm());
     }
 
+    bool  ExportMMF = mParam.SectionChantier().ExportMatrixMarket().Val() ;
+    FILE * aFileEMMF=nullptr;
+    // Export to Matrix Market format
+    if (ExportMMF)
+    {
+        cGenSysSurResol * aSys = mSetEq.Sys();   
+        int aNbV = aSys->NbVar();
+        int aNbNN = 0;
+        int aNbTot = 0;
+        bool DoSym = true; // If true export 2 way else only for J>=I
+        for (int aIter=0 ; aIter<2 ; aIter++)
+        {
+            if (aIter==1)
+            {
+                aFileEMMF = FopenNN("Test_SPD.mtx","w","Export Matrix MarketFormat");
+                fprintf(aFileEMMF,"%d %d %d\n",aNbV,aNbV,aNbNN);
+            }
+            for (int aI=0 ; aI<aNbV ; aI++)
+            {
+                 int aJ0 = (DoSym ? 0 : aI);
+                 for (int aJ=aJ0 ; aJ<aNbV ; aJ++)
+                 {
+                     double aV  = aSys->GetElemQuad(aI,aJ);
+                     bool IsNull = (aV==0);
+                     if (aIter==0)
+                     {
+                         aNbTot++;
+                         if (! IsNull)
+                            aNbNN++;
+                     }
+                     else
+                     {
+                         if (! IsNull)
+                         {
+                             fprintf(aFileEMMF,"%d %d %10.10E\n",aI+1,aJ+1,aV);  // !!! => Fuck Fortran index convention  !!!
+                             // fprintf(aFP,"%d %d %lf\n",aI,aJ,aV);
+                          }
+                     }
+                 }
+            }
+        }
+        std::cout << "===========  EXPORT MATRIX MARKET FORMAT =========\n";
+        std::cout << "  Densite NN=" << (double(aNbNN) / double(aNbTot)) << " NbVar=" << aNbV << "\n";
+    }
+
+    ElTimer aChronoSolve;
     mSetEq.Solve(aSO.SomErPond(),(bool *)0);
 
+    if (ExportMMF)
+    {
+       fprintf(aFileEMMF,"%% MicMac Cholesky time = %lf\n",aChronoSolve.uval());
+       fclose(aFileEMMF);
+    }
 
     if (mESPA)
     {

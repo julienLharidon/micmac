@@ -81,7 +81,14 @@ int Prep4masq_main(int argc,char ** argv)
         for(int i=0;i<int(aVectIm.size());i++){
             //to make the file to manualy modify
             string aNameMasq=StdPrefix(aVectIm[i]) + "_Masq.tif";
-            string cmdconv=MMDir() + "binaire-aux/convert -colorspace gray +compress " + aVectIm[i] + " " + aNameMasq;
+			string cmdconv;
+			#if (ELISE_unix || ELISE_Cygwin || ELISE_MacOs)
+				cmdconv="convert -colorspace gray +compress " + aVectIm[i] + " " + aNameMasq;
+			#endif
+			#if (ELISE_windows)
+				cmdconv=MMDir() + "binaire-aux/windows/convert -colorspace gray +compress " + aVectIm[i] + " " + aNameMasq;
+			#endif
+		            
             ListConvert.push_back(cmdconv);
 
             //to read Size
@@ -114,7 +121,7 @@ int Prep4masq_main(int argc,char ** argv)
 
 int CPP_SetExif(int argc,char **argv)
 {
-    std::string aPat,aCam;
+    std::string aPat,aCam,aTps;
     double aFoc,aF35;
     bool aPurge=true;
 
@@ -125,6 +132,7 @@ int CPP_SetExif(int argc,char **argv)
         LArgMain()  << EAM(aFoc,"F",true,"Focal lenght")
                     << EAM(aF35,"F35",true,"Focal lenght equiv 35mm")
                     << EAM(aCam,"Cam",true,"Camera model")
+					<< EAM(aTps,"Tps",true,"Image timestamp")
                     << EAM(aPurge,"Purge",true,"Purge created exiv2 command file (Def=true)")
     );
     if (MMVisualMode) return EXIT_SUCCESS;
@@ -146,6 +154,9 @@ int CPP_SetExif(int argc,char **argv)
 
     if (EAMIsInit(&aCam))
          fprintf(aFP,"set Exif.Image.Model  Ascii  \"%s\"\n",aCam.c_str());
+	
+	if (EAMIsInit(&aTps))
+         fprintf(aFP,"set Exif.Photo.DateTimeOriginal  Ascii  \"%s\"\n", aTps.c_str());
 
     fclose(aFP);
 

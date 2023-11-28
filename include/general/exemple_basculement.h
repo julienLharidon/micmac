@@ -55,6 +55,8 @@ class cL2EqObsBascult;
 /*                                                                           */
 /*****************************************************************************/
 
+extern bool DEBUG_GCP_BASCULE;
+
 class cSolBasculeRig : public cTransfo3D
 {
     public :
@@ -155,15 +157,17 @@ class cRansacBasculementRigide
         const  std::vector<std::string> & Names()  const;
         void EstimateDelay();
         double   Delay() const;
-    private :
 
           bool SolIsInit() const;
+         double EstimLambda() const;
+
+    private :
+
           void AssertSolInit() const;
 
          void  TestNewSol(const cSolBasculeRig &) ;
 
          double CostSol(const cSolBasculeRig &) const;
-         double EstimLambda() const;
          //  Solution en rendant aussi exact que possible le "match" K1-K2
          //  en cas de degenerescence renvoie Id
          cSolBasculeRig   SolOfK1K2(int aK1,int aK2,bool & OkSol) const;

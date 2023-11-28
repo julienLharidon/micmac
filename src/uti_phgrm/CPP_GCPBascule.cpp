@@ -213,6 +213,13 @@ int GCPCtrl_main(int argc,char ** argv)
     bool        CPI = false;
     bool ShowUnused = true;
 
+    std::string OutTxt {"ResRoll.txt"};
+    bool BoolOutTxt =false;
+
+    std::string OutJSON {"Res.geojson"};
+    bool BoolOutJSON =false;
+    bool WDetProj = false;
+
 
     ElInitArgMain
     (
@@ -224,7 +231,10 @@ int GCPCtrl_main(int argc,char ** argv)
         LArgMain()
                     <<  EAM(CPI,"CPI",true,"when Calib Per Image has to be used", eSAM_IsBool)
                     <<  EAM(ShowUnused,"ShowU",true,"Show unused point (def=true)", eSAM_IsBool)
-    );
+                    <<  EAM(OutTxt,"OutTxt",true,"Name TXT file for Ctrl result (def=false)")
+                    <<  EAM(OutJSON,"OutJSON",true,"Name .geojson file for Ctrl result (def=false)")
+                    <<  EAM(WDetProj,"WithDetProj",true,"with detail on all proj (def=false)")
+                );
 
     if (!MMVisualMode)
     {
@@ -243,11 +253,16 @@ int GCPCtrl_main(int argc,char ** argv)
                        + std::string(" +AeroIn=") + AeroIn
                        + std::string(" +DicoApp=") +  DicoPts
                        + std::string(" +SaisieIm=") +  MesureIm
+                       + std::string(" +WDetProj=") +  ToString(WDetProj)
                     ;
 
     if (EAMIsInit(&ShowUnused)) aCom = aCom + " +ShowUnused=" + ToString(ShowUnused);
     if (CPI) aCom += " +CPI=true ";
+    if (EAMIsInit(&OutTxt)) BoolOutTxt=true;
+    aCom += " +BoolOutTxt=" + ToString(BoolOutTxt) + " +OutTxt=" +OutTxt;
 
+    if (EAMIsInit(&OutJSON)) BoolOutJSON=true;
+    aCom += " +BoolOutJSON=" + ToString(BoolOutJSON) + " +OutJSON=" +OutJSON;
 
     std::cout << "Com = " << aCom << "\n";
     int aRes = System(aCom.c_str(),false,true,true);

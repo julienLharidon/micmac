@@ -42,6 +42,8 @@ Header-MicMac-eLiSe-25/06/2007*/
 // Pour des tests
 #include "cOrientationRTO.h"
 
+
+
 double aSeuilComSupInf = 0.99;
 double aSeuilGlobSupInf = 0.5;
 
@@ -246,6 +248,8 @@ template <class TypeEl,class tBase> cInterpolateurIm2D<TypeEl>  * InterpoleOfEta
 
 }
 
+/* Ch.M: Add template instatiation for g++-10 */
+template  cInterpolateurIm2D<float>  * InterpoleOfEtape(const cEtapeMEC & anEt,float *,double *);
 
 template <class TypeEl>
 cTplLoadedImage<TypeEl>::cTplLoadedImage
@@ -369,6 +373,7 @@ cTplLoadedImage<TypeEl>::cTplLoadedImage
        erod_d8(mMasqIm.in(0),mInterpol->SzKernel()),
        mMasqIm.out()
    );
+
 
 }
 
@@ -1567,6 +1572,7 @@ void cTplLoadedImage<TypeEl>::CalcRapCorrelIm1Maitre
 /*                                       */
 /*****************************************/
 
+
 cMSLoadedIm::cMSLoadedIm(const cOneParamCMS& aParam ,Im2D_REAL4 * anI,bool First) :
    mImCMS (aParam),
    mIm    (First ? *anI : Im2D_REAL4(anI->sz().x,anI->sz().y)),
@@ -1663,12 +1669,14 @@ cLoadedImage::cLoadedImage
    mTImPC           (mImPC)
 {
 
+
    ELISE_COPY
    (
        mMasqIm.all_pts(),
        trans(aFMasq,aBoxIm._p0),
        mMasqIm.out()
    );
+
 
    const cEtapeMEC & anEt = anAppli.CurEtape()->EtapeMEC();
    for 

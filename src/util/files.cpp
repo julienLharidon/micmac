@@ -848,6 +848,20 @@ mNameFile (name)
 	d(name);
 	init(ModeBinTxt);
 	open(name,mode,svp);
+
+/*
+if (MPD_MM())
+{
+    std::string aN2 = "./Tmp-MM-Dir/Ori--Sauv-Autom-0/Densite_AutoCal_Foc-4400_Cam-TheHeadHEAD3.tif";
+    // std::cout << "DDDddd " << mNameFile  << " " << DirOfFile(aN2)  << " " << NameWithoutDir(aN2) << "\n";
+// getchar();
+    if ((mode==READ) && (mNameFile=="./Tmp-MM-Dir/Ori--Sauv-Autom-0/Densite_AutoCal_Foc-4400_Cam-TheHeadHEAD3.tif"))
+    {
+        std::cout <<  "GGGgggggg\n";
+        getchar();
+    }
+}
+*/
 }
 
 
@@ -1109,7 +1123,7 @@ ELISE_ASSERT(false,"ELISE_fp::tell Old File obsolete");
 //===================================================================
 
 
-const char * (ELISE_fp::name_mope_open[3]) = {"rb","wb","r+b"};
+const char * ELISE_fp::name_mope_open[3] = {"rb","wb","r+b"};
 
 ELISE_fp::ELISE_fp(eModeBinTxt ModeBin) :  // use Fclose,Fopen, fread ....
 mNameFile ("NoName???"),
@@ -1237,6 +1251,7 @@ void ELISE_fp::read(void *ptr,tFileOffset size, tFileOffset nmemb,const char* fo
 			        std::cout <<  "Error while file reading |\n"
 					<<  "    FILE = " <<  mNameFile.c_str() << "  pos = " << tell().BasicLLO()  << "|\n"
 					<<  " reading " <<   nmemb.BasicLLO() << " , got " << nb_read.BasicLLO() << "|";
+// getchar();
                                  ELISE_ASSERT(false,"Error while file reading");
 
 			}
@@ -2235,7 +2250,11 @@ template <class T1,class T2> void BinaryDumpInFile(ELISE_fp & aFp,const Im2D<T1,
 template void BinaryDumpInFile(ELISE_fp&,const Im2D<REAL4,REAL8> & anIm);
 template void BinaryDumpInFile(ELISE_fp&,const Im2D<REAL8,REAL8> & anIm);
 template void BinaryDumpInFile(ELISE_fp&,const Im2D<U_INT1,INT> & anIm);
+template void BinaryDumpInFile(ELISE_fp&,const Im2D<U_INT2,INT> & anIm);
 template void BinaryDumpInFile(ELISE_fp&,const Im2D<INT1,INT> & anIm);
+template void BinaryDumpInFile(ELISE_fp&,const Im2D<INT2,INT> & anIm);
+template void BinaryDumpInFile(ELISE_fp&,const Im2D<INT4,INT> & anIm); // MMVII
+
 
 template <class T1,class T2> void BinaryUnDumpFromFile(Im2D<T1,T2> & aVal,ELISE_fp & aFp)
 {
@@ -2248,11 +2267,16 @@ template <class T1,class T2> void BinaryUnDumpFromFile(Im2D<T1,T2> & aVal,ELISE_
 template void BinaryUnDumpFromFile(Im2D<REAL4,REAL8> & anIm,ELISE_fp&);
 template void BinaryUnDumpFromFile(Im2D<REAL8,REAL8> & anIm,ELISE_fp&);
 template void BinaryUnDumpFromFile(Im2D<U_INT1,INT> & anIm,ELISE_fp&);
+template void BinaryUnDumpFromFile(Im2D<U_INT2,INT> & anIm,ELISE_fp&);
+template void BinaryUnDumpFromFile(Im2D<INT4,INT> & anIm,ELISE_fp&); // MMVII
+template void BinaryUnDumpFromFile(Im2D<INT2,INT> & anIm,ELISE_fp&);
 template void BinaryUnDumpFromFile(Im2D<INT1,INT> & anIm,ELISE_fp&);
 
 STD_MANGL(Im2D_REAL8)
 STD_MANGL(Im2D_REAL4)
 STD_MANGL(Im2D_U_INT1)
+STD_MANGL(Im2D_U_INT2)
+STD_MANGL(Im2D_INT2)
 STD_MANGL(Im2D_INT1)
 /********************************************************/
 /*    ceux dont ne sait pas trop quoi faire             */

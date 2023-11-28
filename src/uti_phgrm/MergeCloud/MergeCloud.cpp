@@ -69,7 +69,9 @@ cAppliMergeCloud::cAppliMergeCloud(int argc,char ** argv) :
    mNormaleByCenter   (false),
    mModeMerge         (eQuickMac),
    mDS                (1.0),
-   mOffsetPly         (0,0,0)
+   mOffsetPly         (0,0,0),
+   mSH(""),
+   mDoublePrec        (false)
 {
    // ELISE_fp::MkDirSvp(Dir()+DirQMPLy());
 
@@ -100,6 +102,8 @@ cAppliMergeCloud::cAppliMergeCloud(int argc,char ** argv) :
                     << EAM(aModeMerge,"ModeMerge",true,"Mode Merge in enumerated values", eSAM_None,ListOfVal(eNbTypeMMByP,"e"))
                     << EAM(mDS,"DownScale",true,"DownScale used in computation (to compute names)")
                     << EAM(mOffsetPly,"OffsetPly",true,"Offset Ply for Nuage2Ply")
+                    << EAM(mSH,"SH",true,"Set of Hom, Def=\"\"")
+            		    << EAM(mDoublePrec,"64B",true,"To generate 64 Bits ply, Def=false, WARN = do not work properly with meshlab or cloud compare")
    );
 
 
@@ -243,6 +247,12 @@ std::cout << "CCcccccccccccc\n";
       aNivMin=eQC_GradFaibleC1;
    }
    // aNivMin = eQC_GradFaibleC2;
+   if (aNivMin>mGlobMaxNivH) {
+       // jo 2018 09; tentative de faire foncitonne pims2ply sur image go pro
+       std::cout << "Warning : NivMin = " << aNivMin << ", Niv Gob max is "<< mGlobMaxNivH << "\n";
+       aNivMin=mGlobMaxNivH-1;
+       std::cout << "I change value of NivMin to " << aNivMin <<"\n";
+   }
    for (mCurNivSelSom=mGlobMaxNivH ; mCurNivSelSom>=aNivMin ; mCurNivSelSom--)
    {
        std::cout << "BEGIN NIV " <<  mCurNivSelSom << " " << eToString(eQualCloud(mCurNivSelSom)) << "\n"; 
@@ -457,6 +467,11 @@ const Pt3dr & cAppliMergeCloud::OffsetPly()
 {
    ELISE_ASSERT(HasOffsetPly()," cAppliMergeCloud::OffsetPly");
    return mOffsetPly;
+}
+
+const bool   cAppliMergeCloud::Export64BPly()
+{
+	return mDoublePrec;
 }
 
 

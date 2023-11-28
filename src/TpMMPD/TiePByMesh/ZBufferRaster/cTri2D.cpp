@@ -6,8 +6,10 @@ cTri2D::cTri2D(Pt2dr P1, Pt2dr P2, Pt2dr P3):
     mP3 (P3),
     mIsInCam(true),
     mReech (1.0),
-    mHaveBasis (false)
+    mHaveBasis (false),
+    mInverseOrder (false)
 {
+
 }
 
 cTri2D::cTri2D():
@@ -65,23 +67,34 @@ Pt3dr cTri2D::pt3DFromVBasis(Pt2dr & ptInTri2D, cTri3D & aTri3D)
 }
 
 
-double cTri2D::profOfPixelInTri(Pt2dr & ptInTri2D, cTri3D & aTri3D, cBasicGeomCap3D * aCam)
+double cTri2D::profOfPixelInTri(Pt2dr & ptInTri2D, cTri3D & aTri3D, cBasicGeomCap3D * aCam, bool aSafe)
 {
     Pt2dr ptInTri2DGlob = ptInTri2D/mReech;
     Pt3dr aPt = cTri2D::pt3DFromVBasis(ptInTri2DGlob, aTri3D);
-    if (aCam->PIsVisibleInImage(aPt))
+    if (aSafe)
     {
-        //Can I use this method ?
-        return aCam->ProfondeurDeChamps(aPt);
-        //return(euclid((aCam->VraiOpticalCenter()-aPt).AbsP() ));
+        if (aCam->PIsVisibleInImage(aPt))
+        {
+            //Can I use this method ?
+            double aProf = aCam->ProfondeurDeChamps(aPt);
+            return aProf;
+            //return(euclid((aCam->VraiOpticalCenter()-aPt).AbsP() ));
+        }
+        else
+            return TT_DEFAULT_PROF_NOVISIBLE;
     }
     else
-        return TT_DEFAULT_PROF_NOVISIBLE;
+        return aCam->ProfondeurDeChamps(aPt);
 }
 
 bool cTri2D::orientToCam(cBasicGeomCap3D * aCam)
 {
-    if ( ((mP1-mP2) ^ (mP1-mP3)) > 0 )
+    double notion = ((mP1-mP2) ^ (mP1-mP3));
+    if (mInverseOrder)
+    {
+        notion = -notion;
+    }
+    if (notion  > 0.0 )
         return false;
     else
         return true;
@@ -89,5 +102,10 @@ bool cTri2D::orientToCam(cBasicGeomCap3D * aCam)
 
 double cTri2D::surf()
 {
-    return ((mP1/mReech-mP2/mReech) ^ (mP1/mReech-mP3/mReech));
+    double surf = (mP1/mReech-mP2/mReech) ^ (mP1/mReech-mP3/mReech);
+    if (mInverseOrder)
+    {
+        surf = -surf;
+    }
+    return (surf);
 }

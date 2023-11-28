@@ -64,9 +64,9 @@ Header-MicMac-eLiSe-25/06/2007*/
 //  #define  TNbMinPMul 8  // Nombre de point triple minimal pour un triplet
 #define  TAttenDens 3.0
 
-#define TNbMinTriplet 3    // Nombre de point triple minimal pour un triplet
-#define TStdNbMaxTriplet 20   // Nombre maximal de triplet calcule
-#define TQuickNbMaxTriplet 8   // Nombre maximal de triplet calcule
+//#define TNbMinTriplet 8    // Nombre de point triple minimal pour un triplet // er: added to cCommonMartiniAppli class
+//#define TStdNbMaxTriplet 20   // Nombre maximal de triplet calcule  // er:  added to cCommonMartiniAppli class
+//#define TQuickNbMaxTriplet 3   // Nombre maximal de triplet calcule // er:  added to cCommonMartiniAppli class
 #define TGainSeuil    5e-3
 
 #define NbMaxATT 100000
@@ -100,17 +100,31 @@ class cCommonMartiniAppli
        std::string    mNameOriCalib;
        std::string    mPrefHom;
        std::string    mExtName;
+       bool           mExpTxt;
        std::string    mInOri;
+       std::string    mOriOut;
+       std::string    mOriGPS;
+       std::string    mOriCheck;
+       bool           mDebug;
+       //  std::string    mBlinis;
        bool           mAcceptUnSym;
        bool           mQuick;
        bool           mShow;
        // const std::string &   NameNOMode();
+       int mTStdNbMaxTriplet;
+       int mTQuickNbMaxTriplet;
+       int mTNbMinTriplet;
 
        eTypeModeNO    ModeNO() const;
        cNewO_NameManager * NM(const std::string & aDir) const;
        LArgMain &     ArgCMA();
        std::string    ComParam();
        cCommonMartiniAppli();
+       
+       bool GpsIsInit();
+       bool CheckIsInit();
+       Pt3dr GpsVal(cNewO_OneIm *);
+       CamStenope * CamCheck(cNewO_OneIm *);
       
     private :
        LArgMain * mArg;
@@ -130,7 +144,8 @@ class cNewO_OneIm
             cNewO_OneIm
             (
                  cNewO_NameManager & aNM,
-                 const std::string  & aName
+                 const std::string  & aName,
+                 bool  WithOri = true
             );
 
             CamStenope * CS();
@@ -178,7 +193,7 @@ class cNewO_OrInit2Im
                 bool                Show,
                 bool                aHPP,
                 bool                aSelAllIm,
-                const               cCommonMartiniAppli &
+                cCommonMartiniAppli &
           );
 
           double ExactCost(const ElRotation3D & aRot,double aTetaMax) const;
@@ -364,6 +379,7 @@ class cNewO_NameManager : public cVirtInterf_NewO_NameManager
 
            std::string NameOriInitTriplet(bool ModeBin,cNewO_OneIm *,cNewO_OneIm *,cNewO_OneIm *,bool WithMakeDir=false);
            std::string NameOriOptimTriplet(bool ModeBin,cNewO_OneIm *,cNewO_OneIm *,cNewO_OneIm *,bool WithMakeDir=false);
+           std::string NameOriOptimTriplet(bool ModeBin,const std::string&,const std::string&,const std::string&,bool WithMakeDir=false);
 
            std::string NameOriGenTriplet(bool Quick,bool ModeBin,cNewO_OneIm *,cNewO_OneIm *,cNewO_OneIm *);
 
@@ -465,7 +481,9 @@ class cExeParalByPaquets
           int                    mNbInOnePaquet;
 };
 
+CamStenope * DefaultCamera(const std::string & aName);
 
+void TestEllips_3D();
 
 
 #endif // _ELISE_NEW_ORI_H

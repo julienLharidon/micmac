@@ -70,6 +70,9 @@ cBaseGPS::cBaseGPS  (cSetEqFormelles & aSet,const Pt3dr & aV0) :
      mV0             (aV0),
      mBaseInc        (mSet.Alloc().NewPt3("cBaseGPS",mV0))
 {
+   //aRes->CloseEEF();
+   //AddObj2Kill(aRes);
+
 }
 
 Pt3d<Fonc_Num> cBaseGPS::BaseInc() {return mBaseInc;}
@@ -233,7 +236,7 @@ void GenerateCodeEqOffsetGPS(bool aGL)
 
      ElRotation3D aRot(Pt3dr(0,0,0),0,0,0);
      cRotationFormelle * aRF = aSet.NewRotation (cNameSpaceEqF::eRotLibre,aRot);
-     aRF->SetGL(aGL);
+     aRF->SetGL(aGL,ElRotation3D::Id);
 
      cBaseGPS * aBase = aSet.NewBaseGPS(Pt3dr(0,0,0));
      aSet.NewEqOffsetGPS(*aRF,*aBase,true);

@@ -69,12 +69,17 @@ int  cAttrArcPose::Nb() const { return mNb; }
 
 bool BugBestCam = false;
 
+
 void  cAppliApero::ConstructMST
       (
           const std::list<std::string> & aLNew,
           const cPoseCameraInc &   aPCI
       )
 {
+bool MST_DEBUG = false &&  MPD_MM();
+
+
+
    if (mNbRotPreInit==0)
    {
       ELISE_ASSERT(false,"Cannot built MST on empty base\n");
@@ -89,13 +94,18 @@ void  cAppliApero::ConstructMST
 
 
    const cMEP_SPEC_MST & aMST  = aPCI.MEP_SPEC_MST().Val();
-   bool Show = aMST.Show().Val();
+   bool Show = aMST.Show().Val() ;
    int  aNbPtsMin  = aMST.MinNbPtsInit().Val();
    double anExpDist = aMST.ExpDist().Val();
    double anExpNb   = aMST.ExpNb().Val();
    if (Show)
    {
        std::cout << "MST  " << aLNew.size() << "\n";
+   }
+   if (MST_DEBUG)
+   {
+       for (const auto & aN : aLNew )
+           std::cout <<  " ---  NNeew " << aN<< "\n";
    }
 
 
@@ -111,6 +121,10 @@ void  cAppliApero::ConstructMST
    {
        if (mVecPose[aK]->PreInit())
        {
+if (MST_DEBUG)
+{
+    std::cout << "IIIIIII " << mVecPose[aK]->Name() << "\n";
+}
             ELISE_ASSERT
             (
                 !BoolFind(aLNew,mVecPose[aK]->Name()),
@@ -130,48 +144,74 @@ void  cAppliApero::ConstructMST
 
    int aNbC = (int)aVCible.size(); 
 
+   cPoseCam * aLastRigidSeed;
+   std::vector<cPoseCam *> aVRigid2Init;
+   bool UseBloc = false;
+   if (aMST.MSTBlockRigid().IsInit())
+   {
+        UseBloc = true;
+        PreInitBloc(aMST.MSTBlockRigid().Val());
+   }
+if (MST_DEBUG)
+{
+   std::cout << "MM " << MPD_MM() << " BLoc=" << UseBloc << "\n";
+   getchar();
+}
+
    // A chaque iteration on va affecter un sommet
    for (int aTimes=0 ; aTimes<aNbC ; aTimes++)
    {
+if (MST_DEBUG) std::cout << "aVRigid2Init SIIZE " << aVRigid2Init.size() << "\n";
        cPoseCam  * aBestCam = 0;
-       cObsLiaisonMultiple * aBestPack=0; GccUse(aBestPack);
-       double           aPdsMax = -1e40;
        int aNbRotPreInit = -1;
-       // Recherche du sommet a affecter
-       for (int aKC=0 ; aKC<aNbC ; aKC++)
-       {
-           cPoseCam * aPcK = aVCible[aKC];
-
-           if (! aPcK->PreInit())
-           {
-              cObsLiaisonMultiple * anOLM = PackMulOfIndAndNale(aIdBd,aPcK->Name());
-              anOLM->CompilePose();
-
-              bool GotPMul;
-              double aPds = anOLM->StdQualityZone(ZuUseInInit(),OnInit,aNbPtsMin,anExpDist,anExpNb,GotPMul);
-
-              if (aPds> 0)
-              {
-                  if (aPds>aPdsMax)
-                  {
-                      aPdsMax = aPds;
-                      aBestCam = aPcK;
-                      aBestPack= anOLM;
-                      aNbRotPreInit = anOLM->NbRotPreInit();
-                  }
-              }
-           }
-       }
-
-       // On calcule les pere-mere
        std::vector<cPoseCam *>  aVBestC;
-       if (aBestCam != 0)
-       {
-// BugBestCam = (aTimes==11);
 
-           std::vector<double> aVCost;
-           cObsLiaisonMultiple * anOLM = PackMulOfIndAndNale(aIdBd,aBestCam->Name());
-           aVBestC = anOLM->BestPoseInitStd
+       if (aVRigid2Init.empty())
+       {
+           cObsLiaisonMultiple * aBestPack=0; GccUse(aBestPack);
+           double           aPdsMax = -1e40;
+           // Recherche du sommet a affecter
+           for (int aKC=0 ; aKC<aNbC ; aKC++)
+           {
+               cPoseCam * aPcK = aVCible[aKC];
+
+               if (! aPcK->PreInit())
+               {
+                  cObsLiaisonMultiple * anOLM = PackMulOfIndAndNale(aIdBd,aPcK->Name());
+                  anOLM->CompilePose();
+
+                  bool GotPMul;
+                  double aPds = anOLM->StdQualityZone(ZuUseInInit(),OnInit,aNbPtsMin,anExpDist,anExpNb,GotPMul);
+
+if (MST_DEBUG&& (aTimes==0))
+{
+   std::cout <<  "MSTPDs " << aPds  << " " << aPcK->Name() << " " <<  anOLM->NbRotPreInit()  << "\n";
+}
+
+                  if (aPds> 0)
+                  {
+                      if (aPds>aPdsMax)
+                      {
+                          aPdsMax = aPds;
+                          aBestCam = aPcK;
+                          aBestPack= anOLM;
+                          aNbRotPreInit = anOLM->NbRotPreInit();
+                      }
+                  }
+               }
+           }
+if (MST_DEBUG && aBestCam)
+{
+    std::cout << "aBestCamwwww " << aBestCam->Name() << " Time " << aTimes << "\n";
+    if (aTimes==0) getchar();
+}
+
+           // On calcule les pere-mere
+           if (aBestCam != 0)
+           {
+               std::vector<double> aVCost;
+               cObsLiaisonMultiple * anOLM = PackMulOfIndAndNale(aIdBd,aBestCam->Name());
+               aVBestC = anOLM->BestPoseInitStd
                      (
                            ZuUseInInit(),
                            OnInit,
@@ -181,22 +221,30 @@ void  cAppliApero::ConstructMST
                            anExpDist,
                            anExpNb
                      );
-       }
-       else
-       {
-            for (int aKC=0 ; aKC<aNbC ; aKC++)
-            {
-               cPoseCam * aPcK = aVCible[aKC];
-               if (! aPcK->PreInit())
-               {
-                  std::cout << "  === NON INIT : " << aPcK->Name() << "\n";
-               }
-            }
-            ELISE_ASSERT(false,"aBestCam==0");
-       }
+           }
+           else  // Si pas de meilleure cam, pb de connexion => erreur
+           {
+                for (int aKC=0 ; aKC<aNbC ; aKC++)
+                {
+                   cPoseCam * aPcK = aVCible[aKC];
+                   if (! aPcK->PreInit())
+                   {
+                      std::cout << "  === NON INIT : " << aPcK->Name() << "\n";
+                   }
+                }
+                ELISE_ASSERT(false,"aBestCam==0");
+           }
+      }
+      else
+      {
+          aNbRotPreInit = 1;
+          aVBestC.push_back(aLastRigidSeed);
+          aBestCam = aVRigid2Init.back();
+      }
 
 
-       if (int(aVBestC.size()) < ElMin(2,aNbRotPreInit))
+
+       if (aVRigid2Init.empty() && (int(aVBestC.size()) < ElMin(2,aNbRotPreInit)))
        {
           if (aBestCam !=0)
           {
@@ -253,9 +301,43 @@ void  cAppliApero::ConstructMST
               mProfMax = ElMax(mProfMax,aBestCam->Prof2Init());
           }
         }
+
+ 
+        if (aVRigid2Init.empty())
+        {
+            if (UseBloc  && aBestCam && (aBestCam->GetSRI(true)==nullptr))
+            {
+                 cPreCompBloc * aPCB = aBestCam->GetPreCompBloc(true);
+                 if (aPCB)
+                 {
+                      ElRotation3D  aR0 =  aBestCam->GetPreCB1Pose(false)->mRot;
+                      for (auto & aPC : aPCB->mGrp)
+                      {
+                          if (aPC != aBestCam)
+                          {
+                              ElRotation3D  aL0 =  aPC->GetPreCB1Pose(false)->mRot;
+                              aPC->SetSRI(new cStructRigidInit(aBestCam,aR0.inv() * aL0));
+                              aVRigid2Init.push_back(aPC);
+                          }
+                      }
+                 }
+                 if (!aVRigid2Init.empty())
+                 {
+                     aLastRigidSeed = aBestCam;
+                 }
+            }
+         }
+         else
+         {
+            // Forcement pas vide si on est la
+            aVRigid2Init.pop_back();
+            if (aVRigid2Init.empty())
+               aLastRigidSeed = 0;
+         }
    }
 
 
+if (MST_DEBUG) { std::cout << "ENDDDDDDDD MST \n"; getchar(); }
    // aSInit.pushlast(anAppli.PoseFromName(*itI)->Som());
 }
 

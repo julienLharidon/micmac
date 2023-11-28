@@ -37,8 +37,10 @@ English :
 
 Header-MicMac-eLiSe-25/06/2007*/
 
-#include "StdAfx.h"
+//#include "StdAfx.h"
+#include "ConvertRtk.h"
 
+/*
 const double JD2000 = 2451545.0; 	// J2000 in jd
 const double J2000 = 946728000.0; 	// J2000 in seconds starting from 1970-01-01T00:00:00
 const double MJD2000 = 51544.5; 	// J2000 en mjd
@@ -51,7 +53,7 @@ class cRPG_Appli;
 //struct
 struct PosGPS{
 	
-	//Positions
+    //Positions
     Pt3dr Pos;
     
     //Name or Number
@@ -81,18 +83,18 @@ struct PosGPS{
 
 //struct
 struct hmsTime{
-	double Year;
-	double Month;
-	double Day;
-	double Hour;
-	double Minute;
-	double Second;
+    double Year;
+    double Month;
+    double Day;
+    double Hour;
+    double Minute;
+    double Second;
 };
 
 //struct
 struct towTime{
-	double GpsWeek;
-	double Tow; //or wsec
+    double GpsWeek;
+    double Tow; //or wsec
 };
 
 class cRPG_Appli
@@ -104,26 +106,27 @@ class cRPG_Appli
           void ShowHmsTime(const hmsTime & Time);
           void ShowTowTime(const towTime & Time);
      private :
-		std::string mDir; 			
-		std::string mFile;
-		std::string mOut;
-		std::string mStrChSys;
+        std::string mDir;
+        std::string mFile;
+        std::string mOut;
+        std::string mStrChSys;
 };
 
 template <typename T> string NumberToString(T Number)
 {
-	ostringstream ss;
+    ostringstream ss;
     ss << Number;
     return ss.str();
 }
+*/
 
-void cRPG_Appli::ShowTowTime(const towTime & Time)
+void ShowTowTime(const towTime & Time)
 {
 	std::cout << "Time.GpsWeek ==> " << Time.GpsWeek << std::endl;
 	std::cout << "Time.Tow     ==> " << Time.Tow  << std::endl;
 }
 
-void cRPG_Appli::ShowHmsTime(const hmsTime & Time)
+void ShowHmsTime(const hmsTime & Time)
 {
 	std::cout << "Time.Year   ==> " << Time.Year << std::endl;
 	std::cout << "Time.Month  ==> " << Time.Month << std::endl;
@@ -133,7 +136,7 @@ void cRPG_Appli::ShowHmsTime(const hmsTime & Time)
 	std::cout << "Time.Second ==> " << Time.Second << std::endl;
 }
 
-double cRPG_Appli::hmsTime2MJD(const hmsTime & Time, const std::string & TimeSys)
+double hmsTime2MJD(const hmsTime & Time, const std::string & TimeSys)
 {
 	
 	double aYear;
@@ -142,10 +145,10 @@ double cRPG_Appli::hmsTime2MJD(const hmsTime & Time, const std::string & TimeSys
 	
 	//std::cout << "aSec = " << aSec << std::endl;
 	
-	if(TimeSys == "UTC")
-	{
-		aSec -= LeapSecond;
-	}
+    if(TimeSys == "UTC")
+    {
+        aSec += LeapSecond;
+    }
 	
 	//std::cout << "aSec = " << aSec << std::endl;
 	
@@ -199,13 +202,13 @@ double cRPG_Appli::hmsTime2MJD(const hmsTime & Time, const std::string & TimeSys
 	
 }
 
-double cRPG_Appli::towTime2MJD(const towTime & Time, const std::string & TimeSys)
+double towTime2MJD(const towTime & Time, const std::string & TimeSys)
 {
 	double aSec = Time.Tow;
 	
-	if(TimeSys == "UTC")
+    if(TimeSys == "UTC")
 	{
-		aSec -= LeapSecond;
+        aSec += LeapSecond;
 	}
 	
 	double aS1970 = Time.GpsWeek * 7 * 86400 + aSec + GPS0;
@@ -215,6 +218,19 @@ double cRPG_Appli::towTime2MJD(const towTime & Time, const std::string & TimeSys
 	return aMJD;
 }
 
+hmsTime ElDate2hmsTime(const cElDate & aDate)
+{
+    hmsTime ahmsTime;
+    ahmsTime.Year = aDate.Y();
+    ahmsTime.Month = aDate.M();
+    ahmsTime.Day = aDate.D();
+    cElHour aHour = aDate.H();
+    ahmsTime.Hour = aHour.H();
+    ahmsTime.Minute = aHour.M();
+    ahmsTime.Second = aHour.S();
+    return ahmsTime;
+}
+
 cRPG_Appli::cRPG_Appli(int argc,char ** argv)
 {
 	bool aShowH = false;
@@ -222,11 +238,13 @@ cRPG_Appli::cRPG_Appli(int argc,char ** argv)
 	std::string aTimeSys="";
 	int aCompt = 0;
 	double aTimeF = 0;
+    bool aMedian = false;
 	
 	
 	std::vector<PosGPS> aVPosGPS;
 	std::vector<Pt3dr> aVSauvPosGPS;
 	
+    Pt3dr aOffset(0,0,0);
 	
 	ElInitArgMain
     (
@@ -237,6 +255,8 @@ cRPG_Appli::cRPG_Appli(int argc,char ** argv)
 					 << EAM(mStrChSys,"ChSys",true,"Change coordinate file")
 					 << EAM(aShowH,"ShowH",true,"Show header informations ; Def = false", eSAM_IsBool)
 					 << EAM(aXYZ,"tXYZQ",false,"Export tXYZQ format ASCII data ; Def = false", eSAM_IsBool)
+                     << EAM(aOffset,"OffSet",true,"Subtract an offset to all points")
+                     << EAM(aMedian,"Median",false,"Export the median of coordinates; Def = false")
     );
     
     std::string aFullName = mDir+mFile;
@@ -291,9 +311,9 @@ cRPG_Appli::cRPG_Appli(int argc,char ** argv)
 				if(aTimeSys == "NONE")
 				{
 					ELISE_ASSERT(false,"Time System Not Supported");
-				}
-				
-				char *aBuffer = strdup((char*)aLigne.c_str());
+                }
+
+                char *aBuffer = strdup((char*)aLigne.c_str());
                 std::string aTimeP1 = strtok(aBuffer," ");
                 std::string aTimeP2 = strtok( NULL, " " );
                 char *aX = strtok( NULL, " " );
@@ -315,21 +335,21 @@ cRPG_Appli::cRPG_Appli(int argc,char ** argv)
                 //check output format : hms OR tow ?
                 if(aTimeP1.size() > 4)
                 {
-					//std::cout << "Detected Time Format = hms" << std::endl;
+                    //std::cout << "Detected Time Format = hms" << std::endl;
 					
 					hmsTime aHmsTps;
 					aHmsTps.Year = atof(aTimeP1.substr(0,4).c_str());
-					//std::cout << "aHmsTps.Year == " << aHmsTps.Year << std::endl;
+                    //std::cout << "aHmsTps.Year == " << aHmsTps.Year << std::endl;
 					aHmsTps.Month = atof(aTimeP1.substr(5,2).c_str());
-					//std::cout << "aHmsTps.Month == " << aHmsTps.Month << std::endl;
-					aHmsTps.Day = atof(aTimeP1.substr(8,02).c_str());
-					//std::cout << "aHmsTps.Day == " << aHmsTps.Day << std::endl;
+                    //std::cout << "aHmsTps.Month == " << aHmsTps.Month << std::endl;
+                    aHmsTps.Day = atof(aTimeP1.substr(8,2).c_str());
+                    //std::cout << "aHmsTps.Day == " << aHmsTps.Day << std::endl;
 					aHmsTps.Hour = atof(aTimeP2.substr(0,2).c_str());
-					//std::cout << "aHmsTps.Hour == " << aHmsTps.Hour << std::endl;
+                    //std::cout << "aHmsTps.Hour == " << aHmsTps.Hour << std::endl;
 					aHmsTps.Minute = atof(aTimeP2.substr(3,2).c_str());
-					//std::cout << "aHmsTps.Minute == " << aHmsTps.Minute << std::endl;
+                    //std::cout << "aHmsTps.Minute == " << aHmsTps.Minute << std::endl;
 					aHmsTps.Second = atof(aTimeP2.substr(6,aTimeP2.size()-6).c_str());
-					//std::cout << "aHmsTps.Second == " << aHmsTps.Second << std::endl;
+                    //std::cout << "aHmsTps.Second == " << aHmsTps.Second << std::endl;
 					
 					aTimeF = hmsTime2MJD(aHmsTps,aTimeSys);
 					
@@ -396,20 +416,43 @@ cRPG_Appli::cRPG_Appli(int argc,char ** argv)
      }
 	
 	cDicoGpsFlottant  aDico;
+
+
+    std::vector<double> aVCorX;
+    std::vector<double> aVCorY;
+    std::vector<double> aVCorZ;
+
+
 	
     for (int aKP=0 ; aKP<int(aVSauvPosGPS.size()) ; aKP++)
     {
 		cOneGpsDGF aOAD;
-        aOAD.Pt() = aVSauvPosGPS[aKP];
+        aOAD.Pt() = aVSauvPosGPS.at(aKP) - aOffset;
         aOAD.NamePt() = aVPosGPS[aKP].Name;
         aOAD.Incertitude() = aVPosGPS[aKP].Ic;
         aOAD.TagPt() = aVPosGPS[aKP].Flag;
         aOAD.TimePt() = aVPosGPS[aKP].Time;
 
         aDico.OneGpsDGF().push_back(aOAD);
+
+        if (aMedian && (aOAD.TagPt()==1))
+        {
+            aVCorX.push_back(aOAD.Pt().x);
+            aVCorY.push_back(aOAD.Pt().y);
+            aVCorZ.push_back(aOAD.Pt().z);
+        }
 	}
 
     MakeFileXML(aDico,mOut);
+
+    if (aMedian)
+    {
+        double aCorX = MedianeSup(aVCorX);
+        double aCorY = MedianeSup(aVCorY);
+        double aCorZ = MedianeSup(aVCorZ);
+
+        std::cout << std::setprecision(12) << "The median of coordinates = [" << aCorX << "," << aCorY << "," << aCorZ << "]" << endl;
+    }
     
     //if (.txt) file export
     if(aXYZ)

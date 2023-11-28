@@ -40,6 +40,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 #include "StdAfx.h"
 #include <algorithm>
 
+
 // ffmpeg -i MVI_0001.MOV  -ss 30 -t 20 Im%5d_Ok.png
 
 // Im*_Ok => OK
@@ -73,7 +74,7 @@ class cOriMorito
         std::string mName;
 };
 
-class cAppliMorito
+class cAppliMorito 
 {
     public :
         cAppliMorito(int argc,char ** argv);
@@ -94,9 +95,11 @@ class cAppliMorito
         std::vector<Pt3dr>       mVP1;
         std::vector<Pt3dr>       mVP2;
 
+
         std::string       mOri1;
         std::string       mOri2;
         std::string       mOriOut;
+	int               mFlagUseOri;
         bool              mWithOutLayer;
         ElMatrix<double>  mRM2toM1;
         double            mSc2to1;
@@ -131,6 +134,7 @@ cOriMorito::cOriMorito() :
 void cAppliMorito::InitOneDir(const std::string & aPat,bool aD1)
 {
    cElemAppliSetFile anEASF(aPat);
+   std::string aDirNKS = "";//si NKS-Set-OfFile contient le nom absolut 
 
    const std::vector<std::string> * aVN = anEASF.SetIm();
    std::cout<<"For pattern \""<<aPat;
@@ -141,9 +145,12 @@ void cAppliMorito::InitOneDir(const std::string & aPat,bool aD1)
         std::cout<<"  - "<<aNameOri<<"\n";
         CamStenope * aCS = CamOrientGenFromFile(aNameOri,anEASF.mICNM);
 
+
+        SplitDirAndFile(aDirNKS,aNameOri,aNameOri);
         cOriMorito & anOri = mOrients[aNameOri];
+
         anOri.mName = aNameOri;
-        anOri.mNameFull =  anEASF.mDir + aNameOri;
+        anOri.mNameFull =  anEASF.mDir + aDirNKS + aNameOri;
         if (aD1)
            anOri.mCam1 = aCS;
         else
@@ -153,12 +160,14 @@ void cAppliMorito::InitOneDir(const std::string & aPat,bool aD1)
 
 
 cAppliMorito::cAppliMorito(int argc,char ** argv)  :
+    mFlagUseOri         (3),
     mWithOutLayer       (false),
     mRM2toM1            (3,3,0.0),
     mShow               (2),
     mDir                ("./")
 {
 
+	bool aShowSol=false;
 
     ElInitArgMain
      (
@@ -166,8 +175,11 @@ cAppliMorito::cAppliMorito(int argc,char ** argv)  :
            LArgMain() << EAMC(mOri1,"First set of image", eSAM_IsPatFile)
                       << EAMC(mOri2,"Second set of image", eSAM_IsPatFile)
                       << EAMC(mOriOut,"Orientation Dir"),
-           LArgMain() << EAM(mWithOutLayer,"WithOutLayer",true,"Is robust estimation requires or simply L2 (Def=false, other not supported now)")
+           LArgMain() << EAM(mWithOutLayer,"WithOutLayer",true,"If robust estimation required or simply L2 (Def=false, other not supported now)")
                       << EAM(mDir,"Dir",true,"Global directory, Def=./")
+                      << EAM(aShowSol,"Show",true,"Show the transformation, Def=false")
+                      << EAM(mFlagUseOri,"FUO",true,"Flag Use for common orientation 3=Avg,2=only 2,1=only1 , def=3")
+
 
     );
 
@@ -178,6 +190,7 @@ cAppliMorito::cAppliMorito(int argc,char ** argv)  :
     InitOneDir(mOri2,false);
     mDirOutLoc =  "Ori-"  + mOriOut + "/";
     mDirOutGlob = Dir() + mDirOutLoc;
+    std::string aComPB; // Pas besoin de aComPB
 
     for
     (
@@ -207,6 +220,15 @@ cAppliMorito::cAppliMorito(int argc,char ** argv)  :
     // InitScTr2to1();
     ComputNewRot2();
     Sauv();
+
+	if (aShowSol)
+	{
+		std::cout << "Lambda= " << mSc2to1 << "\n"
+				  << "Tr    = " << mTr2to1 << "\n"
+				  << "R     = " << mRM2toM1(0,0) << "  " << mRM2toM1(0,1) << " " << mRM2toM1(0,2) <<  "\n"
+				  << "        " << mRM2toM1(1,0) << "  " << mRM2toM1(1,1) << " " << mRM2toM1(1,2) <<  "\n"
+				  << "        " << mRM2toM1(2,0) << "  " << mRM2toM1(2,1) << " " << mRM2toM1(2,2) <<  "\n";
+	}
 }
 
 /*
@@ -488,9 +510,20 @@ void cAppliMorito::ComputNewRot2()
             // Pour les doublons on fait une moyenne, sachant que c'est M2 qui sera sauve en priorite
             if (aCam1)
             {
-                aC1 = (aC1+ aCam1->PseudoOpticalCenter()) / 2.0;
-                aRM1toCam = NearestRotation((aRM1toCam + aCam1->Orient().Mat())*0.5);
-            }
+	        if (mFlagUseOri==1)
+		{
+                   aC1 = aCam1->PseudoOpticalCenter();
+		   aRM1toCam = aCam1->Orient().Mat();
+		}
+		else if (mFlagUseOri==2)
+		{
+		}
+		else // (mFlagUseOri==3)
+	        {
+                     aC1 = (aC1+ aCam1->PseudoOpticalCenter()) / 2.0;
+                     aRM1toCam = NearestRotation((aRM1toCam + aCam1->Orient().Mat())*0.5);
+                }
+	    }
             ElRotation3D  aCamToM1 (aC1,aRM1toCam.transpose(),true);
 
 
@@ -545,11 +578,29 @@ void cSolBasculeRig::QualitySol
 
 void cAppliMorito::SauvCalib(const std::string & anOri)
 {
+    std::string anOriTmp = anOri;
+    
+    /* Afin de gerer NKS-Set-OfFile */
+    cElRegex anAutom("NKS-Set-OfFile.*",10);
+    bool ISNKS = anAutom.Match(anOri);
+    if (ISNKS)
+    {
+        std::string aDirNKS, aNameOri;
+
+        cElemAppliSetFile anEASF(anOri);
+        aNameOri = (*anEASF.SetIm())[0]; 
+        SplitDirAndFile(aDirNKS,aNameOri,aNameOri);
+        anOriTmp = anEASF.mDir + aDirNKS + aNameOri;
+
+    }
+
     ELISE_fp::CpFile
     (
-          DirOfFile(anOri) + "AutoCal*.xml",
+          DirOfFile(anOriTmp) + "AutoCal*.xml",
           mDirOutGlob
     );
+
+
 }
 
 
@@ -578,6 +629,7 @@ void cAppliMorito::Sauv()
       }
 
       std::string  aName = mDirOutGlob+anOM.mName;
+
       MakeFileXML(anOCInit,aName);
    }
 

@@ -66,8 +66,7 @@ INT pgm_get_int(ELISE_fp fp,U_INT1 &c)
     INT res = c-'0';
     while
     (
-          ((c = fp.read_U_INT1()) >= '0')
-       && (c <= '9')
+          (((c = fp.read_U_INT1()) >= '0') && (c <= '9')) || (c=='.') || (c=='-')
     )
        res = 10*res+c-'0';
     return res;
@@ -88,11 +87,14 @@ Elise_File_Im  Elise_File_Im::pnm(const char * name)
      ASSERT_TJS_USER((aCar == 'P'),"bad magic pnm");
      INT nb_can = -1234;
      INT kind_pnm = fp.read_U_INT1();
+     bool isFloatIm = false;
      switch (kind_pnm)
      {
-           case '4' : nb_can = 1; break;
-           case '5' : nb_can = 1; break;
+           case '4' : nb_can = 1; break;  // 1 Bits  images
+           case '5' : nb_can = 1; break;  // 
            case '6' : nb_can = 3; break;
+           case 'f' : nb_can = 1; isFloatIm = true;break;
+           case 'F' : nb_can = 3; isFloatIm = true;break;
            default :  elise_fatal_error("bad magic pbm",__FILE__,__LINE__);
      }
      
@@ -117,6 +119,8 @@ Elise_File_Im  Elise_File_Im::pnm(const char * name)
      GenIm::type_el  aType = GenIm::u_int1;
      if ( kind_pnm==4)
          aType = GenIm::bits1_msbf;
+     else if (isFloatIm )
+         aType = GenIm::real4;
      else if (aNbMaxVal>=256)
          aType = GenIm::u_int2;
         
@@ -329,6 +333,7 @@ bool IsKnowImagePostFix(const std::string & aPostMix)
                     || (aPost=="pbm")
                     || (aPost=="pgm")
                     || (aPost=="ppm")
+                    || (aPost=="pfm")
              ;
 
         case 't' :
@@ -830,6 +835,65 @@ void ThomCorrigeCourrantObscur(Im2D_U_INT2 anIm,const Box2di& aBox)
     );
 }
 
+
+int HackToF(int argc,char ** argv)
+{
+   Pt2di aSz(320,240);
+   std::string aName("Test4MPD.bin");
+   int aNbByte = 4;
+   int aOffset = 0;
+
+
+   INT aSzFile = sizeofile (aName.c_str());
+   INT aSzFrame = (aNbByte * aSz.x * aSz.y);
+   int aNbFrame = (aSzFile-aOffset) / aSzFrame;
+
+   ELISE_fp aFP(aName.c_str(),ELISE_fp::READ);
+   for (int aKF=0 ; aKF<aNbFrame ; aKF++)
+   {
+      aFP.seek(aKF*aSzFrame,ELISE_fp::sbegin);
+      Im2D_U_INT1 aI1(aSz.x,aSz.y);
+      Im2D_U_INT1 aI2(aSz.x,aSz.y);
+      Im2D_U_INT1 aI3(aSz.x,aSz.y);
+      Im2D_U_INT1 aI4(aSz.x,aSz.y);
+
+      if ((aKF%10==0))
+      {
+          for (int aY=0 ; aY< aSz.y ; aY++)
+          {
+              for (int aX=0 ; aX< aSz.x ; aX++)
+              {
+                  Pt2di aP(aX,aY);
+                  aI1.SetI(aP,aFP.fgetc());
+                  aI2.SetI(aP,aFP.fgetc());
+                  aI3.SetI(aP,aFP.fgetc());
+                  aI4.SetI(aP,aFP.fgetc());
+              }
+          }
+      }
+      Tiff_Im::CreateFromIm(aI1,"I1-F"+ToString(aKF)+".tif");
+      Tiff_Im::CreateFromIm(aI2,"I2-F"+ToString(aKF)+".tif");
+      Tiff_Im::CreateFromIm(aI3,"I3-F"+ToString(aKF)+".tif");
+      Tiff_Im::CreateFromIm(aI4,"I4-F"+ToString(aKF)+".tif");
+
+      Tiff_Im::CreateFromFonc("I43-F"+ToString(aKF)+".tif",aSz,256*aI4.in()+aI3.in(),GenIm::u_int2);
+
+
+
+      // Tiff_Im::CreateFromIm(aI1,"I1-F"+ToString(aKF));
+
+/*
+      for (int aK=0 ; aK<8 ; aK++)
+      {
+          int aC = aFP.fgetc();
+          printf("%4d " ,aC);
+      }
+      printf("\n");
+*/
+   }
+
+   return EXIT_SUCCESS;
+}
 
 
 

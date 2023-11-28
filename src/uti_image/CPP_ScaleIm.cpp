@@ -67,7 +67,11 @@ int ScaleIm_main(int argc,char ** argv)
     bool aForceGray  = false;
     bool aForce8B  = false;
 
-    bool aModeMasq=false;
+    bool aModeMasq   = false;
+    bool Arg2IsWidth = false;
+    bool useLZW = false;
+    
+    int Strip;
 
 
     ElInitArgMain
@@ -90,6 +94,9 @@ int ScaleIm_main(int argc,char ** argv)
                 << EAM(aForce8B,"F8B",true,"Force 8 bits (Def=false)")
                 << EAM(aModeMasq,"ModMasq",true,"Mode Masq => binarize at 0.9999 threshlod ")
                 << EAM(aNameDepl,"NameDepl",true,"Image of displacement ")
+                << EAM(Arg2IsWidth ,"Arg2IsW",true,"If 2nd Arg is Witdh")
+                << EAM(Strip ,"Strip",true,"Strip for image generated, def unused (use tilling), 0=> one big tile")
+                << EAM(useLZW ,"LZW",true,"Use LZW for compression")
     );
     if (!MMVisualMode)
     {
@@ -100,13 +107,15 @@ int ScaleIm_main(int argc,char ** argv)
     if (aDilXY.x<0)
        aDilXY = Pt2dr(aDilate,aDilate);
 
-    if (aScY==0)
-        aScY= aScX;
-
 
     std::string aNameTif = NameFileStd(aNameIn,aForceGray ? 1 :-1,!aForce8B ,true,true);
-
     Tiff_Im tiff = Tiff_Im::StdConvGen(aNameIn.c_str(),aForceGray ? 1 :-1,!aForce8B ,true);
+    if (Arg2IsWidth)
+    {
+        aScX =   dist8(tiff.sz()) / double(aScX);
+    }
+    if (aScY==0)
+        aScY= aScX;
 
     aP0.SetSup(Pt2dr(0,0));
     Pt2di aSzG = tiff.sz();
@@ -142,6 +151,17 @@ int ScaleIm_main(int argc,char ** argv)
     if (aNameType!="")
        aType = type_im(aNameType);
 
+    L_Arg_Opt_Tiff  aLopt = ArgOpTiffMDP(aNameTif);
+
+    if (EAMIsInit(&Strip))
+    {
+        if (Strip>0) 
+           aLopt  =  aLopt + Arg_Tiff(Tiff_Im::AStrip(Strip));
+        else  
+           aLopt  =  aLopt +  Arg_Tiff(Tiff_Im::ANoStrip());
+    }
+
+    Tiff_Im::COMPR_TYPE aModeCompr = useLZW ? Tiff_Im::LZW_Compr : Tiff_Im::No_Compr;
 
     Tiff_Im TiffOut  =     (tiff.phot_interp() == Tiff_Im::RGBPalette)  ?
                            Tiff_Im
@@ -149,18 +169,20 @@ int ScaleIm_main(int argc,char ** argv)
                               aNameOut.c_str(),
                               Pt2di(aSz),
                               aType,
-                              Tiff_Im::No_Compr,
+                              aModeCompr,
                               tiff.pal(),
-                              ArgOpTiffMDP(aNameTif)
+                              aLopt
+                              // ArgOpTiffMDP(aNameTif)
                           )                    :
                            Tiff_Im
                            (
                               aNameOut.c_str(),
                               Pt2di(aSz),
                               aType,
-                              Tiff_Im::No_Compr,
-                              tiff.phot_interp(),
-                              ArgOpTiffMDP(aNameTif)
+                              aModeCompr,
+                              aForceGray? Tiff_Im::BlackIsZero : tiff.phot_interp(),
+                              aLopt
+                              // ArgOpTiffMDP(aNameTif)
                           );
 
     std::cout << "P0 " << aP0 << " Sc " << aScX << " " << aScY << "\n";
@@ -194,6 +216,8 @@ int ScaleIm_main(int argc,char ** argv)
           Tiff_Im::CreateFromFonc(aNameDepl+"-DepY.tif",aSzG,(FY-aP0.y)/aScY-FY,GenIm::real4);
        }
     }
+
+// std::cout << "isUsingSeparateDirectories" << isUsingSeparateDirectories() << "\n";
     return EXIT_SUCCESS;
 }
 

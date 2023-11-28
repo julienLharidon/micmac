@@ -456,6 +456,11 @@ cAppliMICMAC::cAppliMICMAC
       mNameChantier = NomChantier().Val();
 
 
+    if (ExtensionIntervZ().IsInit())
+    {
+         SetExtensionIntervZInApero(ExtensionIntervZ().Val());
+    }
+
    InitDirectories();
    InitAnamSA();
    InitImages();
@@ -1568,7 +1573,10 @@ void cAppliMICMAC::AddAnImage(const std::string & aName)
      if ( mNbPDV == 0)
          mPDV1 =  mPrisesDeVue.back();
      if ( mNbPDV== 1)
+     {
+         // std::cout << "PDVVVVVV  22222222222222\n"; getchar();
          mPDV2 =  mPrisesDeVue.back();
+     }
      
      int aDim = mPrisesDeVue.back()->Geom().DimPx();
      if (mNbPDV==0)
@@ -1835,6 +1843,13 @@ const cCorrelMultiScale * cAppliMICMAC::CMS() const
 {
    return mCMS;
 }
+
+const cCensusCost * cAppliMICMAC::CC() const
+{
+   return mCC;
+}
+
+
 
 const cEtiqBestImage *  cAppliMICMAC::EBI() const
 {
@@ -2208,9 +2223,22 @@ void cAppliMICMAC::ExeProcessParallelisable
            }
        } 
        fic.close();
-       mCout << " ---Launch processes through the Makefile\n";
 
-	bool makeSucceeded = launchMake( nomMakefile, "", ByProcess().Val() );
+       //// MODIFiED
+       //set number of process according to env variable MICMAC_MAX_THREADS if defined.
+       int thread_count;
+       const char* env_var = std::getenv("MICMAC_MAX_THREADS");
+       if (env_var != NULL)
+       {
+            thread_count = atoi(env_var);
+       }
+       else
+       {
+            thread_count = ByProcess().Val();
+       }
+       mCout << " ---Launch " << thread_count << " processes through the Makefile\n";
+       bool makeSucceeded = launchMake( nomMakefile, "", thread_count );
+       //// END MODIFIED
 
        if (StopOnEchecFils().Val())
         {    
@@ -2427,7 +2455,7 @@ void cAppliMICMAC::AnalyseOri(CamStenope * aCam ) const
 
 /*Footer-MicMac-eLiSe-25/06/2007
 
-Ce logiciel est un programme informatique servant �  la mise en
+Ce logiciel est un programme informatique servant �  la mise en
 correspondances d'images pour la reconstruction du relief.
 
 Ce logiciel est régi par la licence CeCILL-B soumise au droit français et
@@ -2443,17 +2471,17 @@ seule une responsabilité restreinte pèse sur l'auteur du programme,  le
 titulaire des droits patrimoniaux et les concédants successifs.
 
 A cet égard  l'attention de l'utilisateur est attirée sur les risques
-associés au chargement,  �  l'utilisation,  �  la modification et/ou au
-développement et �  la reproduction du logiciel par l'utilisateur étant 
-donné sa spécificité de logiciel libre, qui peut le rendre complexe �  
-manipuler et qui le réserve donc �  des développeurs et des professionnels
+associés au chargement,  �  l'utilisation,  �  la modification et/ou au
+développement et �  la reproduction du logiciel par l'utilisateur étant 
+donné sa spécificité de logiciel libre, qui peut le rendre complexe �  
+manipuler et qui le réserve donc �  des développeurs et des professionnels
 avertis possédant  des  connaissances  informatiques approfondies.  Les
-utilisateurs sont donc invités �  charger  et  tester  l'adéquation  du
-logiciel �  leurs besoins dans des conditions permettant d'assurer la
+utilisateurs sont donc invités �  charger  et  tester  l'adéquation  du
+logiciel �  leurs besoins dans des conditions permettant d'assurer la
 sécurité de leurs systèmes et ou de leurs données et, plus généralement, 
-�  l'utiliser et l'exploiter dans les mêmes conditions de sécurité. 
+�  l'utiliser et l'exploiter dans les mêmes conditions de sécurité. 
 
-Le fait que vous puissiez accéder �  cet en-tête signifie que vous avez 
+Le fait que vous puissiez accéder �  cet en-tête signifie que vous avez 
 pris connaissance de la licence CeCILL-B, et que vous en avez accepté les
 termes.
 Footer-MicMac-eLiSe-25/06/2007*/

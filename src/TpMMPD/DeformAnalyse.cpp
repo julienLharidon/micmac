@@ -76,7 +76,7 @@ int DeformAnalyse_main (int argc, char ** argv)
 
         // 3. get the vector PerResidu
         ifstream aPR((aDir + aOut1).c_str());
-        char *aPerR;
+        std::string aPerR;
         if(aPR)
         {
             std::string aLine;
@@ -87,7 +87,7 @@ int DeformAnalyse_main (int argc, char ** argv)
                 getline(aPR,aLine,'\n');
                 if(aLine.size() != 0)
                 {
-                    aPerR = strdup((char*)aLine.c_str());
+                    aPerR = aLine;
                 }
             }
             aPR.close();
@@ -112,7 +112,7 @@ int DeformAnalyse_main (int argc, char ** argv)
         // 5.get Scale and Tr from the result of CalcMapAnalytik
         cXml_Map2D  aDico = StdGetFromSI(aOut2,Xml_Map2D);
         std::list<cXml_Map2DElem> & aLMaps = aDico.Maps();
-        double aScale;
+        double aScale=0;
         Pt2dr aTr;
         for (auto iT=aLMaps.begin(); iT != aLMaps.end(); iT++)
         {

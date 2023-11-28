@@ -1,22 +1,11 @@
-if( ${qt_version} EQUAL 4 )
-
+#QT mock visual mode
+if(QT_ENABLED)
     set(Uti_Headers_ToMoc
         ../include/general/visual_mainwindow.h
         ../include/general/visual_buttons.h
     )
 
- QT4_WRAP_CPP(Uti_HEADERS_MOCED ${Uti_Headers_ToMoc})
-    #add_definitions(${QT_DEFINITIONS})
-elseif( ${qt_version} EQUAL 5 )
-
-
-    set(Uti_Headers_ToMoc
-        ../include/general/visual_mainwindow.h
-        ../include/general/visual_buttons.h
-    )
-
- QT5_WRAP_CPP(Uti_HEADERS_MOCED ${Uti_Headers_ToMoc})
-
+qt5_wrap_cpp(Uti_HEADERS_MOCED ${Uti_Headers_ToMoc})
 endif()
 
 set(Util_Src_Files
@@ -36,6 +25,7 @@ set(Util_Src_Files
         ${UTIL_DIR}/dates.cpp
         ${UTIL_DIR}/error.cpp
         ${UTIL_DIR}/externalToolHandler.cpp
+        ${UTIL_DIR}/checkDependencies.cpp
         ${UTIL_DIR}/fifo.cpp
         ${UTIL_DIR}/files.cpp
         ${UTIL_DIR}/num.cpp
@@ -47,6 +37,7 @@ set(Util_Src_Files
         ${UTIL_DIR}/string_dyn.cpp
         ${UTIL_DIR}/stringifie.cpp
         ${UTIL_DIR}/tabul.cpp
+        ${UTIL_DIR}/prime_test.cpp 
         ${UTIL_DIR}/wildmatch.cpp
         ${UTIL_DIR}/xml.cpp
         ${UTIL_DIR}/xml2cpp.cpp
@@ -60,9 +51,10 @@ set(Util_Src_Files
         ${UTIL_DIR}/MessageHandler.cpp
         ${UTIL_DIR}/GIT_defines.cpp
         ${UTIL_DIR}/PlyFile.cpp
+        ${UTIL_DIR}/initqtlibpath.cpp
 )
 
-SOURCE_GROUP(Util FILES ${Util_Src_Files})
+source_group(Util FILES ${Util_Src_Files})
 
 set(Elise_Src_Files
         ${Elise_Src_Files}

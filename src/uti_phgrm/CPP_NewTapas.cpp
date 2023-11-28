@@ -38,6 +38,7 @@ English :
 Header-MicMac-eLiSe-25/06/2007*/
 #include "StdAfx.h"
 #include <algorithm>
+#include "TapasCampari.h"
 
 void UseRegulDist(std::vector<double> & aVRegulDist,std::string & aCom)
 {
@@ -54,9 +55,6 @@ void UseRegulDist(std::vector<double> & aVRegulDist,std::string & aCom)
                    + std::string(" +RegDistSeuil=") + ToString(aSeuilNbPts);
    }
 }
-
-namespace NEW_TAPAS
-{
 
 
 class cMemRes
@@ -135,7 +133,7 @@ void Tapas_Banniere()
 }
 
 
-#define  NbModele 29
+#define  NbModele 30
 
 const char * Modele[NbModele] = {
                                    "RadialBasic",     // 0
@@ -153,12 +151,10 @@ const char * Modele[NbModele] = {
                                    "Four11x2",         // 12
                                    "Four15x2",         // 13
                                    "Four19x2",         // 14
-
                                    "AddFour7x2",          // 15
                                    "AddFour11x2",         // 16
                                    "AddFour15x2",         // 17
                                    "AddFour19x2",         // 18
-
                                    "AddPolyDeg0",          // 19
                                    "AddPolyDeg1",          // 20
                                    "AddPolyDeg2",          // 21
@@ -167,17 +163,11 @@ const char * Modele[NbModele] = {
                                    "AddPolyDeg5",          // 24
                                    "AddPolyDeg6",          // 25
                                    "AddPolyDeg7",          // 26
-
                                    "Ebner",                // 27
-                                   "Brown"                 // 28
-
+                                   "Brown",                 // 28
+                                   "FishEyeStereo"          // 29
                                 };
 
-
-
-
-std::string eModAutom;
-double PropDiag = -1.0;
 
 
 void ShowAuthorizedModel()
@@ -188,7 +178,7 @@ void ShowAuthorizedModel()
        std::cout << "   " << Modele[aKM] << "\n";
 }
 
-std::list<std::string> GetAuthorizedModel()
+std::list<std::string> cAppli_Tapas_Campari::GetAuthorizedModel()
 {
     std::list<std::string> list;
     for (int aKM=0 ; aKM<NbModele ; aKM++)
@@ -196,33 +186,8 @@ std::list<std::string> GetAuthorizedModel()
     return list;
 }
 
-bool GlobLibAff = true;
 
-bool GlobLibDec = true;
-bool GlobLibPP  =true;
-bool GlobLibCD=true;
-bool GlobLibFoc=true;
-int  GlobDRadMaxUSer = 100;
-int  GlobDegGen = 100;
-
-int  LocDegGen  = 100;
-bool LocLibDec = true;
-bool LocLibCD=true;
-int  LocDRadMaxUSer = 100;
-bool LocLibPP  =true;
-bool LocLibFoc=true;
-
-bool ModeleAdditional=false;
-bool ModeleAddFour=false;
-bool ModeleAddPoly=false;
-bool IsAutoCal = false;
-bool IsFigee   = false;
-std::string TheModelAdd = "";
-
-
-
-
-void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
+void cAppli_Tapas_Campari::InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
 {
 
     int aKModele = -1;
@@ -236,9 +201,6 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
         ShowAuthorizedModel();
         ELISE_ASSERT(false,"Value is not a correct model\n");
     }
-
-
-
 
     if (aMod==Modele[0])  // RadialBasic
     {
@@ -274,7 +236,7 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
                PropDiag = 0.52;
         }
     }
-    else if ((aMod==Modele[9]) || (aMod==Modele[10])) // "FishEyeBasic" +  "FE_EquiSolBasic"
+    else if ((aMod==Modele[9]) || (aMod==Modele[10]) ||  (aMod==Modele[29]) ) // "FishEyeBasic" +  "FE_EquiSolBasic"
     {
         LocDegGen = 1;
         LocDRadMaxUSer = 3;
@@ -283,6 +245,8 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
         eModAutom = "eCalibAutomFishEyeLineaire";
         if (aMod==Modele[10])
            eModAutom = "eCalibAutomFishEyeEquiSolid";
+        else if (aMod==Modele[29])
+           eModAutom = "eCalibAutomFishEyeStereographique";
     }
     else if ((aMod==Modele[4]) || (aMod==Modele[5])) // AutoCal  +  Figee
     {
@@ -337,6 +301,8 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
               LocLibCD = false;
               LocDegGen =  (aKModele-19);
               TheModelAdd = "eModelePolyDeg" +  ToString(LocDegGen);
+              LocDegAdd=(aKModele-19);// dans tapas le param degAdd de campari n'existe pas et est "confondu/interchangeable" avec DegGen?
+
         }
         eModAutom = "eCalibAutomNone";
     }
@@ -356,6 +322,18 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
         ELISE_ASSERT(false,"internal error for calib in tapas\n");
     }
 
+   SyncLocAndGlobVar();
+
+}
+
+/*
+bool GlobLibFoc=true;
+int  GlobDRadMaxUSer = 100;
+int  GlobDegGen = 100;
+*/
+
+void cAppli_Tapas_Campari::SyncLocAndGlobVar(){
+
     if (! EAMIsInit(&GlobLibDec))       GlobLibDec = LocLibDec;
     if (! EAMIsInit(&GlobLibPP ))       GlobLibPP = LocLibPP ;
     if (! EAMIsInit(&GlobLibCD ))       GlobLibCD = LocLibCD ;
@@ -363,19 +341,16 @@ void InitVerifModele(const std::string & aMod,cInterfChantierNameManipulateur *)
     if (! EAMIsInit(&GlobDRadMaxUSer )) GlobDRadMaxUSer = LocDRadMaxUSer ;
     if (! EAMIsInit(&GlobDegGen ))      GlobDegGen = LocDegGen;
 
-
     if (EAMIsInit(&GlobLibAff))  ElSetMax(GlobDegGen,(GlobLibAff ? 1 : 0));
 
+    if (! EAMIsInit(&GlobDegAdd ))      GlobDegAdd = LocDegAdd;
+
 }
-/*
-bool GlobLibFoc=true;
-int  GlobDRadMaxUSer = 100;
-int  GlobDegGen = 100;
-*/
 
 
-int Tapas_main(int argc,char ** argv)
+int Tapas_main_new(int argc,char ** argv)
 {
+    cAppli_Tapas_Campari anATP;
     NoInit = "#@LL?~~XXXXXXXXXX";
 
     MMD_InitArgcArgv(argc,argv);
@@ -391,7 +366,6 @@ int Tapas_main(int argc,char ** argv)
     int   aDecentre = -1;
     Pt2dr Focales(0,100000);
     Pt2dr aPPDec(-1,-1);
-    std::string SauvAutom="";
     std::string aSetHom="";
     double  TolLPPCD;
 
@@ -433,11 +407,13 @@ int Tapas_main(int argc,char ** argv)
     std::vector<double> aVRegulDist;
     double aLVM = 1.0;
     bool MultipleBlock =false;
+    bool IsMidle= false;
+    bool InitBlocCam = false;
 
     ElInitArgMain
     (
         argc,argv,
-        LArgMain()  << EAMC(aModele,"Calibration model",eSAM_None,GetAuthorizedModel())
+        LArgMain()  << EAMC(aModele,"Calibration model",eSAM_None,anATP.GetAuthorizedModel())
                     << EAMC(aFullDir,"Full Directory (Dir+Pattern)", eSAM_IsPatFile),
         LArgMain()  << EAM(ExpTxt,"ExpTxt",true,"Export in text format (Def=false)",eSAM_IsBool)
                     << EAM(AeroOut,"Out",true, "Directory of Output Orientation", eSAM_IsOutputDirOri)
@@ -449,19 +425,16 @@ int Tapas_main(int argc,char ** argv)
                     << EAM(aVitesseInit,"VitesseInit",true)
                     << EAM(aPPDec,"PPRel",true, "Principal point shift")
                     << EAM(aDecentre,"Decentre",true, "Principal point is shifted (Def=false)")
-                    << EAM(PropDiag,"PropDiag",true, "Hemi-spherik fisheye diameter to diagonal ratio")
-                    << EAM(SauvAutom,"SauvAutom",true, "Save intermediary results to, Set NONE if dont want any", eSAM_IsOutputFile)
+                    << EAM(anATP.PropDiag,"PropDiag",true, "Hemi-spherik fisheye diameter to diagonal ratio")
                     << EAM(ImInit,"ImInit",true, "Force first image", eSAM_IsExistFile)
                     << EAM(MOI,"MOI",true,"MOI", eSAM_IsBool)
                     << EAM(DBF,"DBF",true,"Debug (internal use : DebugPbCondFaisceau=true) ",eSAM_InternalUse)
                     << EAM(Debug,"Debug",true,"Partial file for debug", eSAM_InternalUse)
-                    << EAM(GlobDRadMaxUSer,"DegRadMax",true,"Max degree of radial, default model dependent")
-                    << EAM(GlobDegGen,"DegGen",true,"Max degree of general polynome, default model dependent (generally 0 or 1)")
-                    << EAM(GlobLibAff,"LibAff",true,"Free affine parameter, Def=true", eSAM_IsBool)
-                    << EAM(GlobLibDec,"LibDec",true,"Free decentric parameter, Def=true", eSAM_IsBool)
-                    << EAM(GlobLibPP  ,"LibPP",true,"Free principal point, Def=true", eSAM_IsBool)
-                    << EAM(GlobLibCD,"LibCP",true,"Free distorsion center, Def=true", eSAM_IsBool)
-                    << EAM(GlobLibFoc,"LibFoc",true,"Free focal, Def=true", eSAM_IsBool)
+                    << EAM(anATP.GlobDRadMaxUSer,"DegRadMax",true,"Max degree of radial, default model dependent")
+                    << EAM(anATP.GlobDegGen,"DegGen",true,"Max degree of general polynome, default model dependent (generally 0 or 1)")
+                    << EAM(anATP.GlobLibAff,"LibAff",true,"Free affine parameter, Def=true", eSAM_IsBool)
+                    << EAM(anATP.GlobLibPP  ,"LibPP",true,"Free principal point, Def=true", eSAM_IsBool)
+                    << EAM(anATP.GlobLibFoc,"LibFoc",true,"Free focal, Def=true", eSAM_IsBool)
                     << EAM(aRapTxt,"RapTxt",true, "RapTxt", eSAM_NoInit)
                     << EAM(TolLPPCD,"LinkPPaPPs",true, "Link PPa and PPs (double)", eSAM_NoInit)
                     << EAM(aPoseFigee,"FrozenPoses",true,"List of frozen poses (pattern)", eSAM_IsPatFile)
@@ -483,6 +456,8 @@ int Tapas_main(int argc,char ** argv)
                     << EAM(aVRegulDist,"RegulDist",true,"Parameter fo RegulDist [Val,Grad,Hessian,NbCase,SeuilNb]")
                     << EAM(aLVM,"MulLVM",true,"Multipier Levenberg Markard")
                     << EAM(MultipleBlock,"MultipleBlock",true,"Multiple block need special caution (only related to Levenberg Markard)")
+                    << EAM(InitBlocCam,"UBR4I","Use Bloc Rigid for Init, def=context dependent")
+                    << anATP.ArgATP()
     );
 
 
@@ -508,8 +483,17 @@ int Tapas_main(int argc,char ** argv)
         cTplValGesInit<std::string> aTplN;
         cInterfChantierNameManipulateur * aICNM = cInterfChantierNameManipulateur::StdAlloc(0,0,aDir,aTplN);
 
-                MakeXmlXifInfo(aFullDir,aICNM);
+              MakeXmlXifInfo(aFullDir,aICNM);
 
+
+         if (EAMIsInit(&ImInit)  && (ImInit=="MIDLE"))
+         {
+              cInterfChantierNameManipulateur::tSet   aSetGlob = *(aICNM->Get(aPat));
+              ELISE_ASSERT(aSetGlob.size()!=0,"Empyt pat of image");
+              std::sort(aSetGlob.begin(),aSetGlob.end());
+              ImInit  = aSetGlob[aSetGlob.size()/2];
+              IsMidle = true;
+         }
 
 
         if (FEAutom && (SeuilFEAutom<0))
@@ -530,9 +514,9 @@ int Tapas_main(int argc,char ** argv)
 
     // std::cout << "IFCCCCC " << IsForCalib << " " << CentreLVM << " " << RayFEInit << "\n"; getchar();
 
-        InitVerifModele(aModele,aICNM);
+        anATP.InitVerifModele(aModele,aICNM);
 
-        if (PropDiag<0) PropDiag = 1.0;
+        if (anATP.PropDiag<0) anATP.PropDiag = 1.0;
 
         if (AeroOut=="")
            AeroOut = "" +  aModele;
@@ -564,24 +548,25 @@ int Tapas_main(int argc,char ** argv)
                            //+ std::string(" +PatternAllIm=") + aPat + std::string(" ")
                            + std::string(" +AeroOut=-") + AeroOut
                            + std::string(" +Ext=") + (ExpTxt?"txt":"dat")
-                           + std::string(" +ModeleCam=") + eModAutom
+                           + std::string(" +ModeleCam=") + anATP.eModAutom
                            + std::string(" DoCompensation=") + ToString(DoC)
                            + std::string(" +SeuilFE=") + ToString(SeuilFEAutom)
                            + std::string(" +TetaLVM=") + ToString(TetaLVM)
                            + std::string(" +CentreLVM=") + ToString(CentreLVM)
                            + std::string(" +IntrLVM=") + ToString(IntrLVM)
+               
                            + std::string(" +RayFEInit=") + ToString(RayFEInit)
                            + std::string(" +CalibIn=-") + CalibIn
                            + std::string(" +AeroIn=-") + AeroIn
                            + std::string(" +VitesseInit=") + ToString(2+aVitesseInit)
-                           + std::string(" +PropDiagU=") + ToString(PropDiag)
+                           + std::string(" +PropDiagU=") + ToString(anATP.PropDiag)
 
-                           + std::string(" +DegRadMax=") + ToString(GlobDRadMaxUSer)
-                           + std::string(" +LibFoc=") + ToString(GlobLibFoc && (!SpecFocale))
-                           + std::string(" +LibPP=") + ToString(GlobLibPP && (!SpecPP))
-                           + std::string(" +LibCD=") + ToString(GlobLibCD)
-                           + std::string(" +DegGen=") + ToString(GlobDegGen)
-                           + std::string(" +LibDec=") + ToString(GlobLibDec)
+                           + std::string(" +DegRadMax=") + ToString(anATP.GlobDRadMaxUSer)
+                           + std::string(" +LibFoc=") + ToString(anATP.GlobLibFoc && (!SpecFocale))
+                           + std::string(" +LibPP=") + ToString(anATP.GlobLibPP && (!SpecPP))
+                           + std::string(" +LibCD=") + ToString(anATP.GlobLibCD)
+                           + std::string(" +DegGen=") + ToString(anATP.GlobDegGen)
+                           + std::string(" +LibDec=") + ToString(anATP.GlobLibDec)
                            + std::string(" +Fast=") + ToString(! AffineAll)
                            + std::string(" +UsePano=true") 
                            + std::string(" +CondMaxPano=") + ToString(CondMaxPano)
@@ -624,14 +609,14 @@ int Tapas_main(int argc,char ** argv)
 
 
 
-        if (ModeleAdditional)
+        if (anATP.ModeleAdditional)
         {
               aCom = aCom + std::string(" +HasModeleAdd=true")
-                          + std::string(" +ModeleAdditionnel=") + TheModelAdd;
+                          + std::string(" +ModeleAdditionnel=") + anATP.TheModelAdd;
         }
 
 
-        if (EAMIsInit(&GlobLibAff) && (!GlobLibAff))
+        if (EAMIsInit(&anATP.GlobLibAff) && (!anATP.GlobLibAff))
         {
               aCom = aCom + " +LiberteAff=false ";
         }
@@ -645,21 +630,16 @@ int Tapas_main(int argc,char ** argv)
        if (DBF)
          aCom  = aCom + " DebugPbCondFaisceau=true";
 
+/* => Dans Common
 
-       if (ImInit!=NoInit)
+       if (mSauvAutom!="")
        {
-             aCom =   aCom + " +SetImInit="+ImInit;
-             //aCom = aCom + " +FileCamInit=InitCamSpecified.xml";
-             aCom = aCom + " +InitCamSpecif=true +InitCamCenter=false";
-             ELISE_ASSERT(AeroIn==NoInit,"Incoherence AeroIn/ImInit");
-       }
-       if (SauvAutom!="")
-       {
-         if (SauvAutom=="NONE")
+         if (mSauvAutom=="NONE")
             aCom =   aCom + " +DoSauvAutom=false";
          else
             aCom =   aCom + " +SauvAutom="+SauvAutom;
        }
+*/
 
        if (AeroIn!= NoInit)
        {
@@ -720,8 +700,8 @@ int Tapas_main(int argc,char ** argv)
           aCom  = aCom + " +CalibLibre=" + QUOTE(aCalLibre) ;
        }
 
-       if (IsAutoCal) aCom  = aCom + " +AutoCal=true";
-       if (IsFigee) aCom  = aCom + " +CalFigee=true";
+       if (anATP.IsAutoCal) aCom  = aCom + " +AutoCal=true";
+       if (anATP.IsFigee) aCom  = aCom + " +CalFigee=true";
 
        if (EAMIsInit(&SinglePos))
        {
@@ -745,6 +725,90 @@ int Tapas_main(int argc,char ** argv)
                         + std::string(" +RegDistSeuil=") + ToString(aSeuilNbPts);
        }
 
+       anATP.AddParamBloc(aCom);
+       if (anATP.mWithBlock)
+       {
+           if (IsMidle)
+           {
+              anATP.InitAllImages(aPat,aICNM);
+              int aNBInBl =  anATP.NbInBloc();
+              const std::vector<std::string> & aVImage   = anATP.BlocImagesByTime();
+              const std::vector<std::string> & aVTime = anATP.BlocTimeStamps();
+              std::map<std::string,int> & aCptTime =  anATP.BlocCptTime();
+
+              // Recupere l'image la plus proche du milieu et dont le bloc est plein
+              int aDistMax = -1;
+              int aKMax = -1;
+              for (int aK=0 ; aK<int(aVImage.size()) ; aK++)
+              {
+                 if (aCptTime[aVTime[aK]] == aNBInBl)
+                 {
+                    int aDist = ElMin(aK,int(aVImage.size()-1-aK)); // Distance to border, max in midle
+                    if (aDist>aDistMax)
+                    {
+                       aDistMax = aDist;
+                       aKMax = aK;
+                    }
+                 }
+              }
+              ELISE_ASSERT(aDistMax>=0,"No Bloc Full");
+              ImInit=  aVImage[aKMax];
+           }
+
+/*
+           cInterfChantierNameManipulateur::tSet   aSetGlob = *(aICNM->Get(aPat));
+           std::vector<std::pair<std::string,std::string> > aVP;
+           std::map<std::string,int> aCptTime;
+           for (const auto & aS : aSetGlob)
+           {
+               aVP.push_back(std::pair<std::string,std::string>(anATP.TimeStamp(aS,aICNM),aS));
+               aCptTime[aVP.back().first]++;
+           }
+           if (IsMidle)
+           {
+              std::sort(aVP.begin(),aVP.end());
+              int aDistMax = -1;
+              int aKMax = -1;
+              for (int aK=0 ; aK<int(aVP.size()) ; aK++)
+              {
+                 if (aCptTime[aVP[aK].first] == aNBInBl)
+                 {
+                    int aDist = ElMin(aK,int(aVP.size()-1-aK));
+                    if (aDist>aDistMax)
+                    {
+                       aDistMax = aDist;
+                       aKMax = aK;
+                    }
+                 }
+              }
+              ELISE_ASSERT(aDistMax>=0,"No Bloc Full");
+              ImInit=  aVP[aKMax].second;
+           }
+*/
+           if (EAMIsInit(&ImInit))
+           {
+               InitBlocCam = true;
+               aCom = aCom + " +InitCamCenter=false ";
+               ImInit= QUOTE(anATP.ExtendPattern(aPat,ImInit,aICNM));
+               aCom =   aCom + " +SetImInit="+ImInit;
+           }
+           if (! EAMIsInit(&aVitesseInit))
+               aCom = aCom + std::string(" +VitesseInit=1") ;
+       }
+       else if (ImInit!=NoInit)
+       {
+             aCom =   aCom + " +SetImInit="+ImInit;
+             //aCom = aCom + " +FileCamInit=InitCamSpecified.xml";
+             aCom = aCom + " +InitCamSpecif=true +InitCamCenter=false";
+             ELISE_ASSERT(AeroIn==NoInit,"Incoherence AeroIn/ImInit");
+       }
+
+
+       if (InitBlocCam)
+       {
+          aCom = aCom + " +InitBlocCam=true ";
+       }
+       anATP.AddParamBloc(aCom);
 
        std::cout << "Com = " << aCom << "\n";
        int aRes = 0;
@@ -795,13 +859,11 @@ int Tapas_main(int argc,char ** argv)
    else
        return EXIT_SUCCESS;
 }
-}
-
 
 
 int New_Tapas_main(int argc,char ** argv)
 {
-   return  NEW_TAPAS::Tapas_main(argc,argv);
+   return  Tapas_main_new(argc,argv);
 }
 
 

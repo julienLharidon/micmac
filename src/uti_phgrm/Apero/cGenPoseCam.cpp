@@ -784,6 +784,7 @@ void cPolynBGC3M2D_Formelle::AddEqAttach(Pt2dr aPIm,double aPds,bool Cur,CamSten
 
 void cPolynBGC3M2D_Formelle::AddEqAttachGlob(double aPds,bool Cur,int aNbPts,CamStenope * aKnownSol)
 {
+	// std::cout << "PpppppQqqq " <<  aPds  << "\n"; getchar();
     Pt2dr aSzIm = Pt2dr(mCamCur.SzBasicCapt3D());
     std::vector<Pt2dr> aVP;
     for (int aKx=0 ; aKx< aNbPts ; aKx++)
@@ -798,6 +799,8 @@ void cPolynBGC3M2D_Formelle::AddEqAttachGlob(double aPds,bool Cur,int aNbPts,Cam
                 aVP.push_back(aP);
              }
         }
+    }
+    {
     }
     for (int aKP=0 ; aKP<int(aVP.size()) ; aKP++)
     {
@@ -978,7 +981,7 @@ bool  cBGC3_Modif2D::CaptHasData(const Pt2dr &aP) const
     return  mCam0->CaptHasData(CurIm2CamInit(aP));
 }
 
-bool      cBGC3_Modif2D::PIsVisibleInImage(const Pt3dr & aP,const cArgOptionalPIsVisibleInImage  * anArg) const
+bool      cBGC3_Modif2D::PIsVisibleInImage(const Pt3dr & aP,cArgOptionalPIsVisibleInImage  * anArg) const
 {
     return mCam0->PIsVisibleInImage(aP,anArg);
 }

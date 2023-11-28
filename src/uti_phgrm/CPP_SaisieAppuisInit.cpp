@@ -39,7 +39,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 
 #include "StdAfx.h"
 
-#if (ELISE_X11||(ELISE_QT_VERSION >= 4))
+#if (ELISE_X11 || ELISE_QT)
 void SaisieAppuisInit(int argc, char ** argv,
                       Pt2di &aSzW,
                       Pt2di &aNbFen,
@@ -56,7 +56,8 @@ void SaisieAppuisInit(int argc, char ** argv,
                       double &aZMoy,
                       double &aZInc,
                       std::string & aInputSec,
-                      bool          & WithMaxMin
+                      bool          & WithMaxMin,
+                      double &aGama
                       )
 {
     MMD_InitArgcArgv(argc,argv);
@@ -73,6 +74,7 @@ void SaisieAppuisInit(int argc, char ** argv,
                       << EAM(aNameAuto,"NameAuto",true," Prefix for automatic point creation")
                       << EAM(aPrefix2Add,"Pref2Add",true," Prefix to add during import (for bug correction ?)")
                       << EAM(aForceGray,"ForceGray",true," Force gray image, def =true")
+                      << EAM(aGama,"Gama",true," Gama adjustment (def=1.0)")
                       << EAM(aModeOri,"OriMode", true, "Orientation type (GRID) (Def=Std)")
                       << EAM(aZMoy,"ZMoy",true,"Average Z, Mandatory in PB", eSAM_NoInit)
                       << EAM(aZInc,"ZInc",true,"Incertitude on Z, Mandatory in PB", eSAM_NoInit)
@@ -122,11 +124,9 @@ void SaisieAppuisInit(int argc, char ** argv,
         }
     }
 }
-#endif
+#endif // (ELISE_X11 || ELISE_QT)
 
-#if (ELISE_X11)
-
-
+#if ELISE_X11
 int SaisieAppuisInit_main(int argc,char ** argv)
 {
   Pt2di aSzW(800,800);
@@ -138,9 +138,10 @@ int SaisieAppuisInit_main(int argc,char ** argv)
   double aZMoy,aZInc;
   std::string aInputSec;
   bool  WithMaxMin=false;
+  double aGama = 1.0;
 
 
-  SaisieAppuisInit(argc, argv, aSzW, aNbFen, aFullName, aDir, aName, aNamePt, anOri, aModeOri, anOut, aNameAuto, aPrefix2Add, aForceGray, aZMoy, aZInc,aInputSec,WithMaxMin);
+  SaisieAppuisInit(argc, argv, aSzW, aNbFen, aFullName, aDir, aName, aNamePt, anOri, aModeOri, anOut, aNameAuto, aPrefix2Add, aForceGray, aZMoy, aZInc,aInputSec,WithMaxMin,aGama);
 
   if (!MMVisualMode)
   {
@@ -182,6 +183,11 @@ int SaisieAppuisInit_main(int argc,char ** argv)
            aCom = aCom + " +WithInputSec=true  +InputSec=" + aInputSec + " ";
        }
 
+       if (EAMIsInit(&aGama))
+       {
+           aCom = aCom + " +Gama=" + ToString(aGama) + " ";
+       }
+
 
       std::cout << aCom << "\n";
 
@@ -192,13 +198,7 @@ int SaisieAppuisInit_main(int argc,char ** argv)
   else
       return EXIT_SUCCESS;
 }
-
-
 #endif
-
-
-
-
 /*Footer-MicMac-eLiSe-25/06/2007
 
 Ce logiciel est un programme informatique servant �  la mise en

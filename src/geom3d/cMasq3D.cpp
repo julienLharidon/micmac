@@ -40,22 +40,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 
 
 #include "StdAfx.h"
-
-#if  (ELISE_QT_VERSION >= 4)
-#include "../saisieQT/include_QT/3DObject.h"
-#else
-enum SELECTION_MODE { SUB_INSIDE,
-                      ADD_INSIDE,
-                      SUB_OUTSIDE,
-                      ADD_OUTSIDE,
-                      INVERT,
-                      ALL,
-                      NONE,
-                      SIZE_OF_SELECTION_MODE
-                    };
-
-#endif
-
+#include "cMasq3D_enums.h"
 
 bool IsModeGlobal(SELECTION_MODE aMode)
 {

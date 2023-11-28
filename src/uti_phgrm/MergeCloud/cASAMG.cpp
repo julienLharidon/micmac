@@ -397,6 +397,15 @@ std::string  cASAMG::ExportMiseAuPoint()
         aComPly  = aComPly + " Offs=" + ToString(mAppli->OffsetPly());
     }
 
+    if (mAppli->Export64BPly())
+    {
+	aComPly = aComPly + " 64B=1";
+    }
+    else
+    {
+	aComPly = aComPly + " 64B=0";
+    }
+
     if (mAppli->SzNormale() >0)
     {
          aComPly =    aComPly 
@@ -405,12 +414,17 @@ std::string  cASAMG::ExportMiseAuPoint()
                     + " NeighMask=" +   mAppli->MMIN()->NameFileMasq(eTMIN_Depth,mNameIm);
 
     }
+    /*
     else if (mAppli->NormaleByCenter())
     {
           aComPly = aComPly + " Center=true";
     }
-
-
+    */
+    // GIANG For Paul TS 23/11/2017 . export centre optique dans C3DC Nuage.
+    else if (mAppli->NormaleByCenter())
+    {
+          aComPly = aComPly + " NormByC=2";
+    }
     return aComPly;
 }
 

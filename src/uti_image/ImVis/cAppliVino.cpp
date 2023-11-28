@@ -69,7 +69,7 @@ extern Video_Win * TheWinAffRed ;
 // bool TreeMatchSpecif(const std::string & aNameFile,const std::string & aNameSpecif,const std::string & aNameObj);
 
 
-cAppli_Vino::cAppli_Vino(int argc,char ** argv) :
+cAppli_Vino::cAppli_Vino(int argc,char ** argv,const std::string & aNameImExtern,cAppli_Vino * aMother) :
     mSzIncr            (400,400),
     mNbPixMinFile      (2e6),
     mCurStats          (0),
@@ -81,7 +81,28 @@ cAppli_Vino::cAppli_Vino(int argc,char ** argv) :
     mHistoCum          (mNbHistoMax),
     mIsMnt             (true),
     mWithBundlExp      (false),
-    mClipIsChantier    (false)
+    mClipIsChantier    (false),
+    mMother            (aMother),
+    mExtImNewP         ("Std"),
+    mWithPCarac        (false),
+    mSPC               (0),
+    mQTPC              (0),
+    mSeuilAC           (0.95),
+    mSeuilContRel      (0.6),
+    mCheckNuage        (nullptr),
+    mCheckOri          (nullptr),
+    mNameLab           ("eTPR_NoLabel"),
+    mZoomCA            (10),
+
+    //  Aime pts car
+    mAimeShowFailed  (false),
+    mWithAime         (false),
+    mAimeSzW          (35,35),
+    mAimeCW           (mAimeSzW / 2),
+    mAimeZoomW        (7),
+    mAimWStd          (nullptr),
+    mAimWI0           (nullptr),
+    mAimWLP           (nullptr)
 {
     mNameXmlIn = Basic_XML_MM_File("Def_Xml_EnvVino.xml");
     if (argc>1)
@@ -135,12 +156,27 @@ cAppli_Vino::cAppli_Vino(int argc,char ** argv) :
                     << EAM(mIsMnt,"IsMnt",true,"Display altitude if true, def exist of Mnt Meta data")
                     << EAM(mFileMnt,"FileMnt",true,"Default toto.tif -> toto.xml")
                     << EAM(mParamClipCh,"ClipCh",true,"Param 4 Clip Chantier [PatClip,OriClip]")
+                    << EAM(mImNewP,"NewP",true,"Image for new tie point, if =\"\" curent image")
+                    << EAM(mExtImNewP,"ExtImNewP",true,"Extension for new tie point, def=Std")
+                    << EAM(mImSift,"ImSift",true,"Image for sift if != curent image")
+                    << EAM(mSzSift,"ResolSift",true,"Resol of sift point to visualize")
+                    << EAM(mPatSecIm,"PSI",true,"Pattern Imaage Second")
+                    << EAM(mCheckHom,"CheckH",true,"Check Hom : [Cloud,Ori]")
+                    << EAM(mNameLab,"Label",true,"Label for New Point ")
                     // << EAM(mCurStats->IntervDyn(),"Dyn",true,"Max Min value for dynamic")
+         //  Aime pts car
+                    << EAM(mNameAimePCar,"AimeNPC",true,"Aime name pts carac")
+                    << EAM(mAimeShowFailed,"AimeSF",true,"Aime Show Failed points")
     );
 
+    mLabel =   Str2eTypePtRemark(mNameLab);
+
+    if (aNameImExtern !="")
+      mNameIm = aNameImExtern;
 
 // Files
     mDir = DirOfFile(mNameIm);
+    mICNM = cInterfChantierNameManipulateur::BasicAlloc(mDir);
     ELISE_fp::MkDirSvp(mDir+"Tmp-MM-Dir/");
     // MakeFileXML(EnvXml(),mNameXmlOut);
 
@@ -186,13 +222,20 @@ cAppli_Vino::cAppli_Vino(int argc,char ** argv) :
     mRatioFulXY = Pt2dr(SzW()).dcbyc(Pt2dr(mTifSz));
     mRatioFul = ElMin(mRatioFulXY.x,mRatioFulXY.y);
     // mSzW = round_up(Pt2dr(mTifSz) * mRatioFul);
-    mWAscH = Video_Win::PtrWStd(Pt2di(SzW().x,LargAsc()),true);
+    Pt2di aSzW(SzW().x,LargAsc());
+    if (aMother==0)
+       mWAscH = Video_Win::PtrWStd(aSzW,true);
+    else
+    {
+        mWAscH = new Video_Win(aMother->mWAscH->disp(),aMother->mWAscH->sop(),Pt2di(0,0),aSzW);
+    }
     mW =    new  Video_Win(*mWAscH,Video_Win::eBasG,SzW());
     mWAscV = new Video_Win(*mW,Video_Win::eDroiteH,Pt2di(LargAsc(),SzW().y));
 
 
     mTitle = std::string("MicMac/Vino -> ") + mNameIm;
-    mDisp = new Video_Display(mW->disp());
+    // mDisp =  aMother ?  aMother->mDisp : new Video_Display(mW->disp());
+    mDisp =   new Video_Display(mW->disp());
 
 
 
@@ -259,6 +302,117 @@ cAppli_Vino::cAppli_Vino(int argc,char ** argv) :
        mPatClipCh = mParamClipCh[0];
        mOriClipCh = mParamClipCh[1];
     }
+
+    if (EAMIsInit(&mImNewP))
+    {
+        if (mImNewP=="")
+           mImNewP = mNameIm;
+        mWithPCarac = true;
+
+        // ELISE_ASSERT(false,"Vino revoir labels");
+        mSPC =  LoadStdSetCarac(mLabel,mImNewP,mExtImNewP);
+        mQTPC = new tQtOPC (mArgQt,Box2dr(Pt2dr(-10,-10),Pt2dr(10,10)+Pt2dr(mTifSz)),5,euclid(mTifSz)/50.0);
+
+        for (int aKP=0 ; aKP<int(mSPC->OnePCarac().size()) ; aKP++)
+        {
+            mSPC->OnePCarac()[aKP].Id() = aKP;
+            mQTPC->insert(&(mSPC->OnePCarac()[aKP]));
+        }
+
+    }
+    if (EAMIsInit(&mSzSift))
+    {
+        if (EAMIsInit(&mImSift))
+        {
+        }
+        else if (EAMIsInit(&mImNewP))
+        {
+            mImSift = mImNewP;
+        }
+        else
+        {
+            mImSift = mNameIm;
+        }
+        mWithPCarac = true;
+        getPastisGrayscaleFilename(mDir,mImSift,mSzSift,mNameSift);
+        mNameSift  = DirOfFile(mNameSift) + "LBPp" + NameWithoutDir(mNameSift) + ".dat";
+        if (mSzSift<0) mNameSift = "Pastis/" + mNameSift;
+
+        Tiff_Im aFileInit = PastisTif(mImSift);
+        Pt2di       imageSize = aFileInit.sz();
+
+        mSSF =  (mSzSift<0) ? 1.0 :   double( ElMax( imageSize.x, imageSize.y ) ) / double( mSzSift ) ;
+
+
+        // std::cout << "NAMEPAST=" << mNameSift << "\n";
+        // getchar();
+        bool Ok = read_siftPoint_list(mNameSift,mVSift);
+        if (!Ok)
+        {
+           std::cout << "Name sift=[" << mNameSift << "]\n";
+           ELISE_ASSERT(Ok,"Bad read sift file\n");
+        }
+        // std::cout << "SIIIIffrt " << Ok << " Nb=" << mVSift.size() << "\n";
+    }
+
+    if (EAMIsInit(&mPatSecIm) && (aNameImExtern==""))
+    {
+       cElemAppliSetFile anEASF(mPatSecIm);
+       const cInterfChantierNameManipulateur::tSet *  aVIS = anEASF.SetIm();
+       for (const auto & aNIS : *aVIS)
+       {
+           mAVSI.push_back(new cAppli_Vino(argc,argv,aNIS,this));
+       }
+    }
+
+    if (EAMIsInit(&mCheckHom))
+    {
+        ELISE_ASSERT(mCheckHom.size()==2,"cAppli_Vino, size CheckHom");
+        // Cas master
+        if (! mMother)
+        {
+            mCheckNuage =   cElNuage3DMaille::FromFileIm(mCheckHom[0]);
+        }
+        else
+        {
+            StdCorrecNameOrient(mCheckHom[1],mDir);
+            mCheckOri = mICNM->StdCamGenerikOfNames(mCheckHom[1],mNameIm);
+        }
+    }
+    if (EAMIsInit(&mNameAimePCar))
+    {
+       mWithAime = true;
+       mWithPCarac = true;
+
+       mDirAime =  "./Tmp-2007-Dir-PCar/"+ mNameIm + "/";
+       std::string aPat =  "STD-V1AimePCar-" + mNameAimePCar + "-Tile0_0.dmp";
+       cInterfChantierNameManipulateur* aAimeICNM = cInterfChantierNameManipulateur::BasicAlloc(mDirAime);
+
+       cSetName * aSN= aAimeICNM->KeyOrPatSelector(aPat);
+
+       if (aSN->Get()->empty())
+       {
+           std::cout << "DIR=" << mDirAime << "\n";
+           std::cout << "PAT=" << aPat << "\n";
+           ELISE_ASSERT(false,"No file for Aime visualization");
+       }
+       for (const auto & aName : *(aSN->Get()))
+       {
+           std::cout << "AIMEPCAR NAME=["<< aName << "]\n";
+           mAimePCar.push_back(StdGetFromNRPH(mDirAime+aName,Xml2007SetPtOneType));
+       }
+       std::cout << "\n";
+
+
+       // Fenetre pour voir l'image initiale en zoom
+       mAimWI0  = mW->PtrChc(Pt2dr(0,0),Pt2dr(mAimeZoomW,mAimeZoomW));
+       // Fenetre pour voir l'image initiale  de caracteristique
+       mAimWStd  = mW->PtrChc(Pt2dr(-(2+mAimeSzW.x),0),Pt2dr(mAimeZoomW,mAimeZoomW));
+
+       double aTr =  4+ 2 * mAimeSzW.x;
+       double aZ  = 18.0;
+       mAimWLP   = mW->PtrChc(Pt2dr(-1-aTr *(mAimeZoomW/aZ),-1.8),Pt2dr(aZ,aZ));
+    }
 }
 
 void cAppli_Vino::PostInitVirtual()
@@ -274,6 +428,47 @@ void cAppli_Vino::PostInitVirtual()
     InitTabulDyn();
     mScr->set_max();
     ShowAsc();
+
+    for (auto  & aPtrAp : mAVSI)
+    {
+        aPtrAp->PostInitVirtual();
+    }
+
+    // Calcul des homologues par nuage
+
+    if ((!mMother) && mSPC && mCheckNuage && (mAVSI.size()==1))
+    {
+        ElTimer aT0;
+        std::cout << "BEGIN NEAREST \n";
+        cBasicGeomCap3D * aCap2 = mAVSI[0]->mCheckOri;
+        int aNbH=0;
+        for (const auto & aPt :  mSPC->OnePCarac())
+        {
+            const cOnePCarac * aHom = nullptr;
+            Pt2dr aPIm = mCheckNuage->Plani2Index(aPt.Pt());
+            if (mCheckNuage->CaptHasData(aPIm))
+            {
+                Pt3dr aPTer = mCheckNuage->PtOfIndexInterpol(aPIm);
+                if (aCap2->PIsVisibleInImage(aPTer))
+                {
+                    Pt2dr aPIm2 = aCap2->Ter2Capteur(aPTer);
+                    double aDist;
+                    double aSeuilD=2.0;
+                    aHom = mAVSI[0]->Nearest(aSeuilD,aPIm2,&aDist,aPt.Kind());
+                    if (aDist>aSeuilD)
+                    {
+                        ELISE_ASSERT(aHom==nullptr,"Incoherence in Nearest");
+                        // aHom = nullptr;
+                    }
+                }
+            }
+            if (aHom) 
+               aNbH++;
+            mVptHom.push_back(aHom);
+        }
+        std::cout << "% Homol got " << (aNbH*100.0) / mVptHom.size()  << " T=" << aT0.uval() << "\n";
+
+    }
 }
 
 
@@ -284,55 +479,72 @@ void cAppli_Vino::SaveState()
 
 void cAppli_Vino::Boucle()
 {
-    while (1)
-    {
-        Clik aCl = mDisp->clik_press();
+   while (1)
+   {
+      Clik aCl = mDisp->clik_press();
+      ExeOneClik(aCl);
+      for (auto  & aPtrAp : mAVSI)
+      {
+         aPtrAp->ExeOneClik(aCl);
+      }
+   }
+}
 
-        mP0Click =  aCl._pt;
-        mScale0  =  mScr->sc();
-        mTr0     =  mScr->tr();
-        mBut0    = aCl._b;
-        mCtrl0  = aCl.controled();
-        mShift0  = aCl.shifted();
 
-        // Click sur la fenetre principale 
-        if (aCl._w == *mW)
-        {
- 
-            if (mBut0==2)
-               ExeClikGeom(aCl);
-            if ((mBut0==4) || (mBut0==5))
-            {
-                ZoomMolette();
-                ShowAsc();
-            }
+void cAppli_Vino::ExeOneClik(Clik & aCl)
+{
+   mP0Click =  aCl._pt;
+   mScale0  =  mScr->sc();
+   mTr0     =  mScr->tr();
+   mBut0    = aCl._b;
+   mCtrl0  = aCl.controled();
+   mShift0  = aCl.shifted();
 
-            if (mBut0==1)
-            {
-                GrabShowOneVal();
-            }
-            if (mBut0==3)
-            {
-                MenuPopUp();
-            }
-        }
-        if (aCl._w == *mWAscH)
-        {
-             mModeGrab= eModeGrapAscX;
-             mWAscH->grab(*this);
-             ShowAsc();
-        }
-        if (aCl._w == *mWAscV)
-        {
-             mModeGrab= eModeGrapAscY;
-             mWAscV->grab(*this);
-             ShowAsc();
-        }
-        if (aCl._w == *mWHelp)
-        {
-             Help();
-        }
-    }
+   // Click sur la fenetre principale 
+   if (aCl._w == *mW)
+   {
+      if (mBut0==2)
+         ExeClikGeom(aCl);
+      if ((mBut0==4) || (mBut0==5))
+      {
+         ZoomMolette();
+         ShowAsc();
+      }
+
+      if (mBut0==1)
+      {
+         if (mSPC && mCtrl0)
+         {
+             ShowSPC(mP0Click);
+         }
+         else if (mWithAime && mCtrl0)
+         {
+             InspectAime(mP0Click);
+         }
+         else
+            GrabShowOneVal();
+      }
+      if (mBut0==3)
+      {
+         MenuPopUp();
+      }
+   }
+   if (aCl._w == *mWAscH)
+   {
+      mModeGrab= eModeGrapAscX;
+      mWAscH->grab(*this);
+      ShowAsc();
+   }
+   if (aCl._w == *mWAscV)
+   {
+      mModeGrab= eModeGrapAscY;
+      mWAscV->grab(*this);
+      ShowAsc();
+   }
+   if (aCl._w == *mWHelp)
+   {
+      Help();
+   }
 }
 
 
@@ -443,10 +655,10 @@ void  cAppli_Vino::ShowOneVal(Pt2dr aPW)
         // aMesV = aMesV  + SimplString(ToString(aStat.Soms()[aK])) + " ";
 
     EffaceMessageVal();
+    //  On my computer with small pixel/big curset I dont see the messag
+    int OffsetY = (MPD_MM()) ? -50 : -50;
 
-
-
-    mVBoxMessageVal.push_back(PutMessage(aPW+Pt2dr(-20,50),aMesXY,P8COL::black));
+    mVBoxMessageVal.push_back(PutMessage(aPW+Pt2dr(-20,OffsetY),aMesXY,P8COL::black));
 
     mVBoxMessageVal.push_back(PutMessage(Pt2dr(mVBoxMessageVal.back()._p0)+Pt2dr(0,-5),aMesV,P8COL::black));
 

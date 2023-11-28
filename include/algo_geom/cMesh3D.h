@@ -107,7 +107,7 @@ class cMesh
 
         void        write(const string & aOut, bool aBin, const string & textureFilename="");
 
-        void        Export(string aOut, set <int> const &triangles);
+        void        Export(string aOut, set <int> const &triangles, bool aBin=false);
 
 private:
 
@@ -132,6 +132,7 @@ class cVertex
                     ~cVertex();
 
         void		getPos(Pt3dr &pos){ pos = mPos; }
+        void		modPos(Pt3dr &pos){ mPos = pos; }
         vector<int> *  getTriIdx() { return &mTriIdx; }
         void        addIdx(int id) { if (find(mTriIdx.begin(), mTriIdx.end(), id) == mTriIdx.end()) mTriIdx.push_back(id); }
 

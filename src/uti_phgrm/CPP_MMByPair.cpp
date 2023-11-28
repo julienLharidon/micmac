@@ -171,6 +171,8 @@ class cAppliMMByPair : public cAppliWithSetImage
       bool	   mExpImSec;
       bool mSuprImNoMasq;
       std::string mPIMsDirName;
+      std::string mSetHom;
+      double mTetaOpt;
 };
 
 /*****************************************************************/
@@ -791,13 +793,15 @@ void cAppliWithSetImage::AddDelaunayCple()
 
 }
 
-void cAppliWithSetImage::AddCoupleMMImSec(bool ExApero,bool SupressImInNoMasq,bool AddCple,bool ExpTxt,bool ExpImSec)
+void cAppliWithSetImage::AddCoupleMMImSec(bool ExApero,bool SupressImInNoMasq,bool AddCple, const std::string &SetHom, bool ExpTxt,bool ExpImSec,double aTetaOpt)
 {
       std::string aCom = MMDir() + "bin/mm3d AperoChImSecMM "
                          + BLANK + QUOTE(mEASF.mFullName)
                          + BLANK + mOri
 			 + BLANK + "ExpTxt=" + ToString(ExpTxt)
-			 + BLANK + "ExpImSec=" + ToString(ExpImSec);
+			 + BLANK + "ExpImSec=" + ToString(ExpImSec)
+             + BLANK + "SH=" + SetHom
+             + BLANK + "TetaOpt=" + ToString(aTetaOpt);
 	 
       if (mPenPerIm>0)
       {
@@ -1223,14 +1227,20 @@ int ClipIm_main(int argc,char ** argv)
     std::string aNameOut;
     Pt2di P0(0,0);
     Pt2di Sz(0,0);
+    int  XMaxNot0 = 100000000;
+    int  XMinNot0 = -100000000;
+    int  AmplRandValOut =0;
 
     ElInitArgMain
     (
         argc,argv,
-        LArgMain()  << EAM(aNameIn)
-                    << EAMC(P0,"P0")
-                    << EAMC(Sz,"SZ")  ,
-        LArgMain()  << EAM(aNameOut,"Out",true)
+        LArgMain()  << EAMC(aNameIn,"Name of Image")
+                    << EAMC(P0,"P0, origin of clip")
+                    << EAMC(Sz,"SZ, size of clip")  ,
+        LArgMain()  << EAM(aNameOut,"Out",true,"Name of output file")
+                    << EAM(XMaxNot0,"XMaxNot0",true,"Value will be zeroed fo x > this coord (given in unclip file)")
+                    << EAM(XMinNot0,"XMinNot0",true,"Value will be zeroed fo x <=  this coord (given in unclip file)")
+                    << EAM(AmplRandValOut,"AmplRandVout",true,"Generate random value for out, give amplitude")
     );
 
     if (MMVisualMode) return EXIT_SUCCESS;
@@ -1271,10 +1281,33 @@ int ClipIm_main(int argc,char ** argv)
                               aLArg
                           );
 
+    
+    bool RandOut = EAMIsInit(&AmplRandValOut);
+    Fonc_Num aFoncIn = tiff.in(RandOut ? -1 : 0);
+    if (EAMIsInit(&XMaxNot0))
+    {
+       aFoncIn = aFoncIn * (FX<XMaxNot0);
+       if (RandOut) 
+          aFoncIn = aFoncIn - (FX>=XMaxNot0);  // Add -1 in this out rect
+    }
+    if (EAMIsInit(&XMinNot0))
+    {
+       aFoncIn = aFoncIn * (FX>=XMinNot0);
+       if (RandOut) 
+          aFoncIn = aFoncIn - (FX<XMinNot0);  // Add -1 in this out rect
+    }
+
+ 
+    if (RandOut)
+    {
+       Symb_FNum aFIn(aFoncIn);
+       aFoncIn =  aFIn * (aFIn>=0)  +  (aFIn<0) * frandr() * AmplRandValOut;
+    }
+
     ELISE_COPY
     (
          TiffOut.all_pts(),
-         trans(tiff.in(0),P0),
+         trans(aFoncIn,P0),
          TiffOut.out()
     );
 
@@ -1324,8 +1357,9 @@ cAppliMMByPair::cAppliMMByPair(int argc,char ** argv) :
     mExpTxt        (false),
     mExpImSec      (true),
     mSuprImNoMasq  (false),
-    mPIMsDirName   ("Statue") // used in MMEnvStatute for differenciating PIMs-Forest from PIMs-Statue
-
+    mPIMsDirName   ("Statue"), // used in MMEnvStatute for differenciating PIMs-Forest from PIMs-Statue
+    mSetHom        (""),
+    mTetaOpt       (0.17)
 {
   if ((argc>=2) && (!mModeHelp))
   {
@@ -1437,9 +1471,10 @@ cAppliMMByPair::cAppliMMByPair(int argc,char ** argv) :
                     << EAM(mUseGpu,"UseGpu",false,"Use cuda (Def=false)")
                     << EAM(mDefCor,"DefCor",false,"Def corr (context condepend 0.5 Statue, 0.2 Forest)")
                     << EAM(mZReg,"ZReg",true,"Z Regul (context condepend,  0.05 Statue, 0.02 Forest)")
-   		    << EAM(mExpTxt,"ExpTxt",false,"Use txt tie points for determining image pairs and/or computing epipolar geometry (Def false, e.g. use dat format)")
-   		    << EAM(mExpImSec,"ExpImSec",false,"Export ImSec def=true (put false if set elsewhere)")
-
+   		            << EAM(mExpTxt,"ExpTxt",false,"Use txt tie points for determining image pairs and/or computing epipolar geometry (Def false, e.g. use dat format)")
+   		            << EAM(mSetHom,"SH",false,"Set of Hom, Def=\"\"")
+   		            << EAM(mExpImSec,"ExpImSec",false,"Export ImSec def=true (put false if set elsewhere)")
+                    << EAM(mTetaOpt,"TetaOpt",true,"For the choice of secondary images: Optimal angle of stereoscopy, in radian, def=0.17 (+or- 10 degree)")
   );
 
   // Par defaut c'est le meme comportement
@@ -1473,6 +1508,7 @@ cAppliMMByPair::cAppliMMByPair(int argc,char ** argv) :
       {
           AddLinePair(1,mExpTxt);
       }
+    
 
       if (mModeHelp)
           StdEXIT(0);
@@ -1489,7 +1525,7 @@ cAppliMMByPair::cAppliMMByPair(int argc,char ** argv) :
          AddDelaunayCple();
       if (mRunAperoImSec)
       {
-         AddCoupleMMImSec(BoolFind(mDo,'A'),mSuprImNoMasq,mAddCpleImSec,mExpTxt,mExpImSec);
+         AddCoupleMMImSec(BoolFind(mDo,'A'),mSuprImNoMasq,mAddCpleImSec,mSetHom,mExpTxt,mExpImSec,mTetaOpt);
       }
 
       if (EAMIsInit(&mFilePair))

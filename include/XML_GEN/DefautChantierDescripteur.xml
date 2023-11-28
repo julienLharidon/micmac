@@ -41,6 +41,56 @@
 
 <ChantierDescripteur>
 
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  1 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*) </PatternTransform>
+                <CalcName>     Nuage-Ref-NH/Nuage-$1#1    </CalcName>
+            </Direct>
+            <Inverse>
+                <PatternTransform> Nuage-Ref-NH/Nuage-(.*)#1  </PatternTransform>
+                <CalcName>  $1  </CalcName>
+            </Inverse>
+        </Calcs>
+        <Key>   NKS-Assoc-NHNuageRef </Key>
+        <SubDirAutoMake> Nuage-Ref-NH/ </SubDirAutoMake>
+    </KeyedNamesAssociations>
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  2 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)%(.*) </PatternTransform>
+                <CalcName>    PC-Ref-NH/RefNH-$1---$2-#1.dmp     </CalcName>
+                <Separateur > % </Separateur>
+            </Direct>
+            <Inverse>
+                <PatternTransform> PC-Ref-NH/RefNH-(.*)---(.*)-#1.dmp  </PatternTransform>
+                <CalcName>  $1  </CalcName>
+                <CalcName>  $2  </CalcName>
+            </Inverse>
+        </Calcs>
+        <SubDirAutoMake> PC-Ref-NH/ </SubDirAutoMake>
+        <Key>   NKS-Assoc-NHPtRef </Key>
+    </KeyedNamesAssociations>
+
+
+
+    <KeyedSetsOfNames >
+          <IsParametrized>  true </IsParametrized>
+          <Sets> 
+                 <PatternAccepteur>  RefNH-(.*)---(.*)-#1.dmp  </PatternAccepteur>
+		 <SubDir>   PC-Ref-NH/ </SubDir>
+                 <NivSubDir> 1 </NivSubDir>
+	  </Sets>
+          <Key> NKS-Set-NHPtRef  </Key>
+    </KeyedSetsOfNames>
+
+
+
 <!--  ***********************************************************
 *                                                               *
 *       NEW and (hopefully) definitive systems of Keys  :       *
@@ -671,6 +721,102 @@
     <KeyedNamesAssociations>
         <IsParametrized>  true </IsParametrized>
         <Calcs>
+            <Arrite>  2 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)%(.*) </PatternTransform>
+                <CalcName> Ori-GenEpi-#1/Orient_$1-$2.#2  </CalcName>
+                <Separateur > % </Separateur>
+             </Direct>
+<!--
+   A priori inverse pas utile. Si elle devait l'etre, il faudrait changer les conventions et 
+	     <Inverse>
+                <PatternTransform>  Ori-Epi-#1/Orient_(.*)_-_(.*).#2 </PatternTransform>
+                <CalcName> $1  </CalcName>
+                <CalcName> $2  </CalcName>
+	     </Inverse>
+-->
+        </Calcs>
+        <Key>  NKS-Assoc-CplIm2OriGenEpi </Key>
+	<SubDirAutoMake> Ori-GenEpi-#1 </SubDirAutoMake>
+	<SubDirAutoMakeRec> true </SubDirAutoMakeRec>
+    </KeyedNamesAssociations>
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  3 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)%(.*)%(.*) </PatternTransform>
+                <CalcName> EpipIm-$1-$2-$3.#1  </CalcName>
+                <Separateur > % </Separateur>
+             </Direct>
+<!--
+   A priori inverse pas utile. Si elle devait l'etre, il faudrait changer les conventions et 
+	     <Inverse>
+                <PatternTransform>  Ori-Epi-#1/Orient_(.*)_-_(.*).#2 </PatternTransform>
+                <CalcName> $1  </CalcName>
+                <CalcName> $2  </CalcName>
+	     </Inverse>
+-->
+        </Calcs>
+        <Key>  NKS-Assoc-NameImEpip </Key>
+    </KeyedNamesAssociations>
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  3 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)%(.*)%(.*) </PatternTransform>
+                <CalcName> EpipAppuis-$1-$2-$3.xml  </CalcName>
+                <Separateur > % </Separateur>
+			</Direct>
+			<Inverse>
+					<PatternTransform> EpipAppuis-(.*)-(.*)-(.*).xml </PatternTransform>
+					<CalcName> $2 </CalcName>
+					<CalcName> $3 </CalcName>
+			</Inverse>
+        </Calcs>
+        <Key>  NKS-Assoc-NameAppuiEpip </Key>
+    </KeyedNamesAssociations>
+
+
+
+    
+     <KeyedSetsOfNames >
+          <IsParametrized>  true </IsParametrized>
+          <Sets> 
+                 <PatternAccepteur> Pastis#3/(.*)\.(#2)  </PatternAccepteur>
+		 <SubDir>   #4/Homol#1/ </SubDir>
+                 <NivSubDir> 2 </NivSubDir>
+	  </Sets>
+          <Key> NKS-Set-HomolOfOneImageWithDir </Key>
+    </KeyedSetsOfNames>
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  2 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)%(.*) </PatternTransform>
+                <CalcName> #3/Homol#1/Pastis$1/$2.#2  </CalcName>
+                <Separateur > % </Separateur>
+             </Direct>
+	     <Inverse>
+                <PatternTransform> #3/Homol#1/Pastis(.*)/(.*)\.#2 </PatternTransform>
+                <CalcName> $1  </CalcName>
+                <CalcName> $2  </CalcName>
+	     </Inverse>
+        </Calcs>
+        <Key>  NKS-Assoc-CplIm2HomWithDir </Key>
+	<SubDirAutoMake> Homol#1 </SubDirAutoMake>
+	<SubDirAutoMakeRec> true </SubDirAutoMakeRec>
+    </KeyedNamesAssociations>
+
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
             <Arrite>  1 1 </Arrite>
             <Direct>
                 <PatternTransform> (.*) </PatternTransform>
@@ -1000,6 +1146,28 @@
         <Key>   NKS-Assoc-AddDirAndPref </Key>
         <SubDirAutoMake> #1 </SubDirAutoMake>
     </KeyedNamesAssociations>
+
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  1 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)\.([0-9,A-Z,a-z]{2,4}) </PatternTransform>
+                <CalcName>  #1$1#2  </CalcName>
+             </Direct>
+        </Calcs>
+        <Calcs>
+            <Arrite>  1 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*) </PatternTransform>
+                <CalcName>  #1$1#2  </CalcName>
+             </Direct>
+        </Calcs>
+        <Key>   NKS-Assoc-AddDirAndPost </Key>
+        <SubDirAutoMake> #1 </SubDirAutoMake>
+    </KeyedNamesAssociations>
+
+
 
 
         <!--  Gestion des focales a l'ancienne, pour chantier existant, 
@@ -2496,6 +2664,22 @@
         <Key> Key-Assoc-Nuage-Ply </Key>
     </KeyedNamesAssociations>
 
+<!-- 
+	MEC - decompose image name from MEC2Im-XXX
+-->
+
+    <KeyedNamesAssociations>
+        <Calcs>
+            <Arrite>  2 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)@(.*) </PatternTransform>
+				<CalcName>  MEC2Im-$1-$2/  </CalcName>
+             </Direct>
+        </Calcs>
+        <Key> Key-Assoc-MEC-Dir </Key>
+    </KeyedNamesAssociations>
+
+
 
 <!--
       Masq-Image
@@ -2707,6 +2891,27 @@
              </Direct>
         </Calcs>
         <Key>   Key-Assoc-OpIm2Incid </Key>
+    </KeyedNamesAssociations>
+
+
+    <!-- One-Two Pixel Matching radiometric calibration -->
+    <KeyedNamesAssociations>
+        <IsParametrized>  true </IsParametrized>
+        <Calcs>
+            <Arrite>  1 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*)\.([0-9,A-Z,a-z]{2,4}) </PatternTransform>
+                <CalcName>  Tmp-MM-Dir/#1$1_RadCal.#2  </CalcName>
+             </Direct>
+        </Calcs>
+        <Calcs>
+            <Arrite>  1 1 </Arrite>
+            <Direct>
+                <PatternTransform> (.*) </PatternTransform>
+                <CalcName>  Tmp-MM-Dir/#1$1_RadCal.#2  </CalcName>
+             </Direct>
+        </Calcs>
+        <Key>   NKS-Key-Im2OrtRadCal </Key>
     </KeyedNamesAssociations>
 
 

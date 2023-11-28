@@ -26,10 +26,21 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
    <Symb> ResolRelOrhto=0.5     </Symb>
    <Symb> ZoomInit=32     </Symb>
 
+<!-- One-Two Pixel Matching -->
+   <Symb>  CorPonc=false  </Symb>
+   <Symb>  MCorPoncCal="xml"  </Symb>
+  
+   <Symb>  PCStd=0.0  </Symb>
+   <Symb>  PCCroise=1.0  </Symb>
+   <Symb>  PdsAttPix=1.0  </Symb>
+
+   <eSymb> Px1PenteMax0=? ${CorPonc} 3 2 </eSymb>
+   <eSymb> Px1PenteMax1=? ${CorPonc} ${Px1PenteMax0} * 0.5 ${Px1PenteMax0} </eSymb>
+
 
 <!-- Parametre Algo ayant une valeur par defaut -->
    <Symb>   DefCor=0.2      </Symb>
-   <Symb>   CostTrans=2.0      </Symb>
+   <eSymb>  CostTrans=? ${CorPonc} 0.5 2.0 </eSymb> <!-- value set in the CPP -->
    <Symb>   NbMinIV=3       </Symb>
    <Symb>   Repere="NO-REPERE"  </Symb>
    <Symb>   FileAnam=EmptyXML.xml  </Symb>
@@ -59,6 +70,7 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
 <!-- Parametre de "Chantier -->
    <Symb> DirQO=Qk-ORTHO  </Symb>
    <Symb> DirMEC=MEC-Malt/  </Symb>
+   <Symb> DirPyram=Pyram/   </Symb>
    <Symb> Chantier=STD-MALT  </Symb>
    <Symb> DirTA=TA  </Symb>
    <Symb> Purge=true  </Symb>
@@ -91,8 +103,36 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
   
    <Symb>  FileDoNothing=EmptyXML.xml  </Symb>
    <Symb>  UseImSec=false  </Symb>
+
    <Symb>  CorMS=false  </Symb>
-   <Symb> ModeAgrCor=eAggregSymetrique </Symb>
+   <Symb>  NbMS=3       </Symb>
+
+   <eSymb>MS_Use1= SupEq ${NbMS} 1  </eSymb>
+   <Symb> MS_SzW1=1 </Symb>
+   <Symb> MS_Sig1=0 </Symb>
+   <Symb> MS_Pds1=1 </Symb>
+
+   <eSymb> MS_Use2= SupEq ${NbMS} 2  </eSymb>
+   <Symb> MS_SzW2=2 </Symb>
+   <Symb> MS_Sig2=1 </Symb>
+   <Symb> MS_Pds2=0.5 </Symb>
+
+   <eSymb> MS_Use3= SupEq ${NbMS} 3  </eSymb>
+   <Symb> MS_SzW3=4 </Symb>
+   <Symb> MS_Sig3=2 </Symb>
+   <Symb> MS_Pds3=0.25 </Symb>
+
+
+ 
+   <Symb>  ZoomInitMCorPonc=8  </Symb>
+   <eSymb> AddZoom32MCorPonc=SupEq ${ZoomInitMCorPonc} 32 </eSymb>
+   <eSymb> AddZoom16MCorPonc=SupEq ${ZoomInitMCorPonc} 16 </eSymb>
+   <eSymb> AddZoom8MCorPonc=SupEq ${ZoomInitMCorPonc} 8 </eSymb>
+   <eSymb> AddZoom4MCorPonc=SupEq ${ZoomInitMCorPonc} 4 </eSymb>
+   <eSymb> AddZoom2MCorPonc=SupEq ${ZoomInitMCorPonc} 2 </eSymb>
+   
+
+   <Symb>  ModeAgrCor=eAggregSymetrique </Symb>
 
 
     <!-- NOUVELLE FONCTIONNALITE SYMBOLE EVALUE, NOTATION POLONAISE INVERSE -->
@@ -156,6 +196,12 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
    <Symb>  Clas2=.* </Symb>
    <Symb>  UseClas3=false </Symb>
    <Symb>  Clas3=.* </Symb>
+   <Symb>  UseClas4=false </Symb>
+   <Symb>  Clas4=.* </Symb>
+   <Symb>  UseClas5=false </Symb>
+   <Symb>  Clas5=.* </Symb>
+   <Symb>  UseClas6=false </Symb>
+   <Symb>  Clas6=.* </Symb>
    <Symb>  EZA=false </Symb>
    <Symb>  SzRec=50 </Symb>  <!-- Valeur par defaut actuel pour compatibilite -->
    <Symb>   AlgoMaxFlow=false </Symb>
@@ -169,6 +215,13 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
    <Symb> UseRatioResolImage=false </Symb>
    <Symb> RatioResolImage=1 </Symb>
 
+   <Symb> UseDEMInit=false </Symb>
+   <Symb> DEMInitXML="XXXXXX" </Symb>
+   <Symb> DEMInitIMG="XXXXXX" </Symb>
+
+   <Symb> UseEnvMNTInit=false </Symb>
+   <Symb> EnvZInf="YYYYYYYY" </Symb>
+   <Symb> EnvZsup="YYYYYYYY" </Symb>
 <!--
 
     <Symb>  UseEqui=t=rue </Symb>
@@ -207,6 +260,28 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
      <Symb> VSNI=0 </Symb>
      <Symb> NbDirPrgDyn=7 </Symb>
      <Symb> ModeAgregPrgDyn=ePrgDAgrSomme </Symb>
+     <Symb> OrthoSuperpMNT=false </Symb>
+
+     <Symb>  UseCensusCost=false </Symb>
+     <Symb>  ModeCensusCost=eMCC_CensusQuantitatif </Symb>
+     <Symb>  DynCensusCost=1.0 </Symb>
+
+     <Symb>  WithExtenZ=false      </Symb>
+     <Symb>  ExtenZ=0.0      </Symb>
+
+     <Symb>  ZRedrPx=false      </Symb>
+     <Symb>  ZDeqRedr=false      </Symb>
+
+     <Symb>  IsCorrelExp=false   </Symb>
+     <Symb>  TypeWCorr=eWInCorrelExp   </Symb>
+<!--
+        <#WHEN VTEST=${UseCensusCost}>
+              <CensusCost>
+                              <TypeCost> ${ModeCensusCost}  </TypeCost>
+             </CensusCost>
+        </#WHEN>
+-->
+
 </DicoLoc>
 
 <!--  M2 : Describe the ground zone where the matching is to be done -->
@@ -216,6 +291,19 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
              <ZIncCalc>   ${ZIncCalc} </ZIncCalc>
              <ZIncIsProp> ${ZIncIsProp} </ZIncIsProp>
              <IncludeFileLoc>  ${FileZMoy} </IncludeFileLoc>
+             <#WHEN VTEST=${UseDEMInit}>
+                 <MNT_Init>  
+                     <MNT_Init_Image> ${DEMInitIMG} </MNT_Init_Image>
+                     <MNT_Init_Xml> ${DEMInitXML} </MNT_Init_Xml>
+                 </MNT_Init>
+             </#WHEN>
+
+             <#WHEN VTEST=${UseEnvMNTInit}>
+                  <EnveloppeMNT_INIT>
+                         <ZInf >  ${EnvZInf} </ZInf>
+                         <ZSup >  ${EnvZSup} </ZSup>
+                    </EnveloppeMNT_INIT>
+             </#WHEN>
 
       </IntervAltimetrie>
 
@@ -337,6 +425,24 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                          <Result> Classe3 </Result>
                     </OneAutomMapN2N>
                  </#WHEN>
+                 <#WHEN VTEST=${UseClas4}>
+                    <OneAutomMapN2N>
+                         <MatchPattern> ${Clas4} </MatchPattern>
+                         <Result> Classe4 </Result>
+                    </OneAutomMapN2N>
+                 </#WHEN>
+                 <#WHEN VTEST=${UseClas5}>
+                    <OneAutomMapN2N>
+                         <MatchPattern> ${Clas5} </MatchPattern>
+                         <Result> Classe5 </Result>
+                    </OneAutomMapN2N>
+                 </#WHEN>
+                 <#WHEN VTEST=${UseClas6}>
+                    <OneAutomMapN2N>
+                         <MatchPattern> ${Clas6} </MatchPattern>
+                         <Result> Classe6 </Result>
+                    </OneAutomMapN2N>
+                 </#WHEN>
                  <OneAutomMapN2N>
                          <MatchPattern> .* </MatchPattern>
                          <Result> ClasseDef </Result>
@@ -348,6 +454,9 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
 
 
 <Section_MEC >
+      <#WHEN VTEST=${WithExtenZ}>
+           <ExtensionIntervZ> ${ExtenZ} </ExtensionIntervZ>
+      </#WHEN>
 
       <#WHEN VTEST=${UseClip}>
           <ProportionClipMEC>  ${X0Clip} ${Y0Clip} ${X1Clip} ${Y1Clip} </ProportionClipMEC>
@@ -398,7 +507,7 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                       <ModeAgreg> ${ModeAgregPrgDyn} </ModeAgreg>
                       <NbDir>   ${NbDirPrgDyn}               </NbDir>
                   </EtapeProgDyn>
-                  <Px1PenteMax>   2.0    </Px1PenteMax>
+                  <Px1PenteMax>   ${Px1PenteMax0}    </Px1PenteMax>
 		  <#WHEN VTEST=${UseArgMaskAuto}>
                   	<ArgMaskAuto > 
                       		<ValDefCorrel >  ${DefCor} </ValDefCorrel>
@@ -416,16 +525,18 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
 
             <AggregCorr> ${ModeAgrCor} </AggregCorr>
             <!---->
-            <#WHEN VTEST=${CorMS}>
-                 <#WHEN VTEST=${NotUseGpu}>
-                     <CorrelAdHoc>
-                          <TypeCAH>
-                               <GPU_Correl> </GPU_Correl>
-                          </TypeCAH>
-                     </CorrelAdHoc>
-                  </#WHEN>
 
-            </#WHEN>
+                 <#WHEN VTEST=${CorMS}>
+                      <#WHEN VTEST=${NotUseGpu}>
+                          <CorrelAdHoc>
+                               <TypeCAH>
+                                    <GPU_Correl> </GPU_Correl>
+                               </TypeCAH>
+                          </CorrelAdHoc>
+                       </#WHEN>
+                 </#WHEN>
+
+            
             <#WHEN VTEST=${UseGpu}>
                <CorrelAdHoc>
                    <SzBlocAH > 128 </SzBlocAH>
@@ -434,35 +545,124 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                    </TypeCAH>
                </CorrelAdHoc>
             </#WHEN>
-            
+
+	    <#IF VTEST=${IsCorrelExp}>
+	    <TypeWCorr> ${TypeWCorr} </TypeWCorr>
+	    <NbIterFenSpec> 2 </NbIterFenSpec>
+            </#IF>
+	    <!-- <#IF VTEST=${ZRedrPx}>
+	        <ZRedrPx > true     </ZRedrPx>
+   	    </#IF>
+	    <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+	    </#IF>-->
+
+
+
         </EtapeMEC>
 	     
-        <EtapeMEC> 
+	<EtapeMEC> 
+		<#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+                </#IF>
+                <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+	        </#IF>
+
                 <DeZoom >        ${ZoomInit}        </DeZoom> 
                 <ZPas>           ${DbleZPas}       </ZPas>
         </EtapeMEC>
 
-        <EtapeMEC> 
+	<EtapeMEC> 
+            <#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+            </#IF>
+            <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+	    </#IF>
+
                 <DeZoom >        ${ZoomInit}        </DeZoom> 
-	        <ZDilatAlti>  4    </ZDilatAlti>
+	            <ZDilatAlti>  4    </ZDilatAlti>
                 <ZDilatPlani> 3    </ZDilatPlani>
         </EtapeMEC>
+      
+        
 
         <#WHEN VTEST=${AddZoom64}>
-              <EtapeMEC>
+	    <EtapeMEC>
+		<#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+            </#IF>
+            <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+ 	    </#IF>
+
                   <DeZoom >        64        </DeZoom>
                   <ModeInterpolation> eInterpolBiLin </ModeInterpolation>
               </EtapeMEC>
         </#WHEN>
         <#WHEN VTEST=${AddZoom32}>
-              <EtapeMEC>
+	    <EtapeMEC>
+
+                <#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+                </#IF>
+                <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+                </#IF>
+
                   <DeZoom >        32        </DeZoom>
                   <ModeInterpolation> eInterpolBiLin </ModeInterpolation>
+                  
+
+                  <#WHEN VTEST=${CorPonc}>
+                      <#WHEN VTEST=${AddZoom32MCorPonc}>
+                       <CorrelAdHoc  Portee="Globale">
+                           <TypeCAH>
+                                <MultiCorrelPonctuel>
+                                     <PdsCorrelStd >  ${PCStd} </PdsCorrelStd>
+                                     <PdsCorrelCroise  >  ${PCCroise} </PdsCorrelCroise>
+                                     <MCP_AttachePixel>
+                                         <Pds> ${PdsAttPix}  </Pds>
+                                         <!--<KeyRatio> NKS-Assoc-AddDirAndPost@${DirOrthoF}@_RadCal.${MCorPoncCal} </KeyRatio>-->
+                                         <KeyRatio> NKS-Key-Im2OrtRadCal@${Dir}@${MCorPoncCal} </KeyRatio>
+                                     </MCP_AttachePixel>
+                                </MultiCorrelPonctuel> 
+                           </TypeCAH>
+                       </CorrelAdHoc>
+                      </#WHEN>
+                  </#WHEN>
+
               </EtapeMEC>
         </#WHEN>
         <#WHEN VTEST=${AddZoom16}>
-            <EtapeMEC>
+	<EtapeMEC>
+	    <#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+            </#IF>
+            <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+            </#IF>
                     <DeZoom >        16        </DeZoom>
+                    
+                    <#WHEN VTEST=${CorPonc}>
+                        <#WHEN VTEST=${AddZoom16MCorPonc}>
+                         <CorrelAdHoc  Portee="Globale">
+                             <TypeCAH>
+                                  <MultiCorrelPonctuel>
+                                       <PdsCorrelStd >  ${PCStd} </PdsCorrelStd>
+                                       <PdsCorrelCroise  >  ${PCCroise} </PdsCorrelCroise>
+                                       <MCP_AttachePixel>
+                                           <Pds> ${PdsAttPix}  </Pds>
+                                           <!--<KeyRatio> NKS-Assoc-AddDirAndPost@${DirOrthoF}@_RadCal.${MCorPoncCal} </KeyRatio>-->
+                                           <KeyRatio> NKS-Key-Im2OrtRadCal@${Dir}@${MCorPoncCal} </KeyRatio>
+                                       </MCP_AttachePixel>
+                                  </MultiCorrelPonctuel> 
+                             </TypeCAH>
+                         </CorrelAdHoc>
+                        </#WHEN>
+                    </#WHEN>
+
                     <#WHEN VTEST=${UsePC}>
                          <GenerePartiesCachees>
                              <SeuilUsePC> 3 </SeuilUsePC>
@@ -477,7 +677,14 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
 
 
         <#WHEN VTEST=${AddZoom8}>
-            <EtapeMEC> 
+	<EtapeMEC> 
+	    <#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+            </#IF>
+            <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+	    </#IF>
+
                  <ModeInterpolation Portee="Globale"> eInterpolSinCard </ModeInterpolation>
                  <#WHEN VTEST=${ForDeform}>
                        <SzSinCard Portee="Globale">  5.0 </SzSinCard>
@@ -485,21 +692,22 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                  </#WHEN>
 
                  <DeZoom >        8        </DeZoom> 
-	         <ZDilatAlti>  4    </ZDilatAlti>
+
+                 <ZDilatAlti>  4    </ZDilatAlti>
                  <ZDilatPlani> 3    </ZDilatPlani>
                  <ModulationProgDyn Portee="Globale">
                          <EtapeProgDyn>
                               <ModeAgreg> ${ModeAgregPrgDyn} </ModeAgreg>
                               <NbDir>   ${NbDirPrgDyn}              </NbDir>
                          </EtapeProgDyn>
-                         <Px1PenteMax>   1.0    </Px1PenteMax>
-			 <#WHEN VTEST=${UseArgMaskAuto}>
+                         <Px1PenteMax>  ${Px1PenteMax1}    </Px1PenteMax>
+			             <#WHEN VTEST=${UseArgMaskAuto}>
                          <ArgMaskAuto >
                                 <ValDefCorrel >  ${DefCor} </ValDefCorrel>
-                                <CostTrans >     2.0   </CostTrans>
+                      		    <CostTrans >     ${CostTrans}   </CostTrans>
                                 <ReInjectMask>  false   </ReInjectMask>
                          </ArgMaskAuto>
-			 </#WHEN>
+			             </#WHEN>
                    </ModulationProgDyn>
                    <#WHEN VTEST=${NotZoom8}>
                        <#WHEN VTEST=${UsePC}>
@@ -509,6 +717,25 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                           </GenerePartiesCachees>
                        </#WHEN>
                    </#WHEN>
+
+                   <#WHEN VTEST=${CorPonc}>
+                      <#WHEN VTEST=${AddZoom8MCorPonc}>
+                        <CorrelAdHoc  Portee="Globale">
+                            <TypeCAH>
+                                 <MultiCorrelPonctuel>
+                                      <PdsCorrelStd >  ${PCStd} </PdsCorrelStd>
+                                      <PdsCorrelCroise  >  ${PCCroise} </PdsCorrelCroise>
+                                      <MCP_AttachePixel>
+                                          <Pds> ${PdsAttPix}  </Pds>
+                                          <!--<KeyRatio> NKS-Assoc-AddDirAndPost@${DirOrthoF}@_RadCal.${MCorPoncCal} </KeyRatio>-->
+                                          <KeyRatio> NKS-Key-Im2OrtRadCal@${Dir}@${MCorPoncCal} </KeyRatio>
+                                      </MCP_AttachePixel>
+                                 </MultiCorrelPonctuel> 
+                            </TypeCAH>
+                        </CorrelAdHoc>
+                       </#WHEN>
+                   </#WHEN>
+
                    <#WHEN VTEST=${CorMS}>
                        <SzW Portee="Globale"> 1 </SzW>
                        <CorrelAdHoc Portee="Globale">
@@ -516,25 +743,37 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
                                   <UseGpGpu> ${UseGpu} </UseGpGpu>
                                   <ModeDense> ${MSDense} </ModeDense>
                                   <UseWAdapt>  false </UseWAdapt>
-                                  <OneParamCMS>
-                                       <SzW> 1 1 </SzW>
-                                       <Sigma> 0 </Sigma>
-                                       <Pds> 1.0 </Pds>
-                                  </OneParamCMS>
-                                  <OneParamCMS>
-                                       <SzW> 2 2 </SzW>
-                                       <Sigma> 1.0 </Sigma>
-                                       <Pds> 0.5 </Pds>
-                                  </OneParamCMS>
-                                  <OneParamCMS>
-                                       <SzW> 4 4 </SzW>
-                                       <Sigma> 2.0 </Sigma>
-                                       <Pds> 0.25 </Pds>
-                                  </OneParamCMS>
+                                  <#WHEN VTEST=${MS_Use1}>
+                                       <OneParamCMS>
+                                            <SzW>  ${MS_SzW1} ${MS_SzW1} </SzW>
+                                            <Sigma> ${MS_Sig1} </Sigma>
+                                            <Pds> ${MS_Pds1} </Pds>
+                                       </OneParamCMS>
+                                  </#WHEN>
+                                  <#WHEN VTEST=${MS_Use2}>
+                                       <OneParamCMS>
+                                            <SzW>  ${MS_SzW2} ${MS_SzW2} </SzW>
+                                            <Sigma> ${MS_Sig2} </Sigma>
+                                            <Pds> ${MS_Pds2} </Pds>
+                                       </OneParamCMS>
+                                  </#WHEN>
+                                  <#WHEN VTEST=${MS_Use3}>
+                                       <OneParamCMS>
+                                            <SzW>  ${MS_SzW3} ${MS_SzW3} </SzW>
+                                            <Sigma> ${MS_Sig3} </Sigma>
+                                            <Pds> ${MS_Pds3} </Pds>
+                                       </OneParamCMS>
+                                  </#WHEN>
                            </CorrelMultiScale>
                            <#WHEN VTEST=${NotUseGpu}>
                                <TypeCAH>
+                                   <#IF VTEST=${UseCensusCost}>
+                                       <CensusCost>
+                                            <Dyn> ${DynCensusCost}  </Dyn>
+                                            <TypeCost> ${ModeCensusCost}  </TypeCost>
+                                      </CensusCost>
                                       <GPU_Correl> </GPU_Correl>
+                                   </#IF>
                                 </TypeCAH>
                             </#WHEN>
                             <#WHEN VTEST=${UseGpu}>
@@ -552,20 +791,31 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
         <#WHEN VTEST=${AddZoom4}>
              <IncludeFileLoc>  ${FileZ4PC} </IncludeFileLoc>
         </#WHEN>
+
+
         <#WHEN VTEST=${AddZoom2}>
              <IncludeFileLoc>  ${FileZ2PC} </IncludeFileLoc>
         </#WHEN>
 
         <#WHEN VTEST=${NotZoom8}>
-            <EtapeMEC> 
+	   <EtapeMEC>
+		<#IF VTEST=${ZRedrPx}>
+                <ZRedrPx > true     </ZRedrPx>
+                </#IF>
+	        <#IF VTEST=${ZDeqRedr}>
+                <ZDeqRedr >  true    </ZDeqRedr>
+                </#IF>
+
+
                 <DeZoom>        ${ZoomFinal}        </DeZoom> 
             </EtapeMEC>
-        </#WHEN>
+         </#WHEN>
 
         <IncludeFileLoc>  ${FileZ1Raff} </IncludeFileLoc>
 
 
-        <EtapeMEC> 
+	<EtapeMEC> 
+
                <DeZoom>        ${ZoomFinal}        </DeZoom> 
                <ZPas>          1.0       </ZPas>
                <AlgoRegul>  eAlgoDequant </AlgoRegul>
@@ -594,6 +844,11 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
     </#WHEN>
 
     <GeomMNT> ${Geom}  </GeomMNT> 
+
+<!--    <#WHEN VTEST=${CorPonc}>
+        <GeomMNT> eGeomMNTFaisceauIm1PrCh_Px1D  </GeomMNT>
+    </#WHEN>-->
+    
     <RepereCorrel>   ${Repere}  </RepereCorrel>
     <IncludeFileLoc>  ${FileAnam} </IncludeFileLoc>
 
@@ -654,7 +909,7 @@ MICMAC /home/marc/micmac/include/XML_MicMac/Param-MNS-Ortho.xml  WorkDir=/home/m
      <WorkDir >  ${Dir} </WorkDir> 
      <TmpMEC>    ${DirMEC}  </TmpMEC>
      <TmpResult> ${DirMEC}  </TmpResult>
-     <TmpPyr>    Pyram/  </TmpPyr>
+     <TmpPyr>    ${DirPyram}</TmpPyr>
 <!--
      <ByProcess>   ${MMNbProc}  </ByProcess>
 -->

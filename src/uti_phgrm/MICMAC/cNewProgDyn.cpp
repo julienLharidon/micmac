@@ -204,7 +204,7 @@ class cTabValArgGlob
      public :
 
           cTabValArgGlob(const cMultiCorrelPonctuel & aMCP, const int & aValOut,double aDefRes) :
-                mPdsCrois (aMCP.PdsCorrelCroise() / TheDynMCP),
+                mPdsCrois ((aMCP.PdsCorrelCroise() ) / TheDynMCP),
                 mDefRes   (aMCP.PdsCorrelCroise() * aDefRes),
                 mValOut   (aValOut)
           {
@@ -243,7 +243,7 @@ template <class Type,const int NbV> class cTabValI1Prg2DTmp
 // std::cout << "V1V2 " << int(aV1) << " " << int(aV2) << "\n";
                if ((aV1!=anArg.mValOut) && (aV2!=anArg.mValOut)) 
                {
-                  aRes += ElAbs(aV1-aV2);
+                  aRes += ElAbs(aV1-aV2) * MCPMulCorel;
                   aNbNN++;
                }
            }
@@ -847,9 +847,21 @@ cSurfaceOptimiseur * cSurfaceOptimiseur::AllocNewPrgDyn
                   case 6 :
                      return new  cMMNewPrg2D<cTypeTabValArgPgr2D<tMCPVal,6> >(anArg,aAppli,aPrgD,anEPG,aLT,anEqX,anEqY,aMulImage,EtiqImage,anEBI);
                   break;
+                  case 7 :
+                     return new  cMMNewPrg2D<cTypeTabValArgPgr2D<tMCPVal,7> >(anArg,aAppli,aPrgD,anEPG,aLT,anEqX,anEqY,aMulImage,EtiqImage,anEBI);
+                  break;
+                  case 8 :
+                     return new  cMMNewPrg2D<cTypeTabValArgPgr2D<tMCPVal,8> >(anArg,aAppli,aPrgD,anEPG,aLT,anEqX,anEqY,aMulImage,EtiqImage,anEBI);
+                  break;
+                  case 9 :
+                     return new  cMMNewPrg2D<cTypeTabValArgPgr2D<tMCPVal,9> >(anArg,aAppli,aPrgD,anEPG,aLT,anEqX,anEqY,aMulImage,EtiqImage,anEBI);
+                  break;
+                  case 10 :
+                     return new  cMMNewPrg2D<cTypeTabValArgPgr2D<tMCPVal,10> >(anArg,aAppli,aPrgD,anEPG,aLT,anEqX,anEqY,aMulImage,EtiqImage,anEBI);
+                  break;
              }
-             std::cout << "Nb Image " << aAppli.NbVueAct() << "\n";
-             ELISE_ASSERT(! EtiqImage,"Too much image in MultiCorrelPonctuel");
+             std::cout << "Nb Image " << aAppli.NbVueAct()  << "\n";
+             ELISE_ASSERT(false,"Too much image in MultiCorrelPonctuel");
         }
    }
 

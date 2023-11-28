@@ -68,7 +68,7 @@ class CameraRPC : public cBasicGeomCap3D
 
 		Pt2dr Ter2Capteur   (const Pt3dr & aP) const;
 		ElSeg3D  Capteur2RayTer(const Pt2dr & aP) const;
-		bool     PIsVisibleInImage   (const Pt3dr & aP,const cArgOptionalPIsVisibleInImage * =0) const;
+		bool     PIsVisibleInImage   (const Pt3dr & aP,cArgOptionalPIsVisibleInImage * =0) const;
 
 		bool  HasRoughCapteur2Terrain() const;
 		Pt3dr RoughCapteur2Terrain   (const Pt2dr & aP) const;
@@ -118,6 +118,7 @@ class CameraRPC : public cBasicGeomCap3D
                                         const std::string & aNameImClip,
                                         const ElAffin2D & anOrIntInit2Cur
                     ) const;
+
 
         static cBasicGeomCap3D * CamRPCOrientGenFromFile(
         const std::string & aName, 
@@ -171,7 +172,7 @@ class CameraAffine : public cBasicGeomCap3D
         Pt2di    SzBasicCapt3D() const;
 	    double ResolSolOfPt(const Pt3dr &) const;
 	    bool  CaptHasData(const Pt2dr &) const;
-	    bool     PIsVisibleInImage   (const Pt3dr & aP,const cArgOptionalPIsVisibleInImage * =0) const;
+	    bool     PIsVisibleInImage   (const Pt3dr & aP,cArgOptionalPIsVisibleInImage * =0) const;
 
 	    Pt3dr RoughCapteur2Terrain   (const Pt2dr & aP) const;
 
@@ -215,13 +216,15 @@ class cRPC
 
         /* Re-save in original coordinate system */
         static std::string Save2XmlStdMMName(  cInterfChantierNameManipulateur * anICNM,
-                                        const std::string & aOriOut,
+                                        const std::string & aOri,
                                         const std::string & aNameImClip,
-                                        const ElAffin2D & anOrIntInit2Cur
+                                        const ElAffin2D & anOrIntInit2Cur,
+										const std::string & aOriOut="RecalRPC"
                     );
+
         /* Save non-existing RPCs in original coordinate system */
         static std::string Save2XmlStdMMName_(cRPC &, const std::string &);
-        static std::string NameSave(const std::string & aDirLoc);
+        static std::string NameSave(const std::string & aDirLoc,std::string aDirName="NEW/");
         void Show();
 
         /* 2D<->3D projections */
@@ -281,6 +284,19 @@ class cRPC
         void ReadASCII(const std::string &aFile);
         int  ReadASCIIMeta(const std::string &aMeta, const std::string &aFile);
         void ReadEUCLIDIUM(const std::string &aFile);
+        void ReadScanLineSensor(const std::string &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &);
+        void ReadScanLineSensor(const std::string &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &);
+        void ReadEpiGrid(const std::string &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &,
+                                std::vector<Pt3dr> &);
 
         
         /* Change coordinate system */
@@ -335,7 +351,11 @@ class cRPC
         void ReconstructValidityxy();
         void ReconstructValidityXY();
         void ReconstructValidityH();
-
+        void FillAndVerifyBord(double &aL, double &aC,
+                               const Pt3dr &aP1, const Pt3dr &aP2,
+                               const std::list< Pt3dr > &aP3,
+                               std::vector<Pt3dr> & aG3d, std::vector<Pt3dr> & aG2d);
+		void UpdateGrC(Pt3dr& );
 
         /* Update scales, offsets */
         void NewImOffScal(const std::vector<Pt3dr> & aGrid);
@@ -377,6 +397,8 @@ class cRPC
                        double (&aInvSNum)[20], double (&aInvLNum)[20],
                        double (&aInvSDen)[20], double (&aInvLDen)[20]);
 
+	void SetType(const eTypeImporGenBundle& aT) { mType=aT; };
+
         bool ISDIR;
         bool ISINV;
         bool ISMETER;
@@ -405,7 +427,8 @@ class cRPC
 
         std::string mName;
 
-
+	/* RPC type */
+        eTypeImporGenBundle mType;
 };
 
 class cRPCVerf

@@ -78,6 +78,8 @@ FAIT :
 
 #define USE_INT1_4_MCP false
 
+extern const double MCPMulCorel;
+
 #if (USE_INT1_4_MCP)
 typedef U_INT2 tCRVal;
 const tCRVal ValUndefCple = 0 ;  // Valeur pour coder une valeur inexistante en correl "a un pixel" multi image
@@ -141,7 +143,6 @@ typedef enum
    eModeCarteProfExterne,
    eModeCarteProfInterne //   : si + tard on souhaite embarquer l'image
 } eModeExportNuage;
-
 
 
 
@@ -821,7 +822,7 @@ class cGeomDiscR2
          void SetClip(const  Pt2di & aP0,const  Pt2di  & aP1);
 
          void SetClipInit();
-
+ 
              // Accesseurs
 
          const Pt2di & SzDz() const;
@@ -2613,6 +2614,7 @@ class   cGPU_LoadedImGeom
    public :
        void InitCalibRadiom(cGLI_CalibRadiom * aCal);
        double CorrRadiom(double aVal);
+       double CorrRadiom(double aVal, const Pt2dr &aP);
 
 
        ~cGPU_LoadedImGeom();
@@ -2731,6 +2733,7 @@ class   cGPU_LoadedImGeom
        tImGpu  ImSomO2();
        tImGpu  ImSom12();
 
+
        bool InitValNorms(int anX,int anY,int aNbScaleIm);
        double ValNorm(int anX,int anY) const 
        {
@@ -2755,6 +2758,7 @@ class   cGPU_LoadedImGeom
        cPriseDeVue * PDV();
 
        bool Correl(double & Correl,int anX,int anY,const cGPU_LoadedImGeom & aGeoJ,int aNbIm) const;
+       bool CorreCensus(double & Correl,int anX,int anY,const cGPU_LoadedImGeom & aGeoJ,int aNbIm) const;
 
        // inline double StatIm(int anX,int anY,tGpuF **) const;
 
@@ -3050,6 +3054,8 @@ class cAppliMICMAC  : public   cParamMICMAC,
         void DoOneCorrelSym(int anX,int anY,int aNbScale);
         void DoOneCorrelIm1Maitre(int anX,int anY,const cMultiCorrelPonctuel *,int aNbIm,bool VireExtr,double aPdsPix);
         void DoOneCorrelMaxMinIm1Maitre(int anX,int anY,bool aModeMax,int aNbIm);
+        void DoCostLearnedMMVII(const Box2di & aBox,const cScoreLearnedMMVII &aCPC);
+
 
 		void DoGPU_Correl_Basik (const Box2di & aBoxInterne); 
 
@@ -3077,6 +3083,7 @@ class cAppliMICMAC  : public   cParamMICMAC,
         void DoCorrelMultiFen ( const Box2di & aBox, const cCorrel_MultiFen &);
 
         void DoCorrelRobusteNonCentree ( const Box2di & aBox, const cCorrel_NC_Robuste & aCNR);
+
 
 
 
@@ -3184,6 +3191,7 @@ class cAppliMICMAC  : public   cParamMICMAC,
 
          const cCorrelAdHoc * CAH() const;
          const cCorrelMultiScale*  CMS() const;
+         const cCensusCost *       CC() const;
 
          double AhDefCost () const {return mAhDefCost;} 
          double AhEpsilon () const {return mAhEpsilon;}
@@ -3705,6 +3713,7 @@ class cAppliMICMAC  : public   cParamMICMAC,
        cSurfaceOptimiseur *    mSurfOpt;
        const cCorrelAdHoc *      mCorrelAdHoc;
        const cCorrelMultiScale*  mCMS;
+       const cCensusCost *       mCC;
        bool                      mCMS_ModeEparse;
 
        bool                  mGIm1IsInPax;
@@ -3866,6 +3875,10 @@ void CombleTrouPrgDyn (
          Im2D_Bits<1>  aMaskTer,
          Im2D_INT2     aImZ
      );
+
+// Fonction du ratio compris entre -1 et 1; 0 qd egaux
+double EcartNormalise(double aI1,double aI2);
+
 
 
 

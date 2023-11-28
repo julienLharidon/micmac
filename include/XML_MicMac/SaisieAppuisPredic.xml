@@ -11,6 +11,7 @@
              <Symb> FlouSpecified=false </Symb>
              <Symb> TypeSpecified=false </Symb>
              <Symb> ForceGray=true </Symb>
+             <Symb> Gama=1.0 </Symb>
              <Symb> WithMasq3D=false </Symb>
              <Symb> Masq3D=XXXXX </Symb>
              <Symb> WithPIMsFilter=false </Symb>
@@ -18,6 +19,10 @@
              <Symb> WithInputSec=false </Symb>
              <Symb> InputSec=XXXX </Symb>
              <Symb> UseMinMaxPt=false </Symb>
+             <Symb> WithDmax=false </Symb>
+             <Symb> WithPatFilt=false </Symb>
+             <Symb> DistMax=1e10 </Symb>
+             <Symb> PatFilt=.* </Symb>
 
         </DicoLoc>
 
@@ -61,6 +66,7 @@
         <SectionImages>
               <SetOfImages> ${Images} </SetOfImages>
               <ForceGray> ${ForceGray} </ForceGray>
+              <Gama> ${Gama} </Gama>
               <KeyAssocOri> ${Ori}  </KeyAssocOri>
         </SectionImages>
 
@@ -74,6 +80,13 @@
              </#WHEN>
              <#WHEN VTEST=${WithPIMsFilter}>
                    <PIMsFilterVis> ${PIMsFilter} </PIMsFilterVis>
+             </#WHEN>
+
+             <#WHEN VTEST=${WithDmax}>
+                   <DistMaxVisib>  ${DistMax}  </DistMaxVisib>
+             </#WHEN>
+             <#WHEN VTEST=${WithPatFilt}>
+                   <PatternNamePtsVisib>  ${PatFilt}  </PatternNamePtsVisib>
              </#WHEN>
 
         </SectionTerrain>

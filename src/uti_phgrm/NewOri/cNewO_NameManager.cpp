@@ -141,7 +141,7 @@ cInterfChantierNameManipulateur *  cNewO_NameManager::ICNM()
 
 CamStenope * cInterfChantierNameManipulateur::GlobCalibOfName(const std::string  & aName,const std::string & aPrefOriCal,bool aModeFraser) 
 {
-   // std::cout << "cInterfChantierNameManipulateur::GlobCalibOfName \n"; getchar();
+   // std::cout << "cInterfChantierNameManipulateur::GlobCalibOfName " << aPrefOriCal << "\n"; getchar();
 
 
    if (aPrefOriCal =="")
@@ -330,6 +330,16 @@ CamStenope *  cInterfChantierNameManipulateur::StdCamStenOfNames(const std::stri
 
      std::string aKey = "NKS-Assoc-Im2Orient@-"+ anOri ;
      std::string aNameCam =  Assoc1To1(aKey,aNameIm,true);
+     return CamOrientGenFromFile(aNameCam,this);
+}
+
+CamStenope *  cInterfChantierNameManipulateur::StdCamStenOfNamesSVP(const std::string & aNameIm,const std::string & anOri)
+{
+
+     std::string aKey = "NKS-Assoc-Im2Orient@-"+ anOri ;
+     std::string aNameCam =  Assoc1To1(aKey,aNameIm,true);
+     if (! ELISE_fp::exist_file(aNameCam))
+        return 0;
      return CamOrientGenFromFile(aNameCam,this);
 }
 
@@ -560,6 +570,13 @@ std::string cNewO_NameManager::NameOriOptimTriplet(bool ModeBin,cNewO_OneIm *aI1
 {
     return NameAttribTriplet("OriOpt",(ModeBin ? "dmp" : "xml"),aI1,aI2,aI3,WithMakeDir);
 }
+
+std::string cNewO_NameManager::NameOriOptimTriplet(bool ModeBin,const std::string & aN1,const std::string & aN2,const std::string & aN3,bool WithMakeDir)
+{
+    return NameAttribTriplet("OriOpt",(ModeBin ? "dmp" : "xml"),aN1,aN2,aN3,WithMakeDir);
+}
+
+
 
 std::string cNewO_NameManager::NameTopoTriplet(bool aModeBin)
 {

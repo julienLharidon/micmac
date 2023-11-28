@@ -296,88 +296,85 @@ double cObservLiaison_1Cple::EcMax() const
 }
 
 double  cObservLiaison_1Cple::AddObs
-        (
-	   const cPonderationPackMesure & aPPM,
-	   const cPonderationPackMesure * aPPMSurf
-	)
+(
+	const cPonderationPackMesure & aPPM,
+	const cPonderationPackMesure * aPPMSurf
+)
 {
-   if (mEqS)
-   {
-       ELISE_ASSERT(aPPMSurf!=0,"No Pond for contrainte-surface");
-   }
-
-   cPonderateur aPdrtIm(aPPM,mPack.size());
-
-
-   cPonderateur aPdrtSurf = aPdrtIm;  // Pb d'init
-   if (mEqS)
-   {
-       aPdrtSurf = cPonderateur(*aPPMSurf,mPack.size());
-   }
-
-   double aS1=0;
-   double aSEr2=0;
-   double aSomPdsSurf = 0;
-   mEcMax = 0.0;
-
-   for 
-   (
-       ElPackHomologue::tCstIter itL=mPack.begin();
-       itL!=mPack.end();
-       itL++
-   )
-   {
-      if (true)
-      {
-	  double aNb = itL->Pds() * mMultPds;
-	  std::vector<double> aVPds;
-	  aVPds.push_back(1.0);
-	  aVPds.push_back(1.0);
-
-
-          //const std::vector<Pt2dr> & aPTers = mPLiaisTer->ResiduPointLiaison(*itL,&aPInter);
-	  const cResiduP3Inc & aRes = mPLiaisTer->UsePointLiaison(cArg_UPL(0),-1,-1,0.0,*itL,aVPds,false);
-          double aResidu = (square_euclid(aRes.mEcIm[0])+square_euclid(aRes.mEcIm[1]));
-
-	  ElSetMax(mEcMax,sqrt(aResidu));
-
-	  double aPdsIm = aPdrtIm.PdsOfError(sqrt(aResidu));
-          aVPds[0]= (aPdsIm*aNb);
-          aVPds[1]= (aPdsIm*aNb);
-
-	  double aPdsSurf = 0;
-	  if (mEqS)
-	  {
-             aPdsSurf = aPdrtSurf.PdsOfError(ElAbs(aRes.mEcSurf)) *aNb;
-	  }
-	  aSomPdsSurf += aPdsSurf;
-          mPLiaisTer->UsePointLiaison(cArg_UPL(0),-1,-1,aPdsSurf,*itL,aVPds,true);
-	  aSEr2 += aResidu * aNb;
-          aS1 += aNb;
-
-
-          if (int(aPPM.Show().Val()) >= int(eNSM_Indiv))
-            std::cout << "RLiais = " << sqrt(aResidu) << " pour P1 " << itL->P1() << "\n";
-
-	    mPose1->AddPMoy(itL->P1(),aRes.mPTer,aRes.mBSurH);
-	    mPose2->AddPMoy(itL->P2(),aRes.mPTer,aRes.mBSurH);
-      }
-
-   }
-   aSEr2 /= aS1;
-
-   if (int(aPPM.Show().Val()) >= int(eNSM_Paquet))
-   {
-      if (mEqS)
-         std::cout << "PDS Surf = " << aSomPdsSurf << "\n";
-      std::cout << "| | | RESIDU LIAISON (pixel) =  Ter-Im :" << sqrt(aSEr2)
-                << " pour ["  << mIm1 << "/" << mIm2 << "]"
-		<< " Max = " << mEcMax
-                << "\n";
-   }
+	if (mEqS)
+	{
+		ELISE_ASSERT(aPPMSurf!=0,"No Pond for contrainte-surface");
+	}
+	
+	cPonderateur aPdrtIm(aPPM,mPack.size());
+	
+	cPonderateur aPdrtSurf = aPdrtIm;  // Pb d'init
+	
+	if (mEqS)
+	{
+		aPdrtSurf = cPonderateur(*aPPMSurf,mPack.size());
+	}
+	
+	double aS1=0;
+	double aSEr2=0;
+	double aSomPdsSurf = 0;
+	mEcMax = 0.0;
+	
+	for
+	(
+		ElPackHomologue::tCstIter itL=mPack.begin();
+		itL!=mPack.end();
+		itL++
+	)
+	{
+		if (true)
+		{
+			double aNb = itL->Pds() * mMultPds;
+			std::vector<double> aVPds;
+			aVPds.push_back(1.0);
+			aVPds.push_back(1.0);
+			
+			//const std::vector<Pt2dr> & aPTers = mPLiaisTer->ResiduPointLiaison(*itL,&aPInter);
+			const cResiduP3Inc & aRes = mPLiaisTer->UsePointLiaison(cArg_UPL(0),-1,-1,0.0,*itL,aVPds,false);
+			double aResidu = (square_euclid(aRes.mEcIm[0])+square_euclid(aRes.mEcIm[1]));
+			
+			ElSetMax(mEcMax,sqrt(aResidu));
+			
+			double aPdsIm = aPdrtIm.PdsOfError(sqrt(aResidu));
+			aVPds[0]= (aPdsIm*aNb);
+			aVPds[1]= (aPdsIm*aNb);
+			
+			double aPdsSurf = 0;
+			if (mEqS)
+			{
+				aPdsSurf = aPdrtSurf.PdsOfError(ElAbs(aRes.mEcSurf)) *aNb;
+			}
+			aSomPdsSurf += aPdsSurf;
+			mPLiaisTer->UsePointLiaison(cArg_UPL(0),-1,-1,aPdsSurf,*itL,aVPds,true);
+			aSEr2 += aResidu * aNb;
+			aS1 += aNb;
+			
+			if (int(aPPM.Show().Val()) >= int(eNSM_Indiv))
+				std::cout << "RLiais = " << sqrt(aResidu) << " pour P1 " << itL->P1() << "\n";
+				
+			mPose1->AddPMoy(itL->P1(),aRes.mPTer,aRes.mBSurH);
+			mPose2->AddPMoy(itL->P2(),aRes.mPTer,aRes.mBSurH);
+		}
+	}
+	aSEr2 /= aS1;
+	
+	if (int(aPPM.Show().Val()) >= int(eNSM_Paquet))
+	{
+		if (mEqS)
+			std::cout << "PDS Surf = " << aSomPdsSurf << "\n";
+		std::cout << "| | | RESIDU LIAISON (pixel) =  Ter-Im :" << sqrt(aSEr2)
+				<< " pour ["  << mIm1 << "/" << mIm2 << "]"
+				<< " Max = " << mEcMax
+				<< "\n";
+    }
 
 // getchar();
-   return aSEr2 ;
+return aSEr2 ;
 }
 
 void cObservLiaison_1Cple::ImageResidu(cAgglomRRL & anAgl)
@@ -848,6 +845,7 @@ void  cPackObsLiaison::GetPtsTerrain
     );
     cPonderationPackMesure aPPM = aPEP.Pond();
     aPPM.Add2Compens().SetVal(false);
+    int aNbSel = 0;
     for
     (
            std::map<std::string,cObsLiaisonMultiple *>::iterator itOML=mDicoMul.begin();
@@ -859,6 +857,7 @@ void  cPackObsLiaison::GetPtsTerrain
           std::string aNameP = anOLM->Pose1()->Name();
           if (aSelectorEstim.IsSetIn(aNameP))
           {
+              aNbSel++;
               Im2D_Bits<1> aM(1,1);
               if (aPEP.KeyCalculMasq().IsInit())
               {
@@ -878,6 +877,7 @@ void  cPackObsLiaison::GetPtsTerrain
               anArg.SetMasq(0);
           }
     }
+    std::cout << "Nb Selected Image= " <<  aNbSel << "\n";
 }
 
 
@@ -905,6 +905,8 @@ double cPackObsLiaison::AddObs
    {
       for (int aK= 0 ; aK< 2; aK++)
       {
+          bool StatDone = false;
+          aSO.StatErB() = cStatErB();
           for
           (
                std::map<std::string,cObsLiaisonMultiple *>::iterator itOML=mDicoMul.begin();
@@ -923,6 +925,7 @@ double cPackObsLiaison::AddObs
                  {
                     aS1++;
 	            aSEr +=  anOLM->AddObsLM(aPond,aPondSurf,0,(cArgVerifAero*)0,aSO,aRAZ);
+                     StatDone = true;
                  }
                  else
                  {
@@ -930,6 +933,18 @@ double cPackObsLiaison::AddObs
                  }
              }
 
+         }
+         if (StatDone)
+         {
+             int aLev = mAppli.LevStaB();
+             if (aLev>=1)
+             {
+                if (aLev>=2)
+                {
+                   std::cout << "#######################   Global Stats #################\n";
+                }
+                aSO.StatErB().ShowStatErB();
+             }
          }
       }
    }

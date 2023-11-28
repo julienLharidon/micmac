@@ -39,7 +39,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 
 #include "StdAfx.h"
 
-#if ELISE_QT_VERSION >=4
+#if ELISE_QT 
 
 	#include "../saisieQT/include_QT/Cloud.h"
 	
@@ -117,6 +117,8 @@ Header-MicMac-eLiSe-25/06/2007*/
         int Cptr = 0;
 
         int type = 0;
+	if (type) {} // Warning setbutnotused
+
         bool wNormales = false;
 
         PlyFile * thePlyFile;
@@ -383,7 +385,7 @@ Header-MicMac-eLiSe-25/06/2007*/
 		ElFclose(aFP);
 		}
 			
-		if ( glist!=NULL ) delete glist;
+		if ( glist!=NULL ) free(glist); // G++11 delete glist;
 		if ( plist!=NULL ) delete plist;
 			
 			

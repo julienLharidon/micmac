@@ -154,7 +154,7 @@ class cCameraTiepRed
         const int &   NbPtsHom2Im() const;
 
         // Load the tie point between this and Cam2
-        void LoadHom(cCameraTiepRed & aCam2);
+        void LoadHomCam(cCameraTiepRed & aCam2);
 
         //  handle numeration of camera (associate a unique integer to each camera), because in topological merging ,
         // images are referenced by numbers
@@ -389,6 +389,8 @@ class cAppliTiepRed
           std::string  mDir;
           std::string  mPatImage;
           std::string  mCalib;
+          std::string  mSH;
+	  bool         mGBLike;     // Generik bundle or like it, no focal no mtd ...
 
           std::map<std::string,cCameraTiepRed *> mMapCam;
           std::vector<cCameraTiepRed *>          mVecCam;
@@ -469,7 +471,9 @@ class cAttSomGrRedTP
         double   SzDec() const;
         int &    NumBox0();
         int &    NumBox1();
-        const cMetaDataPhoto &  MTD() const;
+        // const cMetaDataPhoto &  MTD() const;
+	double  FocPix() const;
+	double  Foc35()  const;
         int & NumSom();
         Pt2dr Hom2Cam(const Pt2df & ) const;
      private :
@@ -482,6 +486,8 @@ class cAttSomGrRedTP
         double               mRecCur;   // Niveau de bloquage
         Box2dr               mBoxIm;
         cMetaDataPhoto       mMTD;
+	double               mFocPix;
+	double               mFoc35;
         double               mSzDec;
         int                  mNumBox0;
         int                  mNumBox1;
@@ -542,6 +548,9 @@ class cAppliGrRedTieP : public cElemAppliSetFile
            cAppliGrRedTieP(int argc,char ** argv);
            double  SzPixDec() const;
            cVirtInterf_NewO_NameManager * NoNM();
+	   bool  IsGBLike()  const;
+	   double  DefFocPix() const;
+	   double  DefFoc35()  const;
       private :
            std::string ComOfKBox(int aKBox);
 
@@ -566,6 +575,10 @@ class cAppliGrRedTieP : public cElemAppliSetFile
            bool                               mQuick;
            std::string                        mCalib;
            std::string                        mPatImage;
+           std::string                        mSH;
+	   bool                               mGBLike;     // Generik bundle or like it, no focal no mtd ...
+	   double                             mDefFocPix;  // Default Pix Focal with  mGBLike
+	   double                             mDefFoc35;   // Default  35 mm Focal with mGBLike
            tGrGRTP                            mGr;
            tSubGrGRTP                         mSubAll;
            tEmptySubGrGRTP                    mSubNone;

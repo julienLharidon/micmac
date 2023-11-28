@@ -38,6 +38,8 @@ English :
 Header-MicMac-eLiSe-25/06/2007*/
 #include "Apero.h"
 
+bool TestSTP = true;
+
 
 template  class ElQT<NS_ParamApero::cOnePtsMult *,Pt2dr,NS_ParamApero::cFctrPtsOfPMul> ;
 
@@ -104,6 +106,11 @@ double cStatObs::SomErPond() const
 bool   cStatObs::AddEq() const
 {
    return ( mAddEq!=0 );
+}
+
+cStatErB &  cStatObs::StatErB()
+{
+   return mStatErB;
 }
 
 
@@ -174,7 +181,9 @@ cOneCombinMult::cOneCombinMult
 )   :
    mPLiaisTer (new cManipPt3TerInc(aVCF[0]->Set(),anEqS,aVCF)),
    // mCSVP  (aVP),
-   mGenVP (aVP)
+   mGenVP (aVP),
+   mRapOnZ (0),
+   mRappelOnZApply (true)
 {
 
 
@@ -185,8 +194,56 @@ cOneCombinMult::cOneCombinMult
           mNumCams.push_back(aK);
        }
    }
-   // std::cout << "JJJJJJJJ : " << aVCF.size()  << " " << mNumCams.size() << "\n"; getchar();
+
 }
+
+
+void cOneCombinMult::InitRapOnZ(const cRapOnZ * aRAZ,cAppliApero & anAppli)
+{
+   if (mRapOnZ== aRAZ) 
+      return;
+
+   mRapOnZ= aRAZ;
+   if (mRapOnZ==nullptr)
+   {
+      mRappelOnZApply = false;
+      return;
+   }
+
+   std::string  aKGA = aRAZ->KeyGrpApply();
+
+   if ((aKGA=="") || (aKGA=="NONE"))
+   {
+      mRappelOnZApply = true;
+      return;
+   }
+
+   mRappelOnZApply = true;
+   std::string aN0 = anAppli.ICNM()->Assoc1To1(aKGA,mGenVP[0]->Name(),true);
+   for (int aK=1 ; (aK<int(mGenVP.size())) && mRappelOnZApply  ; aK++)
+   {
+	   if (anAppli.ICNM()->Assoc1To1(aKGA,mGenVP[aK]->Name(),true) != aN0)
+           mRappelOnZApply = false;
+   }
+
+   if (0 && mRappelOnZApply)
+   {
+       std::cout << "NNNN " << aN0 << "\n";
+       std::cout << "RRRRR " << mRappelOnZApply << "\n";
+       for (const auto & aGPC : mGenVP)
+       {
+	       std::cout << "   * " << aGPC->Name() << "\n";
+       }
+       std::cout << "###############\n";
+   }
+}
+
+
+bool cOneCombinMult::RappelOnZApply() const
+{
+  return mRappelOnZApply;
+}
+
 
 cManipPt3TerInc * cOneCombinMult::LiaisTer()
 {
@@ -308,7 +365,7 @@ const Pt2dr& cOnePtsMult::PK(int aK ) const
 }
 
 
-void cOnePtsMult::Add(int aNum,const Pt2dr & aP,bool IsFirstSet)
+void cOnePtsMult::AddPt2PMul(int aNum,const Pt2dr & aP,bool IsFirstSet,double aNewPds)
 {
    if (mFlagI.IsIn(aNum))
    {
@@ -324,8 +381,22 @@ void cOnePtsMult::Add(int aNum,const Pt2dr & aP,bool IsFirstSet)
 #endif
    }
    mFlagI.Add(aNum);
-   mNPts.AddPts(aP);
 
+   
+   int aNbPts = mNPts.NbPts();
+   // Update the weithgint of mNPts so that is is the average of weigth of pairs
+   if (aNbPts==0)
+   {
+       // First case is speciall, weight should not be re-used
+       mNPts.Pds() = aNewPds;
+   }
+   else
+   {
+       double aSomPds = mNPts.Pds() * (aNbPts-1) + aNewPds; // Transform avergae in som
+       mNPts.Pds() = aSomPds / aNbPts;  // Back an average
+   }
+
+   mNPts.AddPts(aP);
 }
 
 const tFixedSetInt & cOnePtsMult::Flag() const
@@ -397,18 +468,27 @@ int cOnePtsMult::NbPoseOK(bool aFullInitRequired,bool UseZU) const
 int   cOnePtsMult::InitPdsPMul
       (
            double aPds,
-	   std::vector<double> & aVpds
+	   std::vector<double> & aVpds,
+           int *               NbRRII  // Nombre de rot reellement init, peut etre > si pts elim because ZU
       ) const
 {
      aVpds.clear();
      const std::vector<cGenPoseCam *> & aVP =  mOCM->GenVP();
      int aNbRInit=0;
-
+     if (NbRRII) 
+     {
+        *NbRRII =0;
+     }
 
      for (int aKPose=0 ; aKPose<int(aVP.size()) ; aKPose++)
      {
+          bool RII = aVP[aKPose]->RotIsInit();
+          if (NbRRII && RII)
+          {
+             (*NbRRII)++;
+          }
           if ( 
-                      aVP[aKPose]->RotIsInit()  
+                      RII
                   && aVP[0]->IsInZoneU(PK(0))
                   && aVP[aKPose]->IsInZoneU(PK(aKPose))
              )
@@ -418,8 +498,10 @@ int   cOnePtsMult::InitPdsPMul
          }
          else
          {
-               aVpds.push_back(0);
+             aVpds.push_back(0);
+             // if (RII) std::cout << "UUuuuuuuuu " << PK(0)  << PK(aKPose) << "\n";
          }
+  
     }
     return aNbRInit;
 }
@@ -458,6 +540,18 @@ ElSeg3D  cOnePtsMult::GetUniqueDroiteInit(bool UseZU)
           );
    
 }
+
+void cOnePtsMult::AddSTP(const cSingleTieP & aSTP)
+{
+   mLSTP.push_back(aSTP);
+}
+
+const std::list<cSingleTieP> & cOnePtsMult::LSTP()
+{
+   return mLSTP;
+}
+
+
 
 const cResiduP3Inc * cOnePtsMult::ComputeInter
                      (
@@ -705,11 +799,17 @@ void cObsLiaisonMultiple::AddPack
    int anInd1 = GetIndexeOfName(aName1);
    int anInd2 = GetIndexeOfName(aName2);
 
+
    ElPackHomologue aPack = ElPackHomologue::FromFile(aNamePack);
    if ( packMustBeSwapped ) aPack.SelfSwap();
    cGenPoseCam * aC1 =  mAppli.PoseGenFromName(aName1);
    cGenPoseCam * aC2 =  mAppli.PoseGenFromName(aName2);
 
+/*
+   std::cout << "OLlll " <<  ((long int) (void *) this)%1234 << " " << anInd1 << " " << aName1 
+             << " " << anInd2 << " " << aName2 
+             << " " << aNamePack << "\n";
+*/
 
    // CamStenope & aCC1 = aC1->Calib()-> CamInit();
    // CamStenope & aCC2 = aC2->Calib()-> CamInit();
@@ -724,7 +824,7 @@ void cObsLiaisonMultiple::AddPack
 
       if (aC1->AcceptPoint(itP->P1()) && aC2->AcceptPoint(itP->P2()))
       {
-          aNewPack.Cple_Add(ElCplePtsHomologues(itP->P1(),itP->P2()));
+          aNewPack.Cple_Add(ElCplePtsHomologues(itP->P1(),itP->P2(),itP->Pds()));
       }
    }
    aPack = aNewPack;
@@ -737,12 +837,13 @@ void cObsLiaisonMultiple::AddPack
 
    for (ElPackHomologue::const_iterator itP=aPack.begin();itP!=aPack.end();itP++)
    {
-       AddCple(anInd1,anInd2,itP->ToCple(),IsFirstSet);
+/// std::cout << "PppPpppp " << itP->Pds() << "\n";
+       AddCple(anInd1,anInd2,itP->ToCple(),IsFirstSet,itP->Pds());
    }
 }
 
 
-void cObsLiaisonMultiple::AddCple(int aK1,int aK2,const ElCplePtsHomologues& aCpl,bool IsFirstSet)
+void cObsLiaisonMultiple::AddCple(int aK1,int aK2,const ElCplePtsHomologues& aCpl,bool IsFirstSet,double aPds)
 {
 
     std::list<cOnePtsMult *> aLPM = mIndPMul->KPPVois
@@ -760,7 +861,8 @@ void cObsLiaisonMultiple::AddCple(int aK1,int aK2,const ElCplePtsHomologues& aCp
     if (aLPM.empty())
     {
          aPM = new cOnePtsMult;
-         aPM->Add(aK1,aCpl.P1(),IsFirstSet);
+         // Weitght doent matter for creation
+         aPM->AddPt2PMul(aK1,aCpl.P1(),IsFirstSet,aPds);
          mVPMul.push_back(aPM);
          if (! mBox.Include(aCpl.P1()))
          {
@@ -775,7 +877,17 @@ void cObsLiaisonMultiple::AddCple(int aK1,int aK2,const ElCplePtsHomologues& aCp
     {
         aPM = *(aLPM.begin());
     }
-    aPM->Add(aK2,aCpl.P2(),IsFirstSet);
+    aPM->AddPt2PMul(aK2,aCpl.P2(),IsFirstSet,aPds);
+
+    if (mAppli.MemoSingleTieP()) // TestSTP
+    {
+        cSingleTieP aSTP;
+        aSTP.mK1 = aK1;
+        aSTP.mK2 = aK2;
+        aSTP.mP1 = aCpl.P1();
+        aSTP.mP2 = aCpl.P2();
+        aPM->AddSTP(aSTP);
+    }
 }
 
 int  cObsLiaisonMultiple::GetIndexeOfName(const std::string & aName)
@@ -1040,7 +1152,7 @@ class cGlobStatDet
  
      public :
           void Add(cGenPoseCam * aCam,Pt2dr aPt,double aPds);
-          void Show();
+          void ShowStat();
      private :
           std::map<cGenPoseCam *,cOneStatDet> mMap;
           
@@ -1051,7 +1163,7 @@ void cGlobStatDet::Add(cGenPoseCam * aCam,Pt2dr aPt,double aPds)
      mMap[aCam].Add(aPt,aPds);
 }
 
-void cGlobStatDet::Show()
+void cGlobStatDet::ShowStat()
 {
     for (std::map<cGenPoseCam *,cOneStatDet>::const_iterator  itC=mMap.begin(); itC!=mMap.end(); itC++ )
     {
@@ -1063,6 +1175,77 @@ void cGlobStatDet::Show()
 }
 
 
+/*******************************/
+/*      cStatErB               */
+/*******************************/
+
+void HandleBundleErr(const cResiduP3Inc & aRes ,eTypeResulPtsBundle & aTRBP,bool ErrOnStat)
+{
+     const char * aMPB = aRes.mMesPb.c_str();
+     if (IsPrefix("BSurH-Insuf",aMPB))
+        aTRBP= eTRPB_BSurH;
+     else if (IsPrefix("MesNotVisIm",aMPB))
+        aTRBP= eTRPB_VisibIm;
+     else if (IsPrefix("BehindCam",aMPB))
+        aTRBP= eTRPB_Behind;
+     else if (IsPrefix("Intersectionfaisceaunondefinie",aMPB))
+        aTRBP= eTRPB_PbInterBundle;
+     else if (IsPrefix("RatioDistP2CamTooHigh",aMPB))
+        aTRBP= eTRPB_RatioDistP2Cam;
+     else if (IsPrefix("NotInMasq3D",aMPB))
+        aTRBP= eTRPB_NotInMasq3D;
+     else if (IsPrefix("Unknown",aMPB))
+        aTRBP= eTRPB_Unknown;
+     else
+     {
+        if (ErrOnStat)
+        {
+           std::cout << "ERR=[" << aMPB << "]\n";
+           ELISE_ASSERT(false,"Unkown erreur in bundle stat");
+        }
+     }
+}
+
+
+cStatErB::cStatErB() :
+   mNbTot (0)
+{
+  
+  for (int aK=0 ; aK<(int)eTRPB_NbVals ; aK++)
+      mStatRes[aK] = 0;
+}
+
+void cStatErB::AddLab(eTypeResulPtsBundle aTRPB,double aPds)
+{
+    mStatRes[(int) aTRPB] += aPds;
+    mNbTot += aPds;
+}
+
+void cStatErB::AddLab(const cStatErB & aS2)
+{
+  for (int aK=0 ; aK<(int)eTRPB_NbVals ; aK++)
+      AddLab((eTypeResulPtsBundle) aK, aS2.mStatRes[aK] );
+}
+
+void cStatErB::ShowStatErB()
+{
+     std::cout << "----- Stat on type of point (ok/elim) ----\n";
+     for (int aK=0 ; aK<(int)eTRPB_NbVals ; aK++)
+     {
+         if (mStatRes[aK] !=0)
+         {
+             eTypeResulPtsBundle aTRPB =  eTypeResulPtsBundle (aK);
+             std::cout <<  "     *  " 
+                       <<  " Perc=" <<   (100.0 * mStatRes[aK]) / mNbTot  << "%"
+                       <<   " ;  Nb="  << mStatRes[aK]
+                       <<  " for " << eToString(aTRPB).substr(6)
+                       <<  "\n";
+         }
+     }
+     std::cout << "---------------------------------------\n";
+}
+
+ /***************************************************/
 
 double cObsLiaisonMultiple::AddObsLM
        (
@@ -1074,19 +1257,10 @@ double cObsLiaisonMultiple::AddObsLM
            const cRapOnZ *      aRAZGlob
        )
 {
-
-
-/*
-  static int aCpt = 0 ; aCpt ++;
-  bool aBug = false;
-  if ( mAppli.NumSauvAuto()==6)
-  {
-      aBug = ((aCpt%4) == 0);
-  }
-  if (aBug) return 0;
-*/
-  
-
+  bool ErrOnStat = MPD_MM() ||  ERupnik_MM();
+  bool AffichStat = (mAppli.LevStaB() >=2);
+  cStatErB aStatRes;
+  std::list<cSingleTieP>  aVLTieP2Exp[eTRPB_NbVals];
 
   FILE * aFpRT = mAppli.FpRT() ;
 
@@ -1152,6 +1326,7 @@ double cObsLiaisonMultiple::AddObsLM
    for (int aKPm=0 ; aKPm<int(mVPMul.size()) ; aKPm++)
    {
         cOnePtsMult * aPM = mVPMul[aKPm];
+        eTypeResulPtsBundle aTRBP = eTRPB_Ok;
         aPM->MemPds() = 0;
 
         bool aOldMemPtOk = aPM->MemPtOk();
@@ -1167,20 +1342,26 @@ double cObsLiaisonMultiple::AddObsLM
         const std::vector<cGenPoseCam *> & aVP = aCOM->GenVP();
 	std::vector<double> aVpds;
 
-        double aPds = aNupl.Pds() * mMultPds;
-        int aNbRInit= aPM->InitPdsPMul(aPds,aVpds);
+        double aPdsGlob = aNupl.Pds() * mMultPds;
+
+        int  NbRRI;
+        int aNbRInit= aPM->InitPdsPMul(aPdsGlob,aVpds,&NbRRI);
         if (aNbRInit>=2)
         {
-             
              aNbNN++;
              static int aCpt=0; aCpt++;
              aNbMult += (aNbRInit>=3);
              const cRapOnZ * aRAZ = aPM->OnPRaz()? aRAZGlob : 0;
+             aCOM->InitRapOnZ(aRAZ,mAppli);
+             if (! aCOM->RappelOnZApply())
+                aRAZ = 0;
+
              const cResiduP3Inc & aRes = aCOM->LiaisTer()->UsePointLiaison(mAppli.ArgUPL(),aLimBsHP,aLimBsHRefut,0.0,aNupl,aVpds,false,aRAZ);
 
 
              if (aRes.mOKRP3I)
              {
+// std::cout << "aNbNN++aNbNN++ " << aNbNN << "\n";
 
                 if (anAVA  && (anAVA->VA().TypeVerif()==eVerifResPerIm))
                 {
@@ -1190,7 +1371,7 @@ double cObsLiaisonMultiple::AddObsLM
 
 
                 double aDistPtC0 = euclid(aRes.mPTer-aVP[0]->CurCentreOfPt(aNupl.PK(0)));
-                if (aDistPtC0 >aMaxDistW)
+                if (aDistPtC0 >aMaxDistW) // Def 1e30 => etait du a une erreur
                 {
                     static bool first = true;
                     if (first)
@@ -1384,7 +1565,7 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
                     double aPdsSurf = 0;
                     if (mEqS)
                     {
-                       aPdsSurf = aPdrtSurf.PdsOfError(ElAbs(aRes.mEcSurf)) * aPds;
+                       aPdsSurf = aPdrtSurf.PdsOfError(ElAbs(aRes.mEcSurf)) * aPdsGlob;
                     }
 
                      aCOM->LiaisTer()->SetTerrainInit(true);
@@ -1413,6 +1594,31 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
                             ElSetMax(aMaxEvolPt,aVarPt);
                         }
                      }
+                     else
+                     {
+                         HandleBundleErr(aRes2,aTRBP,ErrOnStat);
+                     }
+                }
+                else
+                {
+                   if ( aPdsIm <=0)
+                   {
+                      aTRBP =  eTRPB_PdsResNull;
+                   }
+                   else if ( !isInF3D)
+                   {
+                      aTRBP =  eTRPB_NotInMasq3D;
+                   }
+                   else if ( !Add2C)
+                   {
+                   }
+                   else
+                   {
+                      if (ErrOnStat)
+                      {
+                          ELISE_ASSERT(false,"Unkown erreur in bundle stat");
+                      }
+                   }
                 }
  
 
@@ -1438,12 +1644,26 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
              }
              else
              {
+                   HandleBundleErr(aRes,aTRBP,ErrOnStat);
              }
         }
         else
         {
+            // std::cout << "i######################## NBRRI " << NbRRI << "\n";
+            if (NbRRI<2)
+               aTRBP = eTRPB_InsufPoseInit;
+            else
+               aTRBP = eTRPB_OutIm;
         }
         BugUPL = false;
+        aStatRes.AddLab(aTRBP);
+        if ((aTRBP!=eTRPB_Ok) && mAppli.ExportTiePEliminated())  // TestSTP
+        {
+            for (const auto & aSTP : aPM->LSTP())
+            {
+               aVLTieP2Exp[int(aTRBP)].push_back(aSTP);
+            }
+        }
    }
    if (aSomPdsEvol)
    {
@@ -1458,6 +1678,33 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
    int aNbP = (int)mVPMul.size();
       
   mVPoses[0]->GenPose()->SetNbPtsMulNN(aNbMultPdsNN+mVPoses[0]->GenPose()->NbPtsMulNN());
+
+
+  if (mAppli.ExportTiePEliminated()) // TestSTP
+  {
+     for (int aK=0 ; aK<int (eTRPB_NbVals) ; aK++)
+     {
+         std::vector<ElPackHomologue> aVPack;
+         const std::list<cSingleTieP>  aL = aVLTieP2Exp[aK];
+         std::map<int,ElPackHomologue> aDPack;
+         for (const auto & aSTP : aL)
+         {
+             aDPack[aSTP.mK2].Cple_Add(ElCplePtsHomologues(aSTP.mP1,aSTP.mP2));
+             ELISE_ASSERT(aSTP.mK1==0,"Number Im0 in mAppli.ExportTiePEliminated");
+             // std::cout << "SSSSS  " << aSTP.mK1 << " " <<  aSTP.mK2  << "\n";
+         }
+         for (const auto & aIS: aDPack)
+         {
+             int aK2 = aIS.first;
+             const ElPackHomologue & aPack = aIS.second;
+             std::string aKey = "NKS-Assoc-CplIm2Hom@"+eToString((eTypeResulPtsBundle)aK) + "@dat";
+             std::string aN1 =  mVPoses.at(0)->NameCam();
+             std::string aN2 =  mVPoses.at(aK2)->NameCam();
+             std::string aNH = mAppli.ICNM()->Assoc1To2(aKey,aN1,aN2,true);
+             aPack.StdPutInFile(aNH);
+         }
+     }
+  }
 
 
 
@@ -1541,6 +1788,12 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
               std::cout << "Pas assez de valeurs pour percentile\n";
            }
        }
+       if (AffichStat)
+       {
+           aStatRes.ShowStatErB();
+       }
+       aSO.StatErB().AddLab(aStatRes);
+
        if ((int(aImPPM.Show().Val()) >= int(eNSM_CpleIm)) && aMatchIm0)
        {
           for (int aKP=0 ;  aKP<int(mVPoses.size()) ; aKP++)
@@ -1570,7 +1823,10 @@ for (int aK=0 ; aK<int(aVpds.size()) ;  aK++)
        }
 
        {
-         if (aGSD) aGSD->Show();
+         if (aGSD)
+         {
+             aGSD->ShowStat();
+         }
          delete aGSD;
        }
    }

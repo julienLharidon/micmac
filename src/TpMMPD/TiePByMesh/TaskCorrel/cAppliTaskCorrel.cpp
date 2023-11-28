@@ -7,14 +7,16 @@ cParamAppliTaskCorrel::cParamAppliTaskCorrel(
                                              const std::string & aOri,
                                              const std::string & aPatImg,
                                              bool & aNoTif,
-                                             string  aMesureXML
+                                             string  aMesureXML,
+                                             bool aInverseOrder
                                             ):
     pICNM (aICNM),
     pDir (aDir),
     pOri (aOri),
     pPatImg (aPatImg),
     pNoTif (aNoTif),
-    pMesureXML (aMesureXML)
+    pMesureXML (aMesureXML),
+    aInverseOrder (aInverseOrder)
 {
 
 }
@@ -40,7 +42,9 @@ cAppliTaskCorrel::cAppliTaskCorrel (cInterfChantierNameManipulateur * aICNM,
     mNoTif (aNoTif),
     mKeepAll2nd (false),
     MD_SEUIL_SURF_TRIANGLE (TT_SEUIL_SURF_TRIANGLE),
-    mWithGCP (false)
+    mWithGCP (false),
+    mSafeZBuf (true),
+    mZBuf_InverseOrder (false)
 {
     ElTimer aChrono;
     cout<<"In constructor cAppliTaskCorrel : ";
@@ -90,6 +94,10 @@ cAppliTaskCorrel::cAppliTaskCorrel (cInterfChantierNameManipulateur * aICNM,
     }
     cout<<"Done !"<<endl;
 
+    if (aParam->aInverseOrder)
+    {
+        this->mZBuf_InverseOrder = true;
+    }
 }
 
 //  ============================= **************** =============================
@@ -108,7 +116,7 @@ void cAppliTaskCorrel::ReadXMLMesurePts(string aGCPMesureXML, vector<cImgForTiep
            std::list<cOneMesureAF1I> & aMes = iT1->OneMesureAF1I();
            string aNameIm = iT1->NameIm();
            cout<<endl<<" + Img : "<<aNameIm<<endl;
-           cImgForTiepTri* aImg;
+           cImgForTiepTri* aImg = nullptr;
            for (uint akIm=0; akIm<mVImgs.size(); akIm++)
            {
                if (aNameIm == mVImgs[akIm]->Name())
@@ -201,13 +209,21 @@ void cAppliTaskCorrel::ZBuffer()
 {
     cout<<"Cal ZBuf && Tri Valid for each Img ...- NBImg : "<<mVName.size()<<endl;
     ElTimer aChrono;
+    cParamZbufferRaster aParamZBuf;
+
+    if (this->ZBuf_InverseOrder())
+    {
+        aParamZBuf.mInverseOrder = true;
+    }
+
     cAppliZBufferRaster * aAppliZBuf = new cAppliZBufferRaster(
                                                                  mICNM,
                                                                  mDir,
                                                                  mOri,
                                                                  mVcTri3D,
                                                                  mVName,
-                                                                 mNoTif
+                                                                 mNoTif,
+                                                                 aParamZBuf
                                                               );
 
 
@@ -218,11 +234,13 @@ void cAppliTaskCorrel::ZBuffer()
     aAppliZBuf->SEUIL_SURF_TRIANGLE() = SEUIL_SURF_TRIANGLE();
     aAppliZBuf->Method() = MethodZBuf();
     aAppliZBuf->SetNameMesh(mNameMesh);
+    aAppliZBuf->Param().mSafe = this->SafeZBuf();
     aAppliZBuf->DoAllIm(mVTriValid);
 
 
     ELISE_ASSERT(mVTriValid.size() == mVImgs.size(), "Sz VTriValid uncoherent Nb Img");
 
+    // int cnt=0;  Warn unused
     for (uint aKIm=0; aKIm<mVImgs.size(); aKIm++)
     {
         cImgForTiepTri * aImg = mVImgs[aKIm];

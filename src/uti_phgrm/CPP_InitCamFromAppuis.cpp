@@ -144,10 +144,11 @@ class cAppli_Aspro //  :  public cAppliWithSetImage
        std::string mNameCalib;
        std::string mNameFile3D;
        std::string mNameFile2D;
+       std::string mOriOut;
 };
 
-cAppli_Aspro::cAppli_Aspro(int argc,char ** argv) //  : cAppliWithSetImage (argc-1,argv+1,0)
-
+cAppli_Aspro::cAppli_Aspro(int argc,char ** argv) ://  : cAppliWithSetImage (argc-1,argv+1,0)
+    mOriOut ("Aspro")
 {
 
    ElInitArgMain
@@ -157,7 +158,7 @@ cAppli_Aspro::cAppli_Aspro(int argc,char ** argv) //  : cAppliWithSetImage (argc
                    << EAMC(mNameCalib,"Name File for input calibratio,",eSAM_IsExistFile)
                    << EAMC(mNameFile3D,"Name File for GCP",eSAM_IsExistFile)
                    << EAMC(mNameFile2D,"Name File for Image Measures",eSAM_IsExistFile),
-       LArgMain()  // << EAM(toto,"toto",true,"toto et ttiti");
+       LArgMain() <<  EAM(mOriOut,"Out",true,"Out orientation, def=Aspro")
    );
 
    
@@ -169,7 +170,7 @@ cAppli_Aspro::cAppli_Aspro(int argc,char ** argv) //  : cAppliWithSetImage (argc
                        + " DirectoryChantier=" + mEASF.mDir
                        + " +PatternAllIm=" + mEASF.mPat
                        + " +CalibIn="      + mNameCalib
-                       + " +AeroOut=Aspro"
+                       + " +AeroOut=" + mOriOut
                        + " +DicoApp="  + mNameFile3D
                        + " +SaisieIm=" + mNameFile2D;
 
@@ -253,6 +254,8 @@ int Init11Param_Main(int argc,char ** argv)
          aNbMaxP = 6 + aNbTirage/20;
     }
     
+    std::vector<cQual12Param>  aVQual;
+    std::vector<std::string>   aVName;
     for
     (
         std::list<cMesureAppuiFlottant1Im>::const_iterator itMAF = aICA.mSMAF.MesureAppuiFlottant1Im().begin();
@@ -262,6 +265,7 @@ int Init11Param_Main(int argc,char ** argv)
     {
         if (aICA.InitPts(*itMAF) && (int(aICA.mVCPCur.size())>=6))
         {
+             cQual12Param aQual;
              std::string aNameIm = itMAF->NameIm();
              std::cout << "Init11Param :" << aNameIm << "\n";
              double Alti,Prof;
@@ -269,8 +273,8 @@ int Init11Param_Main(int argc,char ** argv)
              Pt2di aSzCam = aMDP.SzImTifOrXif();
              CamStenope * aCS =
                         RansacMode                                                                              ?
-                        cEq12Parametre::RansacCamera11Param(aSzCam,isFraserModel,aICA.mVCPCur,aICA.mVImCur,Alti,Prof,aNbTirage,aPropInlier,aNbMaxP) :
-                        cEq12Parametre::Camera11Param(aSzCam,isFraserModel,aICA.mVCPCur,aICA.mVImCur,Alti,Prof) ;
+                        cEq12Parametre::RansacCamera11Param(aQual,aSzCam,isFraserModel,aICA.mVCPCur,aICA.mVImCur,Alti,Prof,aNbTirage,aPropInlier,aNbMaxP) :
+                        cEq12Parametre::Camera11Param(aQual,aSzCam,isFraserModel,aICA.mVCPCur,aICA.mVImCur,Alti,Prof) ;
 
              if (aCS)
              {
@@ -285,16 +289,32 @@ int Init11Param_Main(int argc,char ** argv)
                                 + aBlk  + Dir11Param 
                                 + aBlk  + Dir11Param + "Comp "
                                 + " SH=NONE "
-                                + std::string(" FocFree=1 PPFree=1 CPI2=1 GCP=[")
+                                + std::string(" AffineFree=1 FocFree=1 PPFree=1 CPI2=1 GCP=[")
                                 +  aICA.aNameFile3D + aVirg + ToString(1e-3) + aVirg
                                 +  aICA.aNameFile2D + aVirg + ToString(1e3) + "]";
+
+	     // std::cout << aCom << "\n"; getchar();
               System(aCom);
+	      aVQual.push_back(aQual);
+	      aVName.push_back(aNameIm);
                               
         }
         else
         {
              std::cout << "for " << itMAF->NameIm() << " only " << aICA.mVCPCur.size() << " measurements\n";
         }
+    }
+    
+    if (! aVQual.empty())
+    {
+       std::cout  <<  " =============================================\n";
+       std::cout  <<  " Qualities before compensation :\n\n";
+       for (size_t aK=0; aK< aVQual.size() ; aK++)
+       {
+           std::cout  <<  aVName[aK] << " : ";
+           aVQual[aK].Show();
+           std::cout  <<  "\n";
+       }
     }
 
     return EXIT_SUCCESS;

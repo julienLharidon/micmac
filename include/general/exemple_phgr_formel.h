@@ -581,6 +581,8 @@ class cSubstitueBlocIncTmp
          void ResetNonTmp();
 
          double  Cond() const;  // Du cBufSubstIncTmp
+         void InitSsBlocSpecCond(cSsBloc **  aSsBlocSpecCond);
+
       private :
 
          std::vector<cSsBloc>    mVSBlTmp;
@@ -646,6 +648,9 @@ class cParamPtProj
        double mSeuilBsHRefut;
        bool   mProjIsInit;
 
+       // Ratio de distance acceptable pour les cameras stenopes
+       double mRatioMaxDistCS;
+
        // Le point terrain d'intersection de faisceau
        Pt3dr mTer;
  
@@ -676,18 +681,20 @@ class cParamPtProj
 class cRapOnZ
 {
     public :
-       cRapOnZ(double aZ,double aIncertCompens,double aIncertEstim,const std::string & aLayerIm);
+       cRapOnZ(double aZ,double aIncertCompens,double aIncertEstim,const std::string & aLayerIm,const std::string & aKeyGrpApply);
 
         Pt3dr PZ() const ; // X ET Y ARBRITRAIREMENT A 0
         double Z() const;
         double IncEstim() const;
         double IncComp() const;
         const std::string & LayerIm() const;
+        const std::string & KeyGrpApply() const;
     private :
        double mZ;
        double mIC;
        double mIE;
        std::string mLayerIm;
+       std::string mKeyGrpApply;
 };
 
 class cXmlSLM_RappelOnPt;
@@ -1210,6 +1217,43 @@ template <class Type> class cStructMergeTieP
         bool                                mDeleted;
         std::list<tMerge *>                 mLM;
         bool                                mWithMemoEdges;
+};
+
+
+class cP3dFormel : public cElemEqFormelle
+{
+    public :
+       cP3dFormel(const Pt3dr &,const std::string & aName,cSetEqFormelles &,cIncListInterv & aLI);
+       const Pt3dr &  Pt()          const {return mPt;}
+       const Pt3d<Fonc_Num> & FPt() const {return mFPt;}
+
+    private :
+       Pt3dr               mPt;
+       Pt3d<Fonc_Num>      mFPt;
+};
+
+class cP2dFormel : public cElemEqFormelle
+{
+    public :
+       cP2dFormel(const Pt2dr &,const std::string & aName,cSetEqFormelles &,cIncListInterv & aLInterv);
+       const Pt2dr &  Pt()          const {return mPt;}
+       const Pt2d<Fonc_Num> & FPt() const {return mFPt;}
+
+    private :
+       Pt2dr               mPt;
+       Pt2d<Fonc_Num>      mFPt;
+};
+
+class cValFormel : public cElemEqFormelle
+{   
+    public :
+       cValFormel(const double &,const std::string & aName,cSetEqFormelles &,cIncListInterv & aLI);
+       const double &  Val()          const {return mVal;}
+       const Fonc_Num & FVal() const {return mFVal;}
+     
+    private :
+       double        mVal;
+       Fonc_Num      mFVal;
 };
 
 

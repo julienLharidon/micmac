@@ -86,11 +86,15 @@ private :
     double                       mTimeUnit;
     bool                         mModeSpline;
     int                          mNbGps;
-    cSysCoord  *                 mSysProj;
+    // cSysCoord  *                 mSysProj;
+    cChSysCo   *                 mChgSys;
     bool                         mWithWPK;
     bool                         mWithInc;
     bool                         mWithIncVitesse;
     bool                         mEcart;
+    bool                         mSysGeoC2Rtl;
+    std::string                  mNameChSys;
+    bool                         mDiscardImTM;
 };
 
 
@@ -101,8 +105,8 @@ Pt3dr  cIIP_Appli::GpsInc(int aK) const
 
 Pt3dr   cIIP_Appli::ToProj(const Pt3dr & aP) const
 {
-    if (! mSysProj) return aP;
-    return mSysProj->FromGeoC(aP);
+    if (! mChgSys) return aP;
+    return mChgSys->Src2Cibl(aP);
 }
 
 bool CmpGpsOnTime(const cOneGpsDGF & aGps1,const cOneGpsDGF & aGps2) {return aGps1.TimePt() < aGps2.TimePt() ;}
@@ -180,19 +184,20 @@ int cIIP_Appli::GetIndGpsBefore(double aTime)
 cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
     mTimeUnit (24  * 3600),
     mModeSpline (true),
-    mSysProj    (0),
-    mWithWPK    (false),
+    mChgSys     (0),
+    mWithWPK    (true),
     mWithInc    (true),
     mWithIncVitesse    (true),
-    mEcart (false)
+    mEcart        (false),
+    mSysGeoC2Rtl  (false),
+    mDiscardImTM(false)
 {
     std::cout.precision(15) ;
     std::string aOut;
-    bool aAddFormat = false;
+    bool aAddFormat = true;
 
     bool mAcceptExtrapol = false;
     std::string mPatNamePly;
-
 
 
     ElInitArgMain
@@ -202,25 +207,27 @@ cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
                 << EAMC(mGpsFile, "GPS .xml file trajectory",  eSAM_IsExistFile)
                 << EAMC(mTMFile, "Image TimeMark .xml file",  eSAM_IsExistFile),
                 LArgMain() << EAM(aOut,"Out",false,"Name Output File ; Def = GPSFileName-TMFileName.txt")
-                << EAM(aAddFormat,"Format",false,"Add File Format at the begining fo the File ; Def #F=N_X_Y_Z_W_P_K",eSAM_IsBool)
+                << EAM(aAddFormat,"Header",false,"Add File Format at the begining fo the File ; Def=true",eSAM_IsBool)
                 << EAM(mTimeUnit,"TimeU",false,"Unity for input time, def = 1 Day ")
                 << EAM(mModeSpline,"ModeSpline",false,"Interpolation spline, def=true ")
                 << EAM(mPatNamePly,"PatNamePly",false,"Pattern name for Ply")
-                << EAM(mWithWPK,"WithAngle",false,"Generate fake angle ")
+                << EAM(mWithWPK,"WithAngle",false,"Generate fake angle, def=true ")
                 << EAM(mWithInc,"Inc",false,"Export uncertainty, def=true")
-                << EAM(mWithIncVitesse,"SpeedInc",false,"Use speed variation in uncertainty estimation ")
-                << EAM(mEcart,"Ecart",false,"Generate difference between the interpolated position and the nearest GPS position")
+                << EAM(mWithIncVitesse,"SpeedInc",false,"Use speed variation in uncertainty estimation,def=true ")
+                << EAM(mEcart,"Ecart",false,"Generate difference between the interpolated position and the nearest GPS position, def=false")
+                << EAM(mSysGeoC2Rtl,"SysGeoC2RTL",false,"Make chgs sys from geoc to RTL of first point")
+                << EAM(mNameChSys,"ChSys",false,"To chang coorrdinate system")
+                << EAM(mDiscardImTM,"Discard",false,"Discard images that are taken ouside time range of GPS observation, def false.\n")
+
                 );
 
-    std::cout << "WPPPKK " <<  EAMIsInit(&mWithWPK) << " " << mWithWPK << "\n";
 
     if (! EAMIsInit(&mWithWPK))
         mWithWPK = mModeSpline;
 
-    std::cout << "WPPPKK " <<  EAMIsInit(&mWithWPK) << " " << mWithWPK << "\n";
 
 
-    if (! EAMIsInit(&aAddFormat))
+    if (! EAMIsInit(&aAddFormat) & EAMIsInit(&mModeSpline))
         aAddFormat = ! mModeSpline;
 
     bool mExportPly=EAMIsInit(&mPatNamePly);
@@ -247,8 +254,15 @@ cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
     ELISE_ASSERT(mDicoGps.OneGpsDGF().size() !=0,"Empty size");
 
     mT0Gps = floor(mDicoGps.OneGpsDGF().front().TimePt());
-    if (1)
-        mSysProj = cSysCoord::RTL(mDicoGps.OneGpsDGF().front().Pt());
+
+    if (EAMIsInit(&mNameChSys))
+    {
+        mChgSys = cChSysCo::Alloc(mNameChSys,mDir);
+    }
+    else if (mSysGeoC2Rtl)
+    {
+        mChgSys = new cChSysCo(cSysCoord::GeoC(),cSysCoord::RTL(mDicoGps.OneGpsDGF().front().Pt()));
+    }
 
     // Formatage pour la Bb spline
     for (auto itG=mDicoGps.OneGpsDGF().begin() ; itG!=mDicoGps.OneGpsDGF().end() ;itG++)
@@ -274,6 +288,36 @@ cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
         printf("Img_MJD[0] = %lf LocSec=%lf \n",aT0Im,ConvertLocTime(aT0Im));
         printf("Img_MJD[end] = %lf LocSec=%lf \n",aTNIm,ConvertLocTime(aTNIm));
         printf("****************************************************************\n");
+
+        int ct(0);
+        if (mDiscardImTM){
+
+
+            for( std::vector< cCpleImgTime >::iterator iT=mDicoIm.CpleImgTime().begin();
+                 iT!=mDicoIm.CpleImgTime().end();)
+            {
+                if (!(iT->TimeIm()>aT0Gps && iT->TimeIm()<aTNGps)){
+                    std::cout << "Discard image " << iT->NameIm() << " which was shooted outside GPS recording \n";
+                    iT = mDicoIm.CpleImgTime().erase(iT);
+                    ct++;
+                } else {
+                    iT++;}
+            }
+
+        }
+            if (ct>0){
+            aT0Im  = mDicoIm.CpleImgTime().front().TimeIm();
+            aTNIm  = mDicoIm.CpleImgTime().back().TimeIm();
+            std::cout << ct << " image were discarded.\n";
+            printf("****************************************************************\n");
+            printf("Gps_MJD[0] = %lf LocSec=%lf \n",  aT0Gps,ConvertLocTime(aT0Gps));
+            printf("Gps_MJD[end] = %lf LocSec=%lf \n",aTNGps,ConvertLocTime(aTNGps) );
+            printf("****************************************************************\n");
+            printf("****************************************************************\n");
+            printf("Img_MJD[0] = %lf LocSec=%lf \n",aT0Im,ConvertLocTime(aT0Im));
+            printf("Img_MJD[end] = %lf LocSec=%lf \n",aTNIm,ConvertLocTime(aTNIm));
+            printf("****************************************************************\n");
+        }
 
 
         if (! mAcceptExtrapol)
@@ -433,6 +477,10 @@ cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
                 }
 
                 aPos = mModeSpline ? aPtSpline : aPosParab;
+                if (mChgSys)
+                {
+                    aPos = ToProj(aPos);
+                }
                 aEcart = euclid(aPos-aNP);
 
 
@@ -444,6 +492,7 @@ cIIP_Appli::cIIP_Appli(int argc,char ** argv) :
                     Pt3di aColName(255,255,255);
 
                     Pt3dr aPLoc = ToProj(aPos);
+                    // std::cout << "PLOC " << aPLoc << "\n";
                     double aRay=0.05;
                     aPC.AddSphere(aColSom,aPLoc,0.05,5);
                     double aL = euclid(anInc);

@@ -49,6 +49,7 @@ int Dequant_main(int argc,char ** argv)
      bool TraitSpecCuv = true;
      double aDyn=1.0;
      double aOffs=0.0;
+     int aVNoVal;
 
      ElInitArgMain
      (
@@ -62,6 +63,7 @@ int Dequant_main(int argc,char ** argv)
                       << EAM(TraitSpecCuv,"TraitSpecCuv",true)
                       << EAM(aDyn,"Dyn",true)
                       << EAM(aOffs,"Offs",true)
+                      << EAM(aVNoVal,"NoValue",true)
     );
 
     if (!MMVisualMode)
@@ -74,6 +76,7 @@ int Dequant_main(int argc,char ** argv)
          if (aSzGlob== Pt2di(0,0))
             aSzGlob = aFileIn.sz();
 
+/*
         Tiff_Im  aTifOut
                  (
                         aNameOut.c_str(),
@@ -82,6 +85,18 @@ int Dequant_main(int argc,char ** argv)
                     Tiff_Im::No_Compr,
                     Tiff_Im::BlackIsZero
                  );
+*/
+        // Quand appele par MM, il ne faut pas changer la structure du fichier (dallage)
+        bool IsModified;
+        Tiff_Im  aTifOut = Tiff_Im::CreateIfNeeded
+                           (
+                                  IsModified,
+                                  aNameOut.c_str(),
+                                  aSzGlob,
+                                  GenIm::real4,
+                                  Tiff_Im::No_Compr,
+                                  Tiff_Im::BlackIsZero
+                           );
 
          Pt2di aPRD(aSzRecDalles,aSzRecDalles);
          cDecoupageInterv2D aDecoup
@@ -101,7 +116,14 @@ int Dequant_main(int argc,char ** argv)
 
 
              aDeq.SetTraitSpecialCuv(TraitSpecCuv);
-             aDeq.DoDequantif(aSzIn, trans(aFileIn.in(),aP0In),1);
+             Fonc_Num FoncOut(0);
+             if (EAMIsInit(&aVNoVal))
+             {
+                FoncOut = (trans(aFileIn.in(),aP0In)==aVNoVal);
+             }
+
+
+             aDeq.DoDequantifWithMasq(aSzIn, trans(aFileIn.in(),aP0In),FoncOut,1);
 
 
              Fonc_Num aFoncRes = aOffs + aDyn *aDeq.ImDeqReelle();
