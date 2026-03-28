@@ -5,6 +5,8 @@
 #include "CodedTarget.h"
 #include "MMVII_Stringifier.h"
 #include "MMVII_MeasuresIm.h"
+#include "MMVII_Sensor.h"
+
 
 namespace MMVII
 {
@@ -32,6 +34,7 @@ cSpecBitEncoding::cSpecBitEncoding() :
      mBase4Name      (10),
      mNbDigit        (0),
      mPrefix         ("XXXX"),
+     mTargetNamePrefix(""),
      mMaxNum         (0),
      mMaxLowCode     (0),
      mMaxCodeEqui    (0)
@@ -55,6 +58,7 @@ void cSpecBitEncoding::AddData(const  cAuxAr2007 & anAux)
        {
           MMVII::AddData(cAuxAr2007("Prefix",anAux),mPrefix);
           MMVII::AddData(cAuxAr2007("NbDigit",anAux),mNbDigit);
+          MMVII::AddData(anAux,"TargetNamePrefix",mTargetNamePrefix, std::string());
           MMVII::AddData(cAuxAr2007("MaxNum",anAux),mMaxNum);
           MMVII::AddData(cAuxAr2007("MaxLowCode",anAux),mMaxLowCode);
           MMVII::AddData(cAuxAr2007("MaxCodeEqui",anAux),mMaxCodeEqui);
@@ -93,7 +97,7 @@ void cOneEncoding::AddData(const  cAuxAr2007 & anAux)
    AddTabData(cAuxAr2007("NumCode",anAux),mNC,2);
    MMVII::AddData(cAuxAr2007("Name",anAux),mName);
    if ((! anAux.Input()) && (mNC[2]!=0))
-       anAux.Ar().AddComment(StrOfBitFlag(Code(),1<<mNC[2]));
+       anAux.Ar().AddComment(StrOfBitFlag(Code(),size_t(1)<<mNC[2]));
 }
 
 size_t cOneEncoding::Num()  const {return mNC[0];}
@@ -213,6 +217,8 @@ class cAppliGenerateEncoding : public cMMVII_Appli
         cCollecSpecArg2007 & ArgOpt(cCollecSpecArg2007 & anArgOpt) override ;
 
 	cPrioCC * GetBest();
+        cPhotogrammetricProject     mPhProj;
+
 
 	// tREAL8  ScoreOfCodeAndDist(,int aHamingDist);
 
@@ -220,11 +226,14 @@ class cAppliGenerateEncoding : public cMMVII_Appli
 	int                   mP2;
 	size_t                mPerCircPerm;
 	bool                  mMiror;
+	bool                  mOkSelfSym;
+    bool                  mShowSelfSym;
 	bool                  mUseAiconCode;
 	cCompEquiCodes  *     mCEC;
 	std::vector<cCelCC*>  mVOC;
 	std::vector<cPrioCC>  mPrioCC;
 	std::string           mNameOut;
+	std::string           mPostfixOut;
 };
 
 cPrioCC * cAppliGenerateEncoding::GetBest()
@@ -239,7 +248,10 @@ cAppliGenerateEncoding::cAppliGenerateEncoding
     const cSpecMMVII_Appli & aSpec
 ) :
    cMMVII_Appli   (aVArgs,aSpec),
+   mPhProj        (*this),
    mMiror         (false),
+   mOkSelfSym     (true),
+   mShowSelfSym   (false),
    mCEC           (nullptr)
 {
 }
@@ -262,11 +274,17 @@ cCollecSpecArg2007 & cAppliGenerateEncoding::ArgOpt(cCollecSpecArg2007 & anArgOp
                << AOpt2007(mSpec.mFreqCircEq,"FreqCircEq","Freq for generating circular permuts (conventionnaly 0->highest) (def depend of type)")
                << AOpt2007(mSpec.mParity,"Parity","Parity check , 1 odd, 2 even, 3 all (def depend of type)")
                << AOpt2007(mSpec.mMaxNb,"MaxNb","Max number of codes",{eTA2007::HDV})
+               << AOpt2007(mSpec.mTargetNamePrefix,"TargetNamePrefix","Prefix for targets names",{eTA2007::HDV})
                << AOpt2007(mSpec.mBase4Name,"Base4N","Base for name",{eTA2007::HDV})
                << AOpt2007(mSpec.mNbDigit,"NbDig","Number of digit for name (default depend of max num & base)")
                << AOpt2007(mSpec.mUseHammingCode,"UHC","Use Hamming code")
                << AOpt2007(mSpec.mPrefix,"Prefix","Prefix for output files")
                << AOpt2007(mMiror,"Mir","Unify mirro codes")
+               << AOpt2007(mOkSelfSym,"OkSelfSym","Accept code with self symetry on period",{eTA2007::HDV})
+               << AOpt2007(mShowSelfSym,"ShowSelfSym","Show code wiht symetry on period",{eTA2007::HDV})
+               << AOpt2007(mNameOut,"Out","Name for output file")
+               << AOpt2007(mPostfixOut,"Postfix","Postfix for output file (def->default tagged extension")
+               <<   mPhProj.DPGndPt3D().ArgDirInOpt("GCPNames","Dir GCP for code selection on names")
           ;
 }
 
@@ -316,6 +334,7 @@ void MakeFile3DCern3DTargt(size_t aNBB,size_t aNbD)
 
 int  cAppliGenerateEncoding::Exe()
 {
+   mPhProj.FinishInit();
    int Num000 = 0;
    //  [0]  ========  Finish initialization and checking ==================
    
@@ -323,6 +342,7 @@ int  cAppliGenerateEncoding::Exe()
    if (mSpec.mFreqCircEq==0) 
       mSpec.mFreqCircEq  = mSpec.mNbBits;
 
+   bool  mCompactNum = true;
 
    // make all default init that are type-dependant
    if (mSpec.mType==eTyCodeTarget::eIGNIndoor)
@@ -345,6 +365,7 @@ int  cAppliGenerateEncoding::Exe()
    else if (mSpec.mType==eTyCodeTarget::eCERN)
    {
         mUseAiconCode = true;
+        mCompactNum   = false;
         SetIfNotInit(mSpec.mParity,size_t(2));
 	Num000 = 1;
    }
@@ -378,7 +399,11 @@ int  cAppliGenerateEncoding::Exe()
                        + "_Hamm" + ToStr(mSpec.mMinHammingD)
                        + "_Run" + ToStr(mSpec.mMaxRunL.x()) + "_" + ToStr(mSpec.mMaxRunL.y());
    }
-   mNameOut  =   mSpec.mPrefix + "_SpecEncoding." + TaggedNameDefSerial();
+   if (! IsInit(&mPostfixOut))
+      mPostfixOut = TaggedNameDefSerial();
+
+   if (! IsInit(&mNameOut))
+      mNameOut  =   mSpec.mPrefix + "_SpecEncoding." + mPostfixOut;
 
    // calls method in cMMVII_Appli, to show current value of params, as many transformation have been made
    ShowAllParams();
@@ -387,7 +412,19 @@ int  cAppliGenerateEncoding::Exe()
    mP2 = (1<<mSpec.mNbBits);
 
    //  [1] =============   read initial value of cells
-   mCEC = cCompEquiCodes::Alloc(mSpec.mNbBits,mPerCircPerm,mMiror);
+   mCEC = cCompEquiCodes::Alloc(mSpec.mNbBits,mPerCircPerm,mMiror,mOkSelfSym);
+
+
+   if (mShowSelfSym)
+   {
+       for (const auto & aCEC : mCEC->VecOfCells() )
+           if (aCEC && aCEC->mSelfSym)
+           {
+               StdOut() << " SSC " << StrOfBitFlag(aCEC->mLowCode,size_t(1)<<mSpec.mNbBits) << "\n";
+           }
+   }
+
+
    mVOC = mCEC->VecOfCells();
    StdOut() <<  "Size Cells init " << mVOC.size() << std::endl;
 
@@ -395,9 +432,12 @@ int  cAppliGenerateEncoding::Exe()
 
    if (mUseAiconCode)
    {
+       // Read the file in ressources MMVII
        std::vector<cPt2di>  aVCode ;
        ReadCodesTarget(aVCode,cCompEquiCodes::NameCERNLookUpTable(mSpec.mNbBits));
 
+       // In this case, by default, take all the code that were specified
+       SetIfNotInit(mSpec.mMaxNb,aVCode.size());
        std::list<cCompEquiCodes::tAmbigPair>  aLamb = mCEC->AmbiguousCode(aVCode);
 
        if (!aLamb.empty())
@@ -417,15 +457,43 @@ int  cAppliGenerateEncoding::Exe()
               MMVII_INTERNAL_ASSERT_bench(aVCode[aK-1].y() < aVCode[aK].y(),"Not growing order for bitflag in 3D-AICON");
 	  }
 
-          for (size_t aK=0 ; aK<aVCode.size(); aK++)
-	  {
-		 const cCelCC * aCel = mCEC->CellOfCode(aVCode[aK].y());
-                 MMVII_INTERNAL_ASSERT_bench(aCel!=0,"CellOfCode in3D AICON");
-                 MMVII_INTERNAL_ASSERT_bench(aVCode[aK].y()==(int)aCel->mLowCode,"CellOfCode in3D AICON");
-	  }
+      for (size_t aK=0 ; aK<aVCode.size(); aK++)
+      {
+           cCelCC * aCel = mCEC->CellOfCode(aVCode[aK].y());
+           if (aCel)
+           {
+                aCel->mNum = aVCode[aK].x();
+                MMVII_INTERNAL_ASSERT_bench(aCel!=0,"CellOfCode in3D AICON");
+                MMVII_INTERNAL_ASSERT_bench(aVCode[aK].y()==(int)aCel->mLowCode,"CellOfCode in3D AICON");
+            }
+      }
 
 
        }
+   }
+
+   if (mPhProj.DPGndPt3D().DirInIsInit())
+   {
+      cSetMesGnd3D aSetGCP =  mPhProj.LoadGCP3D();
+      std::set<int>   aLIntOk;
+      for (const auto & aGCP : aSetGCP.Measures())
+      {
+          // the name from generated encoding are nums, but external name can be any string 
+          if (StringIsIntOk(aGCP.mNamePt))
+             aLIntOk.insert(cStrIO<int>::FromStr(aGCP.mNamePt));
+      }
+      erase_if
+      (
+             mVOC,
+             [aLIntOk] (const auto & aPtr) {return  ! MapBoolFind(aLIntOk,aPtr->mNum);}
+      );
+      //  StdOut() << "VOOOCSIZE= " << mVOC.size()  << " "  << aSetGCP.Measures().size() << "\n";
+      //  getchar();
+      // std::vector<cCelCC*>  mVOC;
+
+      //  StdOut() << "VOOOCSIZE= " << mVOC.size()  << "\n";
+      //  StdOut() <<  "  * N0=" <<  mVOC.at(0)->mNum << "\n";
+      //  StdOut() <<  "  * N1=" <<  mVOC.at(1)->mNum << "\n";
    }
   
    // [3.0]  if we use hamming code, not all numbers are possible
@@ -478,7 +546,8 @@ int  cAppliGenerateEncoding::Exe()
         // 5.1   initialize :   priority queue in mPrioCC
    for (auto aCC : mVOC)
    {
-        tREAL8 aScore = - MaxRun2Length(aCC->mLowCode,mP2);
+       // CM: MaxRun2Length return an unsigned size_t. We must convert it to double before applying unary '-' operator !
+       tREAL8 aScore = - double(MaxRun2Length(aCC->mLowCode,mP2));
         mPrioCC.push_back(cPrioCC(aCC,aScore));
    }
 
@@ -488,9 +557,15 @@ int  cAppliGenerateEncoding::Exe()
 
    cTimeSequencer aTSeq(0.5); // to make use patientate
 			     
+  
+   bool  mDoFilter = (mSpec.mMinHammingD!=1) || (mSpec.mMaxNb<mVOC.size()  );
+   StdOut() <<  " MaxNb=" << mSpec.mMaxNb << "\n";
+   StdOut() <<  " MinH=" << mSpec.mMinHammingD << "\n";
          //  5.2 Now iteratively select one and update others
-   while (GoOn)
+   if (mDoFilter)
    {
+     while (GoOn)
+     {
        // Extract best solution
        cPrioCC * aNextP = GetBest();
 
@@ -501,18 +576,26 @@ int  cAppliGenerateEncoding::Exe()
        }
        else
        {
+
            aNewVOC.push_back(aNextP->Cel());  // add new one
            for (auto & aPC : mPrioCC) // update remaining
-	       aPC.UpdateHammingD(*aNextP);
+           aPC.UpdateHammingD(*aNextP);
 
-	   if (aNewVOC.size() >= mSpec.mMaxNb)  // if enoug stop
+          if (aNewVOC.size() >= mSpec.mMaxNb)  // if enoug stop
               GoOn = false;
        }
        if (aTSeq.ItsTime2Execute())  // make user patient
        {
-	   StdOut() << "Hamming filter, still to do " << mSpec.mMaxNb-aNewVOC.size() << std::endl;
+          StdOut() << "Hamming filter, still to do " << mSpec.mMaxNb-aNewVOC.size() << std::endl;
        }
-   }
+     }
+  }
+  else
+  {
+      aNewVOC = mVOC;
+  }
+     
+   StdOut() << "SSSSS " << mVOC.size() << " => " << aNewVOC.size() << "\n";
    mVOC = aNewVOC;
    StdOut() <<  "Size after hamming  distance selection" << mVOC.size() << std::endl;
 
@@ -527,10 +610,18 @@ int  cAppliGenerateEncoding::Exe()
    SortOnCriteria(mVOC,[](auto aPCel){return aPCel->mLowCode;});
    {
        cBitEncoding aBE;
-       for (size_t aK=0 ; aK<mVOC.size(); aK++)  
+       for (size_t aK1=0 ; aK1<mVOC.size(); aK1++)  
        {
-           size_t aNum = aK + Num000;
-	   size_t aCode = mVOC[aK]->mLowCode;
+           size_t aNum = aK1 + Num000;
+// StdOut() << "NNNNNnnN= " << aNum  << " " << mVOC[aK1]->mNum << "\n";
+           MMVII_INTERNAL_ASSERT_strong(mVOC[aK1]->mNum>=0,"Num was not correctly set in cCelCC");
+           // For AICON-like, with external spec, with maintain the numerotation, for internal MMVII system, we
+           // prefer to "compactify" the numbering
+           if (! mCompactNum)
+           {
+              aNum = mVOC[aK1]->mNum;
+           }
+	   size_t aCode = mVOC[aK1]->mLowCode;
            aBE.AddOneEncoding(aNum,aCode);  // add a new encoding
 
 	   // Update all ranges
@@ -550,7 +641,11 @@ int  cAppliGenerateEncoding::Exe()
 
        for (auto & anEncode : aBE.Encodings())
        {
-           anEncode.SetName(NameOfNum_InBase(anEncode.Num(),mSpec.mBase4Name,mSpec.mNbDigit));
+           anEncode.SetName(mSpec.mTargetNamePrefix + NameOfNum_InBase(anEncode.Num(),mSpec.mBase4Name,mSpec.mNbDigit));
+           if (mShowSelfSym &&  mCEC->CellOfCode(anEncode.Code())->mSelfSym  )
+           {
+               StdOut()  << "Self Sym CODE=" << anEncode.Code() << "\n";
+           }
        }
 
        aBE.SetSpec(mSpec);

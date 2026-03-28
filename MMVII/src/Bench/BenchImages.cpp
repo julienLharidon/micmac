@@ -68,8 +68,12 @@ template <class Type> void TestOneImage2D(const cPt2di & aP0,const cPt2di & aP1)
            MMVII_INTERNAL_ASSERT_bench(aIm.GetV(aP)==0,"Bench image error");
        }
     }
-    cPt2di aP0Pert = cPt2di(RandUnif_N(3), RandUnif_N(3));
-    cPt2di aP1Pert = aP0Pert + cPt2di(1+RandUnif_N(3),1+RandUnif_N(3));
+    auto v1 = RandUnif_N(3);
+    auto v2 = RandUnif_N(3);
+    cPt2di aP0Pert = cPt2di(v1, v2);
+    auto v3 = 1+RandUnif_N(3);
+    auto v4 = 1+RandUnif_N(3);
+    cPt2di aP1Pert = aP0Pert + cPt2di(v3,v4);
     cIm2D<Type> aPIm(aP0Pert,aP1Pert);
     aPIm.DIm().Resize(aP0,aP1);
 
@@ -230,7 +234,9 @@ template <class Type> void TestInterBL(cPt2di aSz,Type aCste,Type aCoeffX,Type a
     for (int aNb=0 ; aNb<10000 ; aNb++)
     {
         double UnMinEpsilon = 0.99999;
-        cPt2dr aP(RandUnif_0_1() * (aSz.x()-1),RandUnif_0_1()*(aSz.y()-1));
+        auto v1 = RandUnif_0_1() * (aSz.x()-1);
+        auto v2 = RandUnif_0_1()*(aSz.y()-1);
+        cPt2dr aP(v1,v2);
         aP = UnMinEpsilon * aP;
         double aV1 = aCste + aCoeffX * aP.x() + aCoeffY * aP.y() + aCXY * aP.x() * aP.y();
         double aV2 = aDIm.GetVBL(aP);
@@ -242,9 +248,11 @@ template <class Type> void TestInterBL(cPt2di aSz,Type aCste,Type aCoeffX,Type a
         //  =============== Test on grad =========================
 
             // Make a pts not too close to pixel limit
+        auto v3 = RandUnif_0_1();
+        auto v4 = RandUnif_0_1();
         aP =   cPt2dr(round_down(aP.x()),round_down(aP.y())) 
              + cPt2dr(0.1,0.1) 
-             + cPt2dr(RandUnif_0_1(),RandUnif_0_1()) * 0.8;
+             + cPt2dr(v3,v4) * 0.8;
 
          
             // compute Gx,Gy,Val
@@ -424,13 +432,37 @@ template <class TypeImage,class tBase,class TypeFile>  void TplBenchFileImage(co
         cPt2di aP0 = aSz/5;
         cPt2di aP1 = aSz/2;
         cBox2di  aBox(aP0,aP1);
-	aDImDup.ClipToFile(aNameTiff,aBox);
-	cIm2D<int>  aImCl = cIm2D<int>::FromFile(aNameTiff);
+        aDImDup.ClipToFile(aNameTiff,aBox);
+        cIm2D<tBase>  aImCl = cIm2D<tBase>::FromFile(aNameTiff);
 
-	for (const auto & aP : aImCl.DIm())
-	{
-            MMVII_INTERNAL_ASSERT_bench(aImCl.DIm().GetV(aP)==aDImDup.GetV(aP+aP0),"Bench ClipToFile")
-	}
+       for (const auto & aP : aImCl.DIm())
+       {
+          if (aImCl.DIm().GetV(aP)!=aDImDup.GetV(aP+aP0))
+          {
+            StdOut() << " DIFF=" << aImCl.DIm().GetV(aP) << " " << aDImDup.GetV(aP+aP0) << "\n";
+            MMVII_INTERNAL_ASSERT_bench(aImCl.DIm().GetV(aP)==aDImDup.GetV(aP+aP0),"Bench ClipToFile");
+          }
+      }
+    }
+
+    {   if (0)
+        {
+           StdOut() << "TplBenchFileImage "
+                 << cStrIO<TypeImage>::msNameType << "  "
+                 << cStrIO<tBase>::msNameType << " "
+                 << cStrIO<TypeFile>::msNameType << " "
+                 << " N=" << aNameTiff
+                 << "\n";
+        }
+        cIm2D<TypeFile> aIDup =  cIm2D<TypeFile>::FromFile(aNameTiff);
+        auto aPtrI = ReadIm2DGen(aNameTiff);
+
+        for (const auto aPix : aIDup.DIm())
+        {
+            MMVII_INTERNAL_ASSERT_bench((tREAL8)aIDup.DIm().GetV(aPix) ==aPtrI->VD_GetV(aPix),"ReadIm2DGen" );
+        }
+        delete aPtrI;
+
     }
 }
 
@@ -438,6 +470,8 @@ template <class TypeFile,class TypeImage>  void TplBenchFileImage()
 {
     TplBenchFileImage<tU_INT1,tINT4,tINT4>(cPt2di(1000,500),100.0);
     TplBenchFileImage<tINT4,tINT4,tINT2>(cPt2di(1000,500),1e-2);
+    TplBenchFileImage<tREAL4,tREAL8,tREAL4>(cPt2di(1000,500),1e-2);
+
 }
 
 void BenchFileImage()
@@ -577,6 +611,7 @@ void BenchGlobImage(cParamExeBench & aParam)
     BenchRectObj();
     BenchBaseImage();
     BenchGlobImage2d();
+    BenchImFilterV1V2();
 
     aParam.EndBench();
 }

@@ -72,6 +72,59 @@ template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::Diag(const cDenseVe
     return aRes;
 }
 
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::MatPerm(const std::vector<int> & aPerm)
+{
+    cDenseMatrix<Type> aRes(aPerm.size(),eModeInitImage::eMIA_Null);
+    for (int aK=0 ; aK<(int)aPerm.size(); aK++)
+        aRes.SetElem(aK,aPerm.at(aK),1.0);
+
+    return aRes;
+}
+
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::FromLines(const std::vector<tDV> & aVV)
+{
+    cDenseMatrix<Type>  aRes(aVV.at(0).Sz(),aVV.size());
+    for (int aY=0 ; aY<int(aVV.size()) ; aY++)
+       aRes.WriteLine(aY,aVV.at(aY));
+
+    return aRes;
+}
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::MatLine(const tDV & aV) {return FromLines({aV});}
+
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::FromCols(const std::vector<tDV> & aVV)
+{
+    cDenseMatrix<Type>  aRes(aVV.size(),aVV.at(0).Sz());
+    for (int aX=0 ; aX<int(aVV.size()) ; aX++)
+       aRes.WriteCol(aX,aVV.at(aX));
+
+    return aRes;
+}
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::MatCol(const tDV & aV) {return FromCols({aV});}
+
+//tDM SubMatrix(const cPt2di & aSz) const
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::SubMatrix(const cPt2di & aP0,const cPt2di & aP1) const
+{
+    cPt2di aSz = aP1 -aP0;
+    cDenseMatrix<Type>   aRes(aSz.x(),aSz.y());
+
+    for (const auto & aPix : aRes.DIm())
+        aRes.SetElem(aPix.x(),aPix.y(),GetElem(aPix+aP0));
+
+    return aRes;
+}
+
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::SubMatrix(const cPt2di & aSz) const
+{
+    return SubMatrix(cPt2di(0,0),aSz);
+}
+
+
+
 template <class Type> cDenseMatrix<Type>  cDenseMatrix<Type>::ClosestOrthog() const
 {
     this->CheckSquare(*this);
@@ -91,15 +144,15 @@ template <class Type> cDenseMatrix<Type>  cDenseMatrix<Type>::ClosestOrthog() co
     return aSVD.MatU() * cDenseMatrix<Type>::Diag(aVP) * aSVD.MatV().Transpose();
 }
 
-template <class Type> Type  cDenseMatrix<Type>::L2Dist(const cDenseMatrix<Type> & aV) const
+template <class Type> Type  cDenseMatrix<Type>::L2Dist(const cDenseMatrix<Type> & aV,bool isAvg) const
 {
-   return DIm().L2Dist(aV.DIm());
+   return DIm().L2Dist(aV.DIm(),isAvg);
 }
 
 
-template <class Type> Type  cDenseMatrix<Type>::SqL2Dist(const cDenseMatrix<Type> & aV) const
+template <class Type> Type  cDenseMatrix<Type>::SqL2Dist(const cDenseMatrix<Type> & aV,bool isAvg) const
 {
-   return DIm().SqL2Dist(aV.DIm());
+   return DIm().SqL2Dist(aV.DIm(),isAvg);
 }
 
 
@@ -166,7 +219,7 @@ template <class Type> cResulSVDDecomp<Type>  cDenseMatrix<Type>::RandomSquareReg
        }
     }
 
-    // Set conditionning
+    // Set conditioning
     {
        // Compute max & min of all ABS values (which one get it is of no interest)
        cWhichMinMax<int,Type> aIMM(0,std::abs(aVDiag(0)));
@@ -175,7 +228,7 @@ template <class Type> cResulSVDDecomp<Type>  cDenseMatrix<Type>::RandomSquareReg
           aIMM.Add(aK,std::abs(aVDiag(aK)));
        }
        double aCond = aIMM.Min().ValExtre() / aIMM.Max().ValExtre() ;
-       // if conditionning is too low
+       // if conditioning is too low
        if (aCond <aCondMinAccept)
        {
             //  (ToAdd + VMin) / (Vmax +ToAdd) = Cond : simplify by supresse VMin 
@@ -232,6 +285,15 @@ template<class Type> cDenseMatrix<Type>
     cResulSVDDecomp<Type>  aSVDD = RandomSquareRankDefSVD(aSz,aSzK);
     return aSVDD.OriMatr();
 }
+
+template<class Type> cDenseMatrix<Type> cDenseMatrix<Type>::RandomOrthogMatrix(const int aSz)
+{
+    tDM  aMat(aSz,eModeInitImage::eMIA_RandCenter);
+    aMat.SelfSymetrize();
+    cResulSymEigenValue<Type>   aSE = aMat.SymEigenValue();
+    return aSE.EigenVectors();
+}
+
 
 
 template<class Type> cDenseVect<Type> cDenseMatrix<Type>::Kernel(Type * aVp) const
@@ -344,6 +406,11 @@ template <class Type> cDenseMatrix<Type> operator * (const cDenseMatrix<Type> & 
    return aRes;
 }
 
+template <class Type> Type Bilinear (const cDenseVect<Type> & aV1,const cDenseMatrix<Type> & aMat,const cDenseVect<Type>& aV2)
+{
+   return aV1.DotProduct(aMat*aV2);
+}
+
 // ===============  Add tAB tAA  ================
 
 template <class TM,class TV> 
@@ -430,8 +497,16 @@ template <class Type> void cDenseMatrix<Type>::Add_tAB(const tDV & aCol,const tD
 }
 template <class Type> void cDenseMatrix<Type>::Add_tAA(const tDV & aCol,bool OnlySup)
 {
-   TplAdd_tAA(*this,aCol,OnlySup);
+   //    StdOut() << "WeightedAdd_tAAWeightedAdd_tAAWeightedAdd_tAAWeightedAdd_tAAWeightedAdd_tAA\n";
+//   TplAdd_tAA(*this,aCol,OnlySup);
+   WeightedAdd_tAA(aCol,1.0,OnlySup);
 }
+
+template <class Type> void   cDenseMatrix<Type>::WeightedAdd_tAA(const tDV & aColLine,const tVal& aW,bool OnlySup)
+{
+   TplWeightedAdd_tAA(*this,aW,aColLine,OnlySup);
+}
+
 template <class Type> void cDenseMatrix<Type>::Sub_tAA(const tDV & aCol,bool OnlySup)
 {
    TplSub_tAA(*this,aCol,OnlySup);
@@ -446,6 +521,10 @@ template <class Type> void cDenseMatrix<Type>::Weighted_Add_tAA(Type aWeight,con
         void  Weighted_Add_tAA(const tDV & aColLine,bool OnlySup=true) override;
 */
 
+template <class Type> cDenseVect<Type>   cDenseMatrix<Type>::Random1LineCombination() const
+{
+     return (cDenseMatrix<Type>(Sz().y(),1,eModeInitImage::eMIA_RandCenter) * (*this)).ReadLine(0);
+}
 
 template <class Type>  void  cDenseMatrix<Type>::Weighted_Add_tAA(Type aWeight,const tSpV & aSparseV,bool OnlySup)
 {  
@@ -485,6 +564,17 @@ template <class Type>  void  cDenseMatrix<Type>::Weighted_Add_tAA(Type aWeight,c
    }
 
 }
+
+
+template <class Type>  Type  cDenseMatrix<Type>:: DotProduct_Col(int aX,const tSpV & aVec) const
+{
+    Type aRes = 0.0;
+    for (const auto & aPairIV : aVec)
+       aRes += GetElem(aX,aPairIV.mInd) * aPairIV.mVal;
+
+   return aRes;
+}
+
 
 
 /* ================================================= */
@@ -556,6 +646,16 @@ template <class Type> void cUnOptDenseMatrix<Type>::Resize(const cPt2di & aSz)
      DIm().Resize(aSz);
 }
 
+template <class Type> cDenseMatrix<Type> cDenseMatrix<Type>::Crop(const cPt2di & aP0,const cPt2di & aP1) const
+{
+    cDenseMatrix<Type> aRes = cDenseMatrix<Type>(aP1-aP0);
+    aRes.ResizeAndCropIn(aP0,aP1,*this);
+    return aRes;
+}
+
+
+
+
 /* ===================================================== */
 /* =====              INSTANTIATION                ===== */
 /* ===================================================== */
@@ -568,6 +668,7 @@ template  cDenseVect<T1> operator * (const cDenseMatrix<T2>& aVC,const cDenseVec
 
 
 #define INSTANTIATE_DENSE_MATRICES(Type)\
+template  Type Bilinear(const cDenseVect<Type>&,const cDenseMatrix<Type>&,const cDenseVect<Type>&);\
 template  class  cUnOptDenseMatrix<Type>;\
 template  class  cDenseMatrix<Type>;\
 template  cDenseMatrix<Type> operator * (const cDenseMatrix<Type> &,const cDenseMatrix<Type>&);\

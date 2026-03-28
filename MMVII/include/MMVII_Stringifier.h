@@ -3,6 +3,7 @@
 
 #include "MMVII_memory.h"
 #include "MMVII_Ptxd.h"
+#include <sstream>
 
 namespace MMVII
 {
@@ -66,6 +67,10 @@ template <>  std::string cStrIO<std::string>::FromStr(const std::string & aStr);
 template <>  std::string cStrIO<char>::ToStr(const char & anI);
 template <>  char cStrIO<char>::FromStr(const std::string & aStr);
 
+// is it a valid string-int, may be templatized , but not sure very curent use ..
+bool  StringIsIntOk(const std::string & aStr);
+
+
 /*
 template <>  std::string cStrIO<cPt2dr>::ToStr(const cPt2dr & anI);
 template <>  cPt2dr cStrIO<cPt2dr>::FromStr(const std::string & aStr);
@@ -86,12 +91,19 @@ template <>  cPt2di cStrIO<cPt2di>::FromStr(const std::string & aStr);
 */
 
 #ifndef _MSC_VER
-template <>  const std::string cStrIO<char>::msNameType;
+template <>  const std::string cStrIO<tU_INT1>::msNameType;
+template <>  const std::string cStrIO<tINT1>::msNameType;
+template <>  const std::string cStrIO<tU_INT2>::msNameType;
+template <>  const std::string cStrIO<tINT2>::msNameType;
+template <>  const std::string cStrIO<tREAL4>::msNameType;
+template <>  const std::string cStrIO<tREAL8>::msNameType;
+//template <>  const std::string cStrIO<char>::msNameType;
 template <>  const std::string cStrIO<bool>::msNameType;
 template <>  const std::string cStrIO<int>::msNameType;
 template <>  const std::string cStrIO<double>::msNameType;
 template <>  const std::string cStrIO<std::string>::msNameType;
 
+template <>  const std::string cStrIO<std::vector<std::vector<std::string>>>::msNameType;
 template <>  const std::string cStrIO<std::vector<std::string>>::msNameType;
 template <>  const std::string cStrIO<std::vector<int>>::msNameType;
 template <>  const std::string cStrIO<std::vector<double>>::msNameType;
@@ -114,6 +126,21 @@ template <>  const std::string cStrIO<eModeCaracMatch>::msNameType;
 template <>  const std::string cStrIO<eProjPC>::msNameType;
 template <>  const std::string cStrIO<eModeTestPropCov>::msNameType;
 template <>  const std::string cStrIO<eDCTFilters>::msNameType;
+
+template <>  const std::string cStrIO<eTypeSerial>::msNameType;
+template <>  const std::string cStrIO<eTyCodeTarget>::msNameType;
+template <>  const std::string cStrIO<eSysCo>::msNameType;
+template <>  const std::string cStrIO<eMTDIm>::msNameType;
+
+template <>  const std::string cStrIO<eTypeSensor>::msNameType;
+template <>  const std::string cStrIO<eFormatSensor>::msNameType;
+
+template <>  const std::string cStrIO<eTopoObsType>::msNameType;
+template <>  const std::string cStrIO<eTopoObsSetType>::msNameType;
+template <>  const std::string cStrIO<eTopoStOriStat>::msNameType;
+template <>  const std::string cStrIO<eTyClino>::msNameType;
+template <>  const std::string cStrIO<eTyInstr>::msNameType;
+
 #endif
 
 /** These functions offer an"easy" interface to cStrIO, however I think
@@ -121,6 +148,10 @@ template <>  const std::string cStrIO<eDCTFilters>::msNameType;
 */
 template  <class Type> std::string ToS(const Type & aV) {return cStrIO<Type>::ToStr(aV);}
 template  <class Type> void FromS(const std::string & aStr,Type & aV) { aV= cStrIO<Type>::FromStr(aStr);}
+
+/// synomym of  cStrIO<std::vector<std::string>>::FromStr
+std::vector<std::string> Str2VStr(const std::string & aS);
+
 
 /*  ================================================== */
 /*                                                     */
@@ -320,8 +351,10 @@ class cAr2007 : public cMemCheck
          virtual void AddComment(const std::string &);
          ///  Tagged File = xml Like, important for handling optionnal parameter
          bool  Tagged() const;
-         ///  May optimize the action
+         ///  May be requirde by some  action (for ex, resizing before read)
          bool  Input() const;
+         ///  May optimize the action, for example vector of num types
+         bool Binary() const;
          ///  Specification archive need some trick action with containers
          bool  IsSpecif() const;
 	 ///  rare used, required in CSV to avoid duplication, default error
@@ -410,8 +443,8 @@ class cAuxAr2007
 	 eTAAr     mType;
 };
 
-/// Create an archive structure, its type (xml, binary, text) is determined by extension
- cAr2007* AllocArFromFile(const std::string & aName,bool Input,bool IsSpecif=false);
+/// Create an archive structure, its type (xml, binary, text) is determined by extension, if aTypeS!=eNbVals it forces the type
+ cAr2007* AllocArFromFile(const std::string & aName,bool Input,bool IsSpecif=false,eTypeSerial aTypeS=eTypeSerial::eNbVals);
 
  ///  Create an archive for storing specif
  cAr2007* AllocArSpecif(const std::string & aName);
@@ -431,18 +464,22 @@ void AddData(const  cAuxAr2007 & anAux, int  &  aVal); ///< for int
 void AddData(const  cAuxAr2007 & anAux, tINT1  &  aVal); ///< for unsigned short
 void AddData(const  cAuxAr2007 & anAux, tU_INT1  &  aVal); ///< for unsigned short
 void AddData(const  cAuxAr2007 & anAux, tINT2  &  aVal); ///< for unsigned short
+void AddData(const  cAuxAr2007 & anAux, long  &  aVal); ///< for unsigned short
+
 void AddData(const  cAuxAr2007 & anAux, tU_INT2  &  aVal); ///< for unsigned short
 void AddData(const  cAuxAr2007 & anAux, tREAL4  &  aVal); ///< for unsigned short
-							   
+void AddData(const  cAuxAr2007 & anAux, tREAL16  &  aVal); ///< for long double
+
 void AddData(const  cAuxAr2007 & anAux, size_t  &  aVal); ///< for unsigned short
 void AddData(const  cAuxAr2007 & anAux, double  &  aVal) ; ///< for double
 void AddData(const  cAuxAr2007 & anAux, std::string  &  aVal) ; ///< for string
 void AddData(const  cAuxAr2007 & anAux, tNamePair  &  aVal) ;  ///< for Pair of string
+void AddData(const  cAuxAr2007 & anAux, cTripletName  &  aVal) ;  ///< for Pair of string
 void AddData(const  cAuxAr2007 & anAux, tNameOCple  &  aVal) ;  ///< for Ordered Cple of string
 void AddData(const  cAuxAr2007 & anAux, std::map<std::string,int>&  aVal) ;  ///< 
 
 template <class Type,int Dim> void AddData(const  cAuxAr2007 & anAux, cPtxd<Type,Dim>  &  aVal) ;  ///<for cPt2dr
-template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,int aNbVal,eTAAr aTAAr= eTAAr::eFixTabNum);
+template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,size_t aNbVal,eTAAr aTAAr= eTAAr::eFixTabNum);
 
 
 
@@ -519,6 +556,18 @@ class cCmpSerializer
          virtual bool Cmp(const int& aV1, const int &aV2) {return Cmp(double(aV1),double(aV2));}
 };
 */
+
+template<class Type> inline Type GetV(std::istringstream & iss, const std::string& aSrcFile, int aSrcLine)
+{
+    Type aNum;
+    iss >> aNum;
+    if ( ! iss)
+    {
+       MMVII_UnclasseUsEr("Bad reading at line  " + std::to_string(aSrcLine+1)+ " of file [" + aSrcFile + "]. (rdstate=" + ToStr((size_t)iss.rdstate()) + ')');
+    }
+    return aNum;
+}
+
 
 
 

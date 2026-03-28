@@ -1,5 +1,5 @@
 
-#include "V1VII.h"
+#include "V1ComLine.h"
 #include "LearnDM.h"
 #include "MMVII_Sys.h"
 
@@ -229,7 +229,7 @@ int cMDLB_AppliFormatTDEDM::Exe()
         break;
 
         default :
-              MMVII_UsersErrror(eTyUEr::eUnClassedError,"Year specified not avalaible");
+              MMVII_UserError(eTyUEr::eUnClassedError,"Year specified not avalaible");
         break;
    }
 

@@ -1,6 +1,8 @@
+#define WITH_MMV1_FUNCTION  false
 
 #include "MMVII_2Include_Serial_Tpl.h"
 #include "MMVII_DeclareAllCmd.h"
+#include "MMVII_Sensor.h"
 
 
 /** \file cMMVII_CalcSet.cpp
@@ -53,16 +55,30 @@ class cAppli_EditSet : public cMMVII_Appli
         cCollecSpecArg2007 & ArgOpt(cCollecSpecArg2007 & anArgOpt) override; ///< return spec of optional args
         cAppliBenchAnswer BenchAnswer() const override ; ///< Has it a bench, default : no
         int  ExecuteBench(cParamExeBench &) override ;
+        std::vector<std::string>  Samples() const override;
+
      protected :
         bool AcceptEmptySet(int aK) const override;
      private :
+	 cPhotogrammetricProject  mPhProj;
          std::string mNameXmlIn;  ///< Save Input file, generally in-out
          std::string mNameXmlOut; ///< Output file, when != Input
          std::string mPat;    ///< Pattern (or File) to modify
          eOpAff      mOp;     ///<  operator
          int         mShow;   ///< Level of message
          std::vector<std::string>  mChgName;
+	 std::string               mPatFilter;
+         size_t                    mNbMinTieP;
 };
+
+std::vector<std::string>  cAppli_EditSet::Samples() const
+{
+   return
+   {
+       "MMVII EditSet  CalibBefore.xml += 'CCAM_.*' FFI0=[0010,0011]  PatFFI0=['CCAM_.*_(.*).tif','$1']"
+   };
+}
+
 
 cAppliBenchAnswer cAppli_EditSet::BenchAnswer() const
 {
@@ -87,7 +103,10 @@ static void OneBenchEditSet
         const std::string & ExpSet   // Expect set
     )
 {
-    // StdOut() << "OneBenchEditSet " << anOp << std::endl;
+#if (!WITH_MMV1_FUNCTION)
+    aNumAskedOut = 0;
+    aRealNumOut = 2;
+#endif
 
     cMMVII_Appli &  anAp = cMMVII_Appli::CurrentAppli();
     std::string aDirI = anAp.InputDirTestMMVII() + "Files/" ;
@@ -117,6 +136,7 @@ static void OneBenchEditSet
        RemoveFile(aDirI+Input,true);
     }
 
+
     // On utilise les ArgOpt  de l'appli que l'on modifie physiquement car : (1) c'est 
     //  impose par ExeCallMMVII (2) A la fin il sont remis a zero, donc pas de pb pour  les
     // reutiliser à chaque fois
@@ -141,6 +161,7 @@ static void OneBenchEditSet
         anAp.StrObl() <<   (UseDirP ? "" : aDirI)+Input  << anOp << aPat,
         anArgOpt
     );
+
 
 
     RenameFiles(aDirI+Ouput,aDirT+Ouput);
@@ -169,17 +190,40 @@ static void OneBenchEditSet
        MMVII_INTERNAL_ASSERT_always(aSet.In(aNF)==(ExpSet.find('0'+aK)!=std::string::npos),"Exp Set in OneBenchEditSet");
 
    }
+
 }
 
 int   cAppli_EditSet::ExecuteBench(cParamExeBench & aParam) 
 {
    for (int aK=0 ; aK<2 ; aK++)
    {
+	   /*
+        int aNumTest,                // Change test condition
+        const std::string & anOp,    // Operator
+        bool InitInput,              // If true, Input is set to last output
+        const std::string & aPat,    // Pattern of image
+        int aNumAskedOut,            // Required num version
+        int aRealNumOut,             // Real Num Version
+        int ExpectCard,              // Number of element required, useless with ExpSet added
+        const std::string & Interv,  // Interval,
+        const std::string & ExpSet   // Expect set
+				     // */
        std::string C09="0123456789";
      // Basic test, we create the file
-       OneBenchEditSet(aK,"+=",false,".*txt"       ,0,2,10,"",C09); // 
-       OneBenchEditSet(aK,"+=",false,".*txt"       ,1,1,10,"",C09);
-       OneBenchEditSet(aK,"+=",false,".*txt"       ,2,2,10,"",C09);
+       OneBenchEditSet
+       (
+             aK,      //  Change test condition : Use or Not Dir Project
+	     "+=",    // operator for mpdi
+	     false,   // If true, Previous OutPut is moved on input, else Input is purged at end of process
+	     "F.*txt", // Pattern of used files 
+	     0,       //  Required num version
+	     2,       // Real Num Version
+	     10,      // Number of element expected (become obsolet with expected set)
+	     "",      // Interval modifying the pattern if != ""
+	     C09      //  Ground truth, what the string should be
+       ); // 
+       OneBenchEditSet(aK,"+=",false,"F.*txt"       ,1,1,10,"",C09);
+       OneBenchEditSet(aK,"+=",false,"F.*txt"       ,2,2,10,"",C09);
        OneBenchEditSet(aK,"+=",false,"F[02468].txt",2,2,5,"","02468");
     // here we init from previous
        OneBenchEditSet(aK,"+=",true ,"F[3-5].txt" ,2,2,7,"","0234568"); // 0234568
@@ -214,23 +258,31 @@ cCollecSpecArg2007 & cAppli_EditSet::ArgOpt(cCollecSpecArg2007 & anArgOpt)
       anArgOpt
          << AOpt2007(mShow,"Show","Show detail of set before/after, 0->none, (1) modif, (2) all",{{eTA2007::HDV}})
          << AOpt2007(mNameXmlOut,"Out","Destination, def=Input, no save for " + MMVII_NONE,{})
-         << AOpt2007(mChgName,"ChgN","Change name [Pat,Name], for ex \"[(.*),IMU_\\$0]\"  add prefix \"IMU_\" ",{{eTA2007::ISizeV,"[2,2]"}})
+         << AOpt2007(mChgName,"ChgN","Change name [Pat,Name], for ex \"[(.*),IMU_\\$&]\"  add prefix \"IMU_\" ",{{eTA2007::ISizeV,"[2,2]"}})
+	 << mPhProj.DPMulTieP().ArgDirInOpt("TiePF","TieP for filtering on number")
+         << AOpt2007(mNbMinTieP,"NbMinTieP","Number min of tie points, if TiePF",{{eTA2007::HDV}})
+         << AOpt2007(mPatFilter,"PatF","Pattern to filter on name")
       ;
 }
 
 cAppli_EditSet::cAppli_EditSet(const std::vector<std::string> & aVArgs,const cSpecMMVII_Appli & aSpec) :
   cMMVII_Appli (aVArgs,aSpec),
-  mShow        (0)
+  mPhProj      (*this),
+  mShow        (0),
+  mNbMinTieP   (1)
 {
 }
 
 int cAppli_EditSet::Exe()
 {
+    mPhProj.FinishInit();
 
    InitOutFromIn(mNameXmlOut,mNameXmlIn);
 
    tNameSet aInput = SetNameFromString(mNameXmlIn,false);
    tNameSet aNew =  MainSet0();
+   bool isFileNone =   (FileOfPath(mNameXmlOut,false) == MMVII_NONE);
+   //SetIfNotInit(mShow,isFileNone ? 2 : 1);
 
    if (IsInit(&mChgName))
    {
@@ -244,12 +296,33 @@ int cAppli_EditSet::Exe()
    }
 
    // StdOut()  << "aNewaNewaNew " <<  aNew.size() << std::endl;
-
    tNameSet aRes = aInput.Dupl();
-
    aRes.OpAff(mOp,aNew);
 
-   if (mShow)
+   if (IsInit(&mPatFilter))
+   {
+       tNameSelector  aSel = AllocRegex(mPatFilter);
+       tNameSet aNewRes;
+       for (const auto & aName : ToVect(aRes))
+       {
+          if (aSel.Match(aName))
+             aNewRes.Add(aName);
+       }
+       aRes = aNewRes;
+   }
+
+   if (mPhProj.DPMulTieP().DirInIsInit())
+   {
+      tNameSet aNewRes;
+      for (const auto & aName : ToVect(aRes))
+      {
+          if (mPhProj.HasNbMinMultiTiePoints(aName,mNbMinTieP,true))
+             aNewRes.Add(aName);
+      }
+      aRes = aNewRes;
+   }
+
+   if (mShow )
    {
        tNameSet   aTot(aInput+aNew);
 
@@ -278,7 +351,7 @@ int cAppli_EditSet::Exe()
    }
 
    // Back to cSetName
-   if (FileOfPath(mNameXmlOut,false) != MMVII_NONE)
+   if (! isFileNone)
       SaveInFile(aRes,mNameXmlOut);
 
    return EXIT_SUCCESS;
@@ -449,7 +522,7 @@ int cAppli_EditRel::Exe()
    {
       if (m2Set)
       {
-         MMVII_UsersErrror(eTyUEr::e2PatInModeLineEditRel,"In mode Line, cannot use multiple pattern in edit rel");
+         MMVII_UserError(eTyUEr::e2PatInModeLineEditRel,"In mode Line, cannot use multiple pattern in edit rel");
       }
 
       std::vector<const std::string *> aV1;
@@ -477,11 +550,11 @@ int cAppli_EditRel::Exe()
    {
        if (mNbMode==0)
        {
-           MMVII_UsersErrror(eTyUEr::eNoModeInEditRel,"No edit mode selected");
+           MMVII_UserError(eTyUEr::eNoModeInEditRel,"No edit mode selected");
        }
        if (mNbMode>1)
        {
-           MMVII_UsersErrror(eTyUEr::eMultiModeInEditRel,"Multi edit mode :"+mModeUsed);
+           MMVII_UserError(eTyUEr::eMultiModeInEditRel,"Multi edit mode :"+mModeUsed);
        }
    }
 

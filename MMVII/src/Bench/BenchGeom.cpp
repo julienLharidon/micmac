@@ -1,9 +1,116 @@
 #include "MMVII_Geom2D.h"
 #include "MMVII_Geom3D.h"
 #include "MMVII_Tpl_Images.h"
+#include "MMVII_PCSens.h"
 
 namespace MMVII
 {
+
+
+template<const int Dim> void DimBenchLsqVariety(int aDimSE)
+{
+    bool Show = false;
+    typedef cPtxd<int,Dim> tPtI;
+    typedef cPtxd<tREAL8,Dim> tPtR;
+
+   // tSim3dR aSim =  tSim3dR::RandomSim3D(10,10);
+   // const tRotR & aRot = aSim.Rot() ;
+
+    tDMatR aMat = tDMatR::RandomOrthogMatrix(Dim);
+    tPtR aCenter = tPtR::PRandC() * 10.0;
+    tREAL8 aScale = RandInInterval(0.1,3.0);
+    int aDistMax= 2;
+
+    std::vector<tPtR> aVPt;
+    for (const auto & aPI :  cPixBox(tPtI::PCste(-aDistMax),tPtI::PCste(aDistMax+1)))
+    {
+        tPtR aPR;
+        for (int aD=0 ; aD<Dim ; aD++)
+            aPR[aD] = aPI[aD] * (1+aD);
+        aPR = aCenter + aMat*aPR * aScale;
+        aVPt.push_back(aPR);
+    }
+
+   cAffineSpace<Dim> aAfSp =  cAffineSpace<Dim>::LstSqEstimate(aVPt,aDimSE);
+
+   for (int aDimS=0 ; aDimS<aDimSE ; aDimS++)
+   {
+        tPtR aVSp =  aAfSp.VecSp().at(aDimS);
+        tPtR aVComp = aMat*(tPtR::P1Coord(Dim-1-aDimS,1.0));
+        aVComp =     aVSp.OrientInSameDir(aVComp)  ;
+
+        if (Show)
+        {
+            StdOut() << " [V1=" <<  aVSp  <<  " V2=  " <<aVComp  << "]\n";
+        }
+        MMVII_INTERNAL_ASSERT_bench(Norm2(aVSp-aVComp)<1e-7,"Diff distl");
+
+   }
+
+   if (Show)
+   {
+      StdOut()   << " Tr=" << aCenter  << "  C=" << aAfSp.P0()-aCenter << "-----\n\n";
+   }
+
+   MMVII_INTERNAL_ASSERT_bench(Norm2(aAfSp.P0()-aCenter)<1e-7,"Diff distl");
+}
+
+void BenchLsqVariety()
+{
+   for (int aK=0 ; aK<10 ; aK++)
+   {
+
+       DimBenchLsqVariety<2>(1);
+       DimBenchLsqVariety<2>(2);
+
+       DimBenchLsqVariety<3>(1);
+       DimBenchLsqVariety<3>(2);
+       DimBenchLsqVariety<3>(3);
+   }
+}
+
+// template <const int Dim> class cFit
+
+//  Test the "OrthogonalizePair" function that make ortognal 2 vecteur with minimal def, do it with
+// 3d as with cross product we have an easy check
+
+void Bench_OrthogonalizePair(const cPt3dr& aP1, const cPt3dr & aP2)
+{
+    auto [aQ1,aQ2] = OrthogonalizePair(aP1,aP2);
+
+    // the normal to plane must be equal between old & new (i.e planes are equal)
+    tREAL8 aDifN =  Norm2(VUnit(aP1^aP2) - VUnit(aQ1^aQ2));
+    MMVII_INTERNAL_ASSERT_bench(aDifN<1e-10,"Bench_OrthogonalizePair Normal");
+
+    // the new vector must be orthogonal ....
+    tREAL8 aScal = Scal(aQ1,aQ2);
+    MMVII_INTERNAL_ASSERT_bench(aScal<1e-10,"Bench_OrthogonalizePair Scal");
+
+    // the new vectors must be to equal distance
+    tREAL8 aD1 = Norm2(VUnit(aP1)-aQ1);
+    tREAL8 aD2 = Norm2(VUnit(aP2)-aQ2);
+    MMVII_INTERNAL_ASSERT_bench(std::abs(aD1-aD2)<1e-10,"Diff distl");
+
+    // check d(P1,Q2)=d(P2,Q1) may be redundant
+    tREAL8 aD12 = Norm2(VUnit(aP1)-aQ2);
+    tREAL8 aD21 = Norm2(VUnit(aP2)-aQ1);
+    MMVII_INTERNAL_ASSERT_bench( RelativeDifference(aD12,aD21)<1e-10,"Order distl");
+}
+
+void Bench_OrthogonalizePair()
+{
+   for (int aK=0 ; aK<100 ; aK++)
+   {
+       cPt3dr aP1 = cPt3dr::PRand();
+       while (Norm2(aP1)<1e-1)
+           aP1 = cPt3dr::PRand();
+        cPt3dr aP2 = cPt3dr::PRand();
+        while  ((Norm2(aP2)<1e-1) || (AbsAngleTrnk(aP1,aP2)<1e-2))
+             aP2 = cPt3dr::PRand();
+        Bench_OrthogonalizePair(aP1,aP2);
+   }
+
+}
 
 template<class Type> void TplBenchRotation3D(cParamExeBench & aParam)
 {
@@ -13,10 +120,15 @@ template<class Type> void TplBenchRotation3D(cParamExeBench & aParam)
    {
        cPtxd<Type,3> aP0 = cPtxd<Type,3>::PRandUnit();
        {
+          int aNum = aKTest - aNbTest/2;
+          
           // Compute a Normal Repair completing 1 vect
-          cRotation3D<Type> aRP0 = cRotation3D<Type>::CompleteRON(aP0);
+          cRotation3D<Type> aRP0 = cRotation3D<Type>::CompleteRON(aP0,aNum);
           MMVII_INTERNAL_ASSERT_bench(aRP0.Mat().Unitarity()<1e-5,"Complete RON 1 Vect"); // Its a rot
-          MMVII_INTERNAL_ASSERT_bench(Norm1( aP0-aRP0.AxeI())<1e-5,"Complete RON 1 Vect"); //Its axe is P0
+          cPtxd<Type,3> anAxe =  cPtxd<Type,3>::Col(aRP0.Mat(),mod(aNum,3));
+          MMVII_INTERNAL_ASSERT_bench(Norm1( aP0-anAxe)<1e-5,"Complete RON 1 Vect"); //Its axe is P0
+
+          MMVII_INTERNAL_ASSERT_bench(std::abs( aRP0.Mat().Det()-1.0)<1e-5,"Complete RON 1 Vect"); //Its axe is P0
        }
 
        // Compute a Normal Repair completing 2 vect
@@ -150,7 +262,10 @@ template<class Type> void TplBenchRotation3D(cParamExeBench & aParam)
    for (int aKTest=0 ; aKTest<20 ; aKTest++)
    {
 	// generate WPK, with caution to have cos phi not to close to 0
-        cPtxd<Type,3>  aWPK(RandUnif_C()*20,RandUnif_C()*1.5,RandUnif_C()*20);
+       auto v1 = RandUnif_C()*20;
+       auto v2 = RandUnif_C()*1.5;
+       auto v3 = RandUnif_C()*20;
+        cPtxd<Type,3>  aWPK(v1,v2,v3);
 
 	// now force to PI/2 and -PI/2 sometime
 	if (aKTest%3!=1)
@@ -174,11 +289,111 @@ template<class Type> void TplBenchRotation3D(cParamExeBench & aParam)
         MMVII_INTERNAL_ASSERT_bench(aD<1e-2,"Omega Phi Kapa"); 
 	// StdOut() << "DDDD " << aD << std::endl;
    }
-   // StdOut() << "============================" << std::endl;
+   // check that multiply M by A and its inverse, do not change centroid
+   for (int aKTest=0 ; aKTest<20 ; aKTest++)
+   {
+        cRotation3D<Type> aM=  cRotation3D<Type>::RandomElem();
+        cRotation3D<Type> aRA=  cRotation3D<Type>::RandomSmallElem(0.3);
+        cRotation3D<Type> aRB=  cRotation3D<Type>::RandomSmallElem(0.3);
+        if (aKTest%2)
+           aRA = cRotation3D<Type>::Identity();
+        else
+           aRB = cRotation3D<Type>::Identity();
+
+        cRotation3D<Type> aR1 =   aRB* aM* aRA;
+        cRotation3D<Type> aR2 =   aRB.MapInverse() * aM* aRA.MapInverse();
+
+        cRotation3D<Type> aRAvg = aR1.Centroid(aR2);
+
+        Type aDist = aM.Dist(aRAvg);
+        MMVII_INTERNAL_ASSERT_bench(aDist<1e-4,"Centroid by mult"); 
+   }
+   /*  Test rotation aggregation from a set of rotation. Method for generating sample :
+
+          - generate a center M , pureley random
+          - generate inlayer arround M, we generate a small perturbation P and add M*P and M*P-1,  this
+            symetry assure that the center is exactly on M
+          - idem for outlayer
+
+        We can add, or not, the center M to the samples :
+           - if we add it, the median estimator must return it
+           - in all case the robust estimation must converge to M
+   */  
+   for (int aKTest=0 ; aKTest<20 ; aKTest++)
+   {
+         bool WithC = ((aKTest%2)==1); // do we add the center to the samples
+
+         int aNbInlay = WithC ? 100 : 200;   // with center, less sample because we make a "full median"
+         int aNbOutlay = WithC ? 50 : 100;
+
+         tREAL8 aNoiseIn = 0.1;
+         tREAL8 aNoiseOut0 = 1.0;  //interval of outlayer
+         tREAL8 aNoiseOut1 = 3.0;
+
+         int aNbTot = aNbInlay + aNbOutlay;
+         // if WithC  we will add M at a random position, else never add
+         int aIndC = (WithC ?  RandUnif_N (aNbTot) : -1);
+
+         cRotation3D<Type> aM=  cRotation3D<Type>::RandomElem();
+         std::vector<cRotation3D<Type>> aVRot;
+         
+         for (int aK=0 ; aK <aNbTot ; aK++)
+         {
+             bool isIn = SelectQAmongN(aK,aNbInlay,aNbTot);
+             cRotation3D<Type> aPerturb = isIn ? 
+                                          cRotation3D<Type>::RandomSmallElem(aNoiseIn) :
+                                          cRotation3D<Type>::RandomInInterval(aNoiseOut0,aNoiseOut1) ;
+             aVRot.push_back(aM*aPerturb);
+             aVRot.push_back(aM*aPerturb.MapInverse());
+
+
+             if (aK==aIndC)
+                aVRot.push_back(aM);
+         }
+
+         if (WithC) 
+         {
+             cRotation3D<Type> aEstim0 = cRotation3D<Type>::PseudoMediane(aVRot);
+             tREAL8 aD0M = aEstim0.Dist(aM);
+             MMVII_INTERNAL_ASSERT_bench(aD0M==0,"PseudoMediane "); 
+         }
+
+         cRotation3D<Type> aEstim1 = cRotation3D<Type>::PseudoMediane(aVRot,30);
+         // tREAL8 aD1M = aEstim1.Dist(aM);
+
+         cRotation3D<Type> aEstim2 = cRotation3D<Type>::RobustAvg(aVRot,aEstim1,{0.1,2,0.5},3,1e-6,8);
+         tREAL8 aD2M = aEstim2.Dist(aM);
+
+
+         MMVII_INTERNAL_ASSERT_bench(aD2M<=1e-4,"RobustAvg "); 
+   }
+}
+
+void BenchRotation3DReal8()
+{
+    tREAL8 aEps = 0.2;
+    for (int aKT=0 ; aKT<100 ; aKT++)
+    {
+         cRotation3D<tREAL8>  aR0 = cRotation3D<tREAL8>::RandomRot();
+         cRotation3D<tREAL8>  aRTarget = aR0*cRotation3D<tREAL8>::RandomRot(aEps);
+
+         cPoseWithUK  aPUK(tPoseR(cPt3dr(0,0,0),aR0));
+
+         for (int aKIter=0 ; aKIter<5; aKIter++)
+         {
+             cPt3dr  W = aPUK.ValAxiatorFixRot(aRTarget);
+             //aPUK.Omega() = W;
+             aPUK.SetOmega(W);
+             aPUK.OnUpdate();
+         }
+         tREAL8 aD =  aRTarget.Mat().L2Dist(aPUK.Pose().Rot().Mat()) ;
+	 MMVII_INTERNAL_ASSERT_bench(aD <1e-10,"FromTriInAndOut p1 !!");
+    }
 }
 
 void BenchRotation3D(cParamExeBench & aParam)
 {
+    BenchRotation3DReal8();
     TplBenchRotation3D<tREAL4 >(aParam);
     TplBenchRotation3D<tREAL8 >(aParam);
     TplBenchRotation3D<tREAL16>(aParam);
@@ -348,12 +563,19 @@ template <class tMap,class TypeEl> void TplBenchMap2D(const tMap & aMap,const tM
 	MMVII_INTERNAL_ASSERT_bench(aD<1e-2,"MapIdent");
 }
 
-
+static tREAL8 TheMinEr_M2DLASQ = 0.0;
 
 
 template <class tMap,class TypeEl> void TplBenchMap2D_LSQ(TypeEl *)
 {
      bool IsHomogr =  (tMap::Name() == "Homogr2D");
+
+
+     TypeEl anAccuracy =  tElemNumTrait<TypeEl>::Accuracy();
+     if (tNumTrait<TypeEl>::TyNum() == eTyNums::eTN_REAL4)
+     {
+         anAccuracy = 10;
+     }
 
      int aNbPts = (tMap::NbDOF+1)/2;
      std::vector<cPtxd<TypeEl,2> > aVIn =  RandomPtsOnCircle<TypeEl>(aNbPts);
@@ -365,6 +587,7 @@ template <class tMap,class TypeEl> void TplBenchMap2D_LSQ(TypeEl *)
           aVOut.push_back(cPtxd<TypeEl,2>::PRand());
      }
 
+
      if (IsHomogr)
      {
        auto aPair = RandomPtsHomgr<TypeEl>();
@@ -373,6 +596,50 @@ template <class tMap,class TypeEl> void TplBenchMap2D_LSQ(TypeEl *)
      }
 
      tMap aMap =  tMap::StdGlobEstimate(aVIn,aVOut);
+
+     // Test for derivation, do it only for most accurate
+     if (sizeof(TypeEl)==16)
+     {
+         cDenseVect<TypeEl> aVParam = aMap.GetParam();
+         tMap aMapBis = tMap::FromParam(aVParam);
+        //  StdOut() << "MAPNAEEMM   " << tMap::Name() << "\n";
+         for (int aK=0 ; aK<10 ; aK++)
+         {
+             cPtxd<TypeEl,2> aPt = cPtxd<TypeEl,2>::PRandC();
+             // Test that GetParam() -> FromParam()
+             TypeEl aDist = Norm2(aMap.Value(aPt)-aMapBis.Value(aPt));
+             MMVII_INTERNAL_ASSERT_bench(aDist<1e-9,"FromParam -> GetParam");
+
+             std::vector<cDenseVect<TypeEl>> aDerXY= DerivFromParam(aMap,aPt);
+
+             for (size_t aKP = 0 ; aKP<tMap::NbDOF ; aKP++)
+             {
+                TypeEl aEps = 1e-5;
+                cDenseVect<TypeEl> aVParam0 = aVParam.Dup();
+                cDenseVect<TypeEl> aVParam1 = aVParam.Dup();
+                aVParam0(aKP) -= aEps;
+                aVParam1(aKP) += aEps;
+
+                tMap aMap0 = tMap::FromParam(aVParam0);
+                tMap aMap1 = tMap::FromParam(aVParam1);
+
+                cPtxd<TypeEl,2> aDerDif = (aMap1.Value(aPt)-aMap0.Value(aPt)) / (2* aEps);
+                cPtxd<TypeEl,2> aDerF(aDerXY.at(0)(aKP),aDerXY.at(1)(aKP));
+
+                TypeEl aNormDif = Norm2(aDerDif  - aDerF);
+
+
+              /*  StdOut() << " NnnNN=" <<
+                            aNormDif
+                           << " DDif=" << aDerDif  << " DerF="<<  aDerF << " K=" << aKP
+                         <<  " " << tMap::Name() << "\n";  */
+                MMVII_INTERNAL_ASSERT_bench(aNormDif<1e-6,"DerivFromParam");
+
+             }
+         }
+
+
+     }
 
      if (tMap::NbDOF%2) // in this case match cannot be perfect "naturally", not enoug DOF, must cheat
      {
@@ -389,14 +656,31 @@ template <class tMap,class TypeEl> void TplBenchMap2D_LSQ(TypeEl *)
      for (int aK=0 ; aK<int(aVIn.size()); aK++)
      {
           TypeEl anEr = Norm2(aVOut[aK] - aMap.Value(aVIn[aK]));
-	  anEr /= tElemNumTrait<TypeEl>::Accuracy();
-          // Very leniant with homography ....
-         
+
+          anEr /= anAccuracy;
           TypeEl aDiv=std::min(TypeEl(1.0),Square(aMap.Divisor(aVIn[aK])));
+
+          // Very leniant with homography ....
+        // StdOut() << " ERRRR=" << anEr << " " << tElemNumTrait<TypeEl>::Accuracy() << "\n";
+          if ((anEr> TheMinEr_M2DLASQ) && (tNumTrait<TypeEl>::TyNum()!= eTyNums::eTN_REAL4) )
+          {
+              if (false)  // to maintain, as there has been many error
+              {
+                 TheMinEr_M2DLASQ = anEr;
+                 StdOut() << "ERRR=" << anEr
+                          <<  " M=" << tMap::Name()
+                           << " D="   << aDiv
+                          <<  " T=" << tNumTrait<TypeEl>::NameType()
+                          << "\n";
+              }
+          }
           if ((aDiv>1e-10) && (anEr*aDiv>=1e-2))
           {
-               StdOut()  << "Diivv " << aMap.Divisor(aVIn[aK])  << " DD=" << aDiv  << " E=" << anEr << std::endl;
-	       MMVII_INTERNAL_ASSERT_bench(false,"Least Sq Estimat 4 Mapping");
+               StdOut()  << "Diivv " << aMap.Divisor(aVIn[aK])
+                         <<  " T=" << tNumTrait<TypeEl>::NameType()
+                         << " DD=" << aDiv
+                         << " E=" << anEr << std::endl;
+               MMVII_INTERNAL_ASSERT_bench(false,"Least Sq Estimat 4 Mapping");
           }
           aTabIn[aK] = aVIn[aK];
           aTabOut[aK] = aVOut[aK];
@@ -409,6 +693,7 @@ template <class tMap,class TypeEl> void TplBenchMap2D_LSQ(TypeEl *)
     for (int aK=0 ; aK<int(aVIn.size()); aK++)
     {
          TypeEl anEr = Norm2(aVOut[aK] - aMap.Value(aVIn[aK]));
+        // StdOut()  << " ERR MAP2D=" << anEr << "\n";
          anEr /= tElemNumTrait<TypeEl>::Accuracy();
          MMVII_INTERNAL_ASSERT_bench(anEr<1e-2,"Least Sq Estimat 4 Mapping");
     }
@@ -500,15 +785,62 @@ template <class tMap,class TypeEl> void TplBenchMap2D_NonLinear(const tMap & aMa
     MMVII_INTERNAL_ASSERT_bench(aResMin<1e-5,"Ransac  Estimat 4 Mapping");
     // Dont understand why sometimes it grows back after initial decrease, to see later ...
     MMVII_INTERNAL_ASSERT_Unresolved(aRes<1e-3,"Ransac  Estimat 4 Mapping");
-    // StdOut() << "Hhhhhhhhhhhhh " << std::endl; getchar();
+}
+
+template <class tMap> void TplBench_ToEqParamFromLinear(const tMap & aMap)
+{
+    cLeasSqtAA<tREAL8> aSys(tMap::NbDOF);
+    for (int aK=0 ; aK< 6 ; aK++)
+    {
+       // data to fill sys
+       cDenseVect<tREAL8> aVect(tMap::NbDOF);
+       tREAL8 aRHS;
+
+       // generate random seg
+       cPt2dr aPS1 =  cPt2dr::PRandC();
+       cPt2dr aPS2 =  aPS1 + cPt2dr::PRandUnit() * (RandUnif_C_NotNull(0.1)*5.0);
+       cSegment2DCompiled<tREAL8> aSeg(aPS1,aPS2);
+
+       // generate random point on seg
+       cPt2dr aPInSeg = aSeg.FromCoordLoc(cPt2dr(RandInInterval(-5,5),0.0));
+
+       cPt2dr aPInv = aMap.Inverse(aPInSeg);  // Point such that aMap(aPInv) in seg
+       // add equation
+       ToEqInSeg<tMap>(aRHS,aVect,aPInv,aSeg);  
+       aSys.PublicAddObservation(1.0,aVect,aRHS);
+    }
+
+    cDenseVect<tREAL8> aVect = aSys.PublicSolve();
+    tMap aMap2 = tMap::FromParam(aVect);
+
+    for (int aK=0 ; aK< 6 ; aK++)
+    {
+        cPt2dr aPt = cPt2dr::PRandC();
+        cPt2dr aP1 = aMap.Value(aPt);
+        cPt2dr aP2 = aMap2.Value(aPt);
+        tREAL8 aD = Norm2(aP1-aP2);
+        MMVII_INTERNAL_ASSERT_bench(aD<=1e-4,"TplBench_ToEqParamFromLinear"); 
+    }
 }
 
 template <class Type> void TplElBenchMap2D()
 {
+   for (int aK=0 ; aK<10 ; aK++)
+   {
+        TplBench_ToEqParamFromLinear(cTrans2D<tREAL8>(cPt2dr::PRandC()));
+        TplBench_ToEqParamFromLinear(cHomot2D<tREAL8>(cPt2dr::PRandC(),RandUnif_C_NotNull(0.1)*5));
+        TplBench_ToEqParamFromLinear(cSim2D<tREAL8>(cPt2dr::PRandC(),cPt2dr::PRandUnit() * (RandUnif_C_NotNull(0.1)*5.0) ));
+   }
+/*
+*/
+
+   auto v1 = cRot2D<Type>::RandomRot(5);
+   auto v2 = cPtxd<Type,2>::PRandC()*Type(0.3);
+   auto v3 = Type(RandUnif_C()*0.2);
    TplBenchMap2D_NonLinear
    (
-         cRot2D<Type>::RandomRot(5) ,
-         cRot2D<Type>(cPtxd<Type,2>::PRandC()*Type(0.3), Type(RandUnif_C()*0.2)),
+         v1,
+         cRot2D<Type>(v2, v3),
          (Type*)nullptr
    );
 
@@ -519,10 +851,18 @@ template <class Type> void TplElBenchMap2D()
    TplBenchMap2D_LSQ<cHomot2D<Type>>((Type*)nullptr);
 
 
-   TplBenchMap2D(cAffin2D<Type>::AllocRandom(1e-1),cAffin2D<Type>::AllocRandom(1e-1),(Type*)nullptr);
-   TplBenchMap2D(cSim2D<Type>::RandomSimInv(5,2,1e-1),cSim2D<Type>::RandomSimInv(3,4,1e-1),(Type*)nullptr);
-   TplBenchMap2D(cHomot2D<Type>::RandomHomotInv(5,2,1e-1),cHomot2D<Type>::RandomHomotInv(3,4,1e-1),(Type*)nullptr);
-   TplBenchMap2D(cRot2D<Type>::RandomRot(5),cRot2D<Type>::RandomRot(3),(Type*)nullptr);
+   auto v4 = cAffin2D<Type>::AllocRandom(1e-1);
+   auto v5 = cAffin2D<Type>::AllocRandom(1e-1);
+   TplBenchMap2D(v4,v5,(Type*)nullptr);
+   auto v6 = cSim2D<Type>::RandomSimInv(5,2,1e-1);
+   auto v7 = cSim2D<Type>::RandomSimInv(3,4,1e-1);
+   TplBenchMap2D(v6,v7,(Type*)nullptr);
+   auto v8 = cHomot2D<Type>::RandomHomotInv(5,2,1e-1);
+   auto v9 = cHomot2D<Type>::RandomHomotInv(3,4,1e-1);
+   TplBenchMap2D(v8,v9,(Type*)nullptr);
+   auto v10 = cRot2D<Type>::RandomRot(5);
+   auto v11 = cRot2D<Type>::RandomRot(3);
+   TplBenchMap2D(v10,v11,(Type*)nullptr);
 
    cHomogr2D<Type> aHgrId =  RandomMapId<cHomogr2D<Type>>(0.1);
    cHomogr2D<Type> aHgGlob =  cHomogr2D<Type>::AllocRandom(2.0);
@@ -547,18 +887,39 @@ void  BenchMap2D()
 /*          BenchGlobImage    */
 /* ========================== */
 void BenchPlane3D();
-void BenchHomogr2D();
 
+void BenchSeg2D()
+{
+    for (int aK=0 ; aK<100 ; aK++)
+    {
+        cPt2dr aP1 = cPt2dr::PRandC();
+	cPt2dr aT1 = cPt2dr::PRandUnit();
+	cSegment2DCompiled<tREAL8>  aSeg1(aP1,aP1+aT1);
+
+        cPt2dr aP2 = cPt2dr::PRandC();
+	cPt2dr aT2 = cPt2dr::PRandUnitNonAligned(aT1);
+	cSegment2DCompiled<tREAL8>  aSeg2(aP2,aP2+aT2);
+
+	cPt2dr aI = aSeg1.InterSeg(aSeg2);
+
+	MMVII_INTERNAL_ASSERT_bench(aSeg1.DistLine(aI)<1e-8,"InterSeg");
+	MMVII_INTERNAL_ASSERT_bench(aSeg2.DistLine(aI)<1e-8,"InterSeg");
+    }
+}
 
 void BenchGeom(cParamExeBench & aParam)
 {
     if (! aParam.NewBench("Geom")) return;
 
+    BenchLsqVariety();
+    Bench_OrthogonalizePair();
+    BenchSeg2D();
+
     BenchSampleQuat();
 
-    BenchHomogr2D();
 
     cEllipse::BenchEllispe();
+    cEllipse3D::Bench();
 
     BenchIsometrie(aParam);
     BenchRotation3D(aParam);

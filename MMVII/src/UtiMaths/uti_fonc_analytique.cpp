@@ -1,8 +1,12 @@
-
 #include "MMVII_Ptxd.h"
 
 namespace MMVII
 {
+
+template <typename Type> Type SignedSqrt(const Type & aX)
+{
+   return SignSupEq0(aX) * std::sqrt(std::abs(aX));
+}
 
 	/*
 template  TYPE Sqrt(const TYPE & aSin);
@@ -37,7 +41,7 @@ constexpr int Fact3 = 2 * 3;
 constexpr int Fact5 = 2 * 3 * 4 * 5;  // Dont use Fact3, we dont control order of creation
 constexpr int Fact7 = 2 * 3 * 4 * 5 * 6 * 7 ;
 constexpr int Fact9 = 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9;
-constexpr int Fact11 = 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9;
+constexpr int Fact11 = 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9 * 10 * 11;
 
 
 template <typename Type> Type DerSinC(const Type & aTeta,const Type & aEps)
@@ -137,22 +141,55 @@ template <typename Type> Type DerYAtanXsY_sX(const Type & X,const Type & Y)
 
 template <typename Type> Type ATan2(const Type & aX,const Type & aY)
 {
-     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for arcsinus");
+     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for atan2");
 
      return std::atan2(aX,aY);
 }
 
 template <typename Type> Type DerX_ATan2(const Type & aX,const Type & aY)
 {
-     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for arcsinus");
+     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for atan2");
      return aY / (Square(aX)+Square(aY));
 }
 
 template <typename Type> Type DerY_ATan2(const Type & aX,const Type & aY)
 {
-     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for arcsinus");
+     MMVII_INTERNAL_ASSERT_tiny((aX!=0)||(aY!=0),"Bad value for atan2");
      return  (- aX) / (Square(aX)+Square(aY));
 }
+
+
+template <typename Type> Type DiffAngMod(const Type & aA, const Type & aB)
+{
+     auto aDiff = aA - aB;
+     if (std::isfinite(aDiff))
+     {
+         if (aDiff < -M_PI)
+         {
+             int n = (aDiff-M_PI)/(-2*M_PI);
+             aDiff += n*2*M_PI;
+         }
+         if (aDiff > 2*M_PI)
+         {
+             int n = aDiff/(2*M_PI);
+             aDiff -= n*2*M_PI;
+         }
+     }
+
+     return aDiff;
+}
+
+template <typename Type> Type DerA_DiffAngMod(const Type & aA,const Type & aB)
+{
+     return 1.;
+}
+
+template <typename Type> Type DerB_DiffAngMod(const Type & aA,const Type & aB)
+{
+     return -1.;
+}
+
+
 
 
 template <typename Type> Type sinH(const Type & aX) {return std::exp(aX)-std::exp(-aX);}
@@ -160,6 +197,7 @@ template <typename Type> Type cosH(const Type & aX) {return std::exp(aX)+std::ex
 
 
 #define INSTATIATE_FUNC_ANALYTIQUE(TYPE)\
+template  TYPE SignedSqrt(const TYPE & aSin);\
 template  TYPE DerSqrt(const TYPE & aSin);\
 template  TYPE DerASin(const TYPE & aSin);\
 template  TYPE ASin(const TYPE & aSin);\
@@ -175,6 +213,9 @@ template  TYPE AtanXsY_sX(const TYPE & X,const TYPE & Y);\
 template  TYPE DerXAtanXsY_sX(const TYPE & X,const TYPE & Y,const TYPE & aEps);\
 template  TYPE DerXAtanXsY_sX(const TYPE & X,const TYPE & Y);\
 template  TYPE DerYAtanXsY_sX(const TYPE & X,const TYPE & Y);\
+template  TYPE DiffAngMod(const TYPE & A,const TYPE & B);\
+template  TYPE DerA_DiffAngMod(const TYPE & A,const TYPE & B);\
+template  TYPE DerB_DiffAngMod(const TYPE & A,const TYPE & B);\
 template  TYPE sinH(const TYPE & );\
 template  TYPE cosH(const TYPE & );
 

@@ -349,7 +349,7 @@ template <class Type>  void  cUncalibSpaceRessection<Type>::AddOneEquation(const
        cDenseVect<Type>  aVect (TheNbVar, eModeInitImage::eMIA_Null);
        SetOneAffineForm( aVect , (IsX ? 0 : 4) , aP3 ,  1.0                                   );
        SetOneAffineForm( aVect ,             8 , aP3 , - (IsX ?aPair.mP2.x() : aPair.mP2.y()) );
-       mSys0.AddObservation(aW,aVect,0.0);
+       mSys0.PublicAddObservation(aW,aVect,0.0);
 
        // update weigthings
        mSumW += aW;
@@ -377,7 +377,7 @@ template <class Type>  void cUncalibSpaceRessection<Type>::CalcSolOneVarFixed(in
      aW *= mSumW ;  // now weithed summ
      aSys.AddObsFixVar(aW,aKV,1.0);  // Add a constraint
 
-     cDenseVect<Type>  aSol = aSys.Solve();  // extract the least square sol with constraint
+     cDenseVect<Type>  aSol = aSys.PublicSolve();  // extract the least square sol with constraint
      cHomog2D3D<Type>  aHom(aSol.RawData()); // make an homography of the sol
 
      tREAL8 aScore = AvgReProj(mSet,aHom); // compute the residual
@@ -533,8 +533,9 @@ void OneBenchUnCalibResection(int aKTest)
 {
 
      // StdOut() << "KKK=" << aKTest << std::endl;
-
-     cPt2di  aSz(2000+RandUnif_0_1()*2000,2000+RandUnif_0_1()*2000);
+     auto v1 = 2000+RandUnif_0_1()*2000;
+     auto v2 = 2000+RandUnif_0_1()*2000;
+     cPt2di  aSz(v1,v2);
      tREAL8  aFoc = 1000 + RandUnif_0_1() * 10000;
      //cPt2dr  aPP(1250.0,1100.0);
      cPt2dr  aPP =  ToR(aSz/2) + cPt2dr::PRandC() * 4000.0;
@@ -584,7 +585,7 @@ void OneBenchUnCalibResection(int aKTest)
           cSensorCamPC aCam("Camera_BenchUncalibResection",cIsometry3D<tREAL8>::RandomIsom3D(100.0),aCalib);
 
           std::vector<double> aVDepts({1,2});
-          cSet2D3D  aSetCorresp  =  aCam.SyntheticsCorresp3D2D(10,aVDepts) ;
+          cSet2D3D  aSetCorresp  =  aCam.SyntheticsCorresp3D2D(10,aVDepts,true) ;
 
           cUncalibSpaceRessection<tREAL8>  aResec8(aSz,aSetCorresp,&aCam);
           cSensorCamPC * aCamCalc = aResec8.ComputeParameters("NoIm_UCSR");
@@ -595,7 +596,7 @@ void OneBenchUnCalibResection(int aKTest)
 
 void BenchUnCalibResection()
 {
-    // Maybe because bad conditionning ? but inversion do not pass eigen test, 
+    // Maybe because bad conditioning ? but inversion do not pass eigen test,
     // BTW they pass "my" test on residual, so ....
     PushErrorEigenErrorLevel(eLevelCheck::Warning);
 
@@ -653,7 +654,8 @@ cCollecSpecArg2007 & cAppli_UncalibSpaceResection::ArgObl(cCollecSpecArg2007 & a
 {
       return anArgObl
               << Arg2007(mSpecImIn,"Pattern/file for images",{{eTA2007::MPatFile,"0"},{eTA2007::FileDirProj}})
-              <<  mPhProj.DPPointsMeasures().ArgDirInMand()
+              <<  mPhProj.DPGndPt3D().ArgDirInMand()
+              <<  mPhProj.DPGndPt2D().ArgDirInMand()
               <<  mPhProj.DPOrient().ArgDirOutMand()
            ;
 }
@@ -751,14 +753,14 @@ void cAppli_UncalibSpaceResection::DoMedianCalib()
 
 	     cMetaDataImage  aMDI = mPhProj.GetMetaData(DirProject()+aNameIm);
 	     aMapCal[aMDI.InternalCalibGeomIdent()].push_back(aCalib);
-	     StdOut() << "NIIII  " << aNameIm << " F=" << aCalib->F()   << std::endl;
          }
          else
          {
              // No reason dont exit
-             MMVII_UsersErrror(eTyUEr::eOpenFile,"No calib file found");
+             MMVII_UserError(eTyUEr::eOpenFile,"No calib file found");
          }
      }
+     bool isRecursGAIP = false;
 
      for (const auto & aNameCal : aMapCal)
      {
@@ -766,13 +768,13 @@ void cAppli_UncalibSpaceResection::DoMedianCalib()
           std::string  aName = aNameCal.first;
 	  const tVCal &  aVCal = aNameCal.second;
           cPerspCamIntrCalib & aCal0 = *(aVCal.at(0));
-          cGetAdrInfoParam<tREAL8>  aGAIP0(".*",aCal0); // Structure for extract param by names, all here
+          cGetAdrInfoParam<tREAL8>  aGAIP0(".*",aCal0,isRecursGAIP); // Structure for extract param by names, all here
           size_t aNbParam = aGAIP0.VAdrs().size();
 
           std::vector<std::vector<double> > aVVParam(aNbParam); // will store all the value of a given param
           for (const auto & aPCal : aVCal)
           {
-                cGetAdrInfoParam<tREAL8>  aGAIPK(".*",*(aPCal));
+                cGetAdrInfoParam<tREAL8>  aGAIPK(".*",*(aPCal),isRecursGAIP);
                 for (size_t aKP=0 ; aKP<aNbParam ; aKP++)
                 {
                      aVVParam.at(aKP).push_back(*aGAIPK.VAdrs().at(aKP));
@@ -815,6 +817,8 @@ int cAppli_UncalibSpaceResection::Exe()
 	{
             DoMedianCalib();
 	}
+        mPhProj.CpSysCoIn2Out(false,true);
+
         return EXIT_SUCCESS;
     }
 
@@ -825,7 +829,7 @@ int cAppli_UncalibSpaceResection::Exe()
     StdOut() <<  "Nb Measures=" << mSet23.NbPair() << std::endl;
 
 
-    cPt2di aSz =  cDataFileIm2D::Create(aNameIm,false).Sz();
+    cPt2di aSz =  cDataFileIm2D::Create(aNameIm,eForceGray::No).Sz();
     cSensorCamPC *  aCam0 =  cSensorCamPC::CreateUCSR(mSet23,aSz,aNameIm,mReal16);
 
      
@@ -836,6 +840,8 @@ int cAppli_UncalibSpaceResection::Exe()
 
     mPhProj.SaveCamPC(*aCam0);
 
+    if (LevelCall()==0)
+        mPhProj.CpSysCoIn2Out(false,true);
     delete aCam0;
     return EXIT_SUCCESS;
 };
@@ -858,7 +864,7 @@ cSpecMMVII_Appli  TheSpec_OriUncalibSpaceResection
       Alloc_UncalibSpaceResection,
       "Pose estimation from GCP, uncalibrated case",
       {eApF::Ori},
-      {eApDT::GCP},
+      {eApDT::ObjCoordWorld, eApDT::ObjMesInstr},
       {eApDT::Orient},
       __FILE__
 );

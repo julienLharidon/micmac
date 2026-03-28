@@ -22,6 +22,19 @@ std::vector<std::string>  NamesMatr(const std::string& aPref,const cPt2di & aSz)
      return aRes;
 }
 
+std::vector<std::string>  NamesObsP3Norm(const std::string& aPref)
+{
+  return    Append(NamesP3("PNorm"+ aPref),NamesP3("DirU"+aPref),NamesP3("DirV"+aPref));
+}
+
+
+std::vector<std::string>  VectNames(const std::string& aPref,int aK0,int aK1)
+{
+    std::vector<std::string> aRes;
+    for (int aK=aK0; aK<aK1 ; aK++)
+        aRes.push_back(aPref+ToStr(aK));
+    return aRes;
+}
 std::vector<std::string>  NamesPose(const std::string& aNameC ,const std::string&  aNameOmega)
 {
 	return Append(NamesP3(aNameC),NamesP3(aNameOmega));
@@ -47,6 +60,18 @@ std::vector<std::string> FormalBilinIm2D_NameObs(const std::string & aPrefix)
               "Im10_" + aPrefix,
               "Im01_" + aPrefix,
               "Im11_" + aPrefix
+          };
+}
+
+std::vector<std::string> FormalGradInterpol_NameObs(const std::string & aPrefix)
+{
+   return std::vector<std::string> 
+          {
+              "PtX0_" + aPrefix,
+              "PtY0_" + aPrefix,
+              "Im_"   + aPrefix,
+              "Gx_"   + aPrefix,
+              "Gy_"   + aPrefix
           };
 }
 
@@ -76,7 +101,7 @@ std::string NameMon(const cPt2di& aDegMon)
 }
 
 
-cDescOneFuncDist::cDescOneFuncDist(eTypeFuncDist aType,const cPt2di aDegXY) :
+cDescOneFuncDist::cDescOneFuncDist(eTypeFuncDist aType,const cPt2di aDegXY,eModeDistMonom aModeMonom) :
    mType    (aType),
    mDegMon  (-1,-1),
    mNum     (-1)
@@ -128,9 +153,13 @@ cDescOneFuncDist::cDescOneFuncDist(eTypeFuncDist aType,const cPt2di aDegXY) :
       mDegMon = aDegXY;
       mDegTot = mDegMon.x() + mDegMon.y();
       bool isX = (mType==eTypeFuncDist::eMonX);
-      if ((isX) && (mDegTot==1))
+      if ((isX) && (mDegTot==1) && (aModeMonom==eModeDistMonom::eModeFraser))
       {
           mName = ( mDegMon.x() == 1) ? "b1" : "b2";  // Usual convention
+      }
+      else if ((mDegTot==1) && ( mDegMon.y()==0) && (aModeMonom==eModeDistMonom::eModeSysCyl))
+      {
+          mName = isX  ? "a" : "b";  // Usual convention
       }
       else
       {

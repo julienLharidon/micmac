@@ -1,11 +1,27 @@
 #include "MMVII_SetITpl.h"
-#include "MMVII_Sys.h"
 #include "cMMVII_Appli.h"
 
 #include <fstream>
 
 namespace MMVII
 {
+
+size_t  AllocBit(tSet32Bits& aSet)
+{
+    // look for a bit not already currently allocated
+    for (size_t aBit=0 ; aBit<32 ; aBit++)
+    {
+          if (!aSet.IsInside(aBit))
+          {
+               aSet.AddElem(aBit);
+               return aBit;
+          }
+    }
+    //  if not : Error
+    MMVII_INTERNAL_ERROR("No more bits in AllocBit (forgot to free ?)");
+    return 0;
+}
+
 
 size_t GetNDigit_OfBase(size_t aNum,size_t aBase)
 {
@@ -111,6 +127,21 @@ size_t  N_LeftBitsCircPerm(size_t aSetFlag,size_t aPow2,size_t N)
 }
 
 
+bool CodeIsSelfmSym(size_t aCode,size_t aNbBits,size_t aPeriod)
+{
+   size_t aCodeInit = aCode;    // used to compute selfSimFound
+
+   for (size_t aBit=0 ; aBit<aNbBits ; aBit+=aPeriod)
+   {
+       if  ((aBit!=0) && (aCode==aCodeInit))
+          return true;
+
+       aCode = N_LeftBitsCircPerm(aCode,size_t(1)<<aNbBits,aPeriod);
+
+   }
+    return false;
+}
+
 /// make a symetry bits, assuming a size NbIt, with  aPow2= NbBit^2
 
 size_t  BitMirror(size_t aSetFlag,size_t aPow2) 
@@ -148,7 +179,7 @@ size_t  Str2BitFlag(const std::string & aStr)
   size_t aRes=0;
   for ( size_t aK=0 ; aStr[aK] ; aK++)
       if (aStr[aK]!='0')
-         aRes |= (1<<aK);
+          aRes |= (size_t(1)<<aK);
   return aRes;
 }
 
@@ -228,7 +259,9 @@ size_t MaxRun2Length(tU_INT4 aVal,size_t aPow2)
 /* *************************** */
 
 cCelCC::cCelCC(size_t aLowestCode) :
-    mLowCode       (aLowestCode)
+    mLowCode       (aLowestCode),
+    mNum           (-1),
+    mSelfSym       (false)
 {
 }
 
@@ -255,30 +288,34 @@ size_t cCelCC::HammingDist(const cCelCC & aC2) const
 
 //std::map<std::string,cCompEquiCodes*> cCompEquiCodes::TheMapCodes;
 
-cCompEquiCodes::cCompEquiCodes(size_t aNbBits,size_t aPer,bool WithMirror) :
+cCompEquiCodes::cCompEquiCodes(size_t aNbBits,size_t aPer,bool WithMirror,bool OkSelfSym) :
      mNbBits       (aNbBits),
      mPeriod       (aPer),
-     mNbCodeUC     (1<<mNbBits),
+     mNbCodeUC     (size_t(1)<<mNbBits),
      mVCodes2Cell  (mNbCodeUC,nullptr)
 {
      MMVII_INTERNAL_ASSERT_strong((aNbBits%aPer)==0,"NbBit not multiple of period in cCompEquiCodes");
      for (size_t aCode=0 ; aCode < mNbCodeUC ; aCode++)
      {
-          if (mVCodes2Cell[aCode] == nullptr)
-	  {
-              cCelCC * aNewCel = new cCelCC(aCode);
-	      mVecOfCells.push_back(aNewCel);
+         if (mVCodes2Cell[aCode] == nullptr)
+         {
+             if (OkSelfSym  || (! CodeIsSelfmSym(aCode,mNbBits,mPeriod)))
+             {
+                 cCelCC * aNewCel = new cCelCC(aCode);
+                 aNewCel->mNum = mVecOfCells.size();
+                 mVecOfCells.push_back(aNewCel);
 
-	      AddCodeWithPermCirc(aCode,aNewCel);
-	      if (WithMirror)
-	          AddCodeWithPermCirc(BitMirror(aCode,mNbCodeUC),aNewCel);
+                 AddCodeWithPermCirc(aCode,aNewCel);
+                if (WithMirror)
+                   AddCodeWithPermCirc(BitMirror(aCode,mNbCodeUC),aNewCel);
 
-	      AddAndResizeUp(mHistoNbBit,NbBits(aCode),1);
-	  }
-	  else
-	  {
+                 AddAndResizeUp(mHistoNbBit,NbBits(aCode),1);
+             }
+         }
+         else
+         {
               // Nothing to do, code has been processed by equivalent lower codes
-	  }
+         }
      }
 
      //for (const auto & AC : mVecOfCells)
@@ -290,9 +327,9 @@ cCompEquiCodes::~cCompEquiCodes()
      DeleteAllAndClear(mVecOfCells);
 }
 
-cCompEquiCodes * cCompEquiCodes::Alloc(size_t aNbBits,size_t aPer,bool WithMirror)
+cCompEquiCodes * cCompEquiCodes::Alloc(size_t aNbBits,size_t aPer,bool WithMirror,bool OkSelfSym)
 {
-     return  new cCompEquiCodes(aNbBits,aPer,WithMirror);
+     return  new cCompEquiCodes(aNbBits,aPer,WithMirror,OkSelfSym);
      /*
      std::string aInd = ToStr(aNbBits)+"_"+ ToStr(aPer) + "_" +ToStr(WithMirror);
      cCompEquiCodes* & aRef = TheMapCodes[aInd];
@@ -315,10 +352,14 @@ const cCelCC &  cCompEquiCodes::CellOfCodeOK(size_t aCode) const
 const cCelCC *  cCompEquiCodes::CellOfCode(size_t aCode) const
 {
    if (aCode>=mVCodes2Cell.size()) return nullptr;
-
    return  mVCodes2Cell.at(aCode);
 }
 
+cCelCC *  cCompEquiCodes::CellOfCode(size_t aCode) 
+{
+   if (aCode>=mVCodes2Cell.size()) return nullptr;
+   return  mVCodes2Cell.at(aCode);
+}
 
 
 void cCompEquiCodes::AddCodeWithPermCirc(size_t aCode,cCelCC * aNewCel)
@@ -334,6 +375,8 @@ void cCompEquiCodes::AddCodeWithPermCirc(size_t aCode,cCelCC * aNewCel)
        }
        aCode = N_LeftBitsCircPerm(aCode,mNbCodeUC,mPeriod);
    }
+   aNewCel->mSelfSym = CodeIsSelfmSym(aCode,mNbBits,mPeriod);
+
 }
 
 const std::vector<cCelCC*>  & cCompEquiCodes::VecOfCells() const {return mVecOfCells;}
@@ -341,11 +384,18 @@ const std::vector<cCelCC*>  & cCompEquiCodes::VecOfCells() const {return mVecOfC
 
 std::vector<cCelCC*>  cCompEquiCodes::VecOfUsedCode(const std::vector<cPt2di> & aVXY,bool Used)
 {
+    //  StdOut() << " LllLL=" << __LINE__ << "\n";
+
     for (auto aPCel : mVecOfCells)
+    {
        aPCel->mTmp = false;
+    }
 
     for (auto aXY : aVXY)
-       mVCodes2Cell[aXY.y()]->mTmp = true;
+    {
+        if (mVCodes2Cell[aXY.y()])
+            mVCodes2Cell[aXY.y()]->mTmp = true;
+    }
 
     std::vector<cCelCC*> aRes;
     for (auto aPCel : mVecOfCells)
@@ -399,22 +449,23 @@ void  ReadCodesTarget(std::vector<cPt2di> & aVCode,const std::string & aNameFile
 
 /** show some static of run lenght on certain codinf scheme */
 
-void  TestComputeCoding(size_t aNBBCoding,int aParity,size_t aPer)
+void  TestComputeCoding(size_t aNBBCoding,int aParity,size_t)
 {
    std::vector<std::list<cCelCC*>>  aVCodeByRun(aNBBCoding+1);
 
    std::unique_ptr<cCompEquiCodes> aCEC (cCompEquiCodes::Alloc(aNBBCoding));
    for (const auto & aPCel : aCEC->VecOfCells())
    {
-	size_t aCode =  aPCel->mLowCode;
-        int aNbB = NbBits(aCode);
-	bool takeIt = (aNbB%2==0)  ? ((aParity & 2)!=0)  : ((aParity & 1) !=0);
+      // StdOut() << "LLL=" << __LINE__  << "Ptr=" << aPCel << "\n";
+       size_t aCode =  aPCel->mLowCode;
+       int aNbB = NbBits(aCode);
+       bool takeIt = (aNbB%2==0)  ? ((aParity & 2)!=0)  : ((aParity & 1) !=0);
 
-	if (takeIt)
-	{
-             size_t aLenRun = MaxRun2Length(aCode,1<<aNBBCoding);
-	     aVCodeByRun.at(aLenRun).push_back(aPCel);
-	}
+       if (takeIt)
+       {
+         size_t aLenRun = MaxRun2Length(aCode,size_t(1)<<aNBBCoding);
+         aVCodeByRun.at(aLenRun).push_back(aPCel);
+       }
    }
 
    int aCumul=0;
@@ -630,7 +681,7 @@ cHamingCoder::cHamingCoder(int aNbBitsIn) :
     mNumO2I   = std::vector<int> (mNbBitsOut+1,-1);
 
     for (int aK=0 ; aK<mNbBitsRed ; aK++)
-        mIsBitRed.at(1<<aK) = true;
+        mIsBitRed.at(size_t(1)<<aK) = true;
 
     int aKIn=1;
     for (int aKOut=1 ; aKOut<=mNbBitsOut ; aKOut++)
@@ -664,7 +715,7 @@ void BenchHammingCode(int aNbB)
    cHamingCoder aHC(aNbB);
 
    std::vector<int>  aVC;
-   std::vector<bool>  aVIsCorrect(1<<aHC.NbBitsOut(),false);
+   std::vector<bool>  aVIsCorrect(size_t(1)<<aHC.NbBitsOut(),false);
    for (int aK=0 ; aK<(1<<aNbB) ; aK++)
    {
       int aC = aHC.Coding(aK);

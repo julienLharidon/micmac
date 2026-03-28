@@ -29,7 +29,8 @@ const char * TheXMLBeginCom  = "<!--";
 const char * TheXMLEndCom    = "-->";
 const char * TheXMLBeginCom2 = "<?";
 const char * TheXMLEndCom2   = "?>";
-const char * TheXMLHeader = "<?xml version=\"1.0\" encoding=\"ISO8859-1\" standalone=\"yes\" ?>";
+// const char * TheXMLHeader = "<?xml version=\"1.0\" encoding=\"ISO8859-1\" standalone=\"yes\" ?>";
+const char * TheXMLHeader = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>";
 
 static const char *  FakeTopSerialTree = "FakeTopSerialTree";
 // static const std::string  JSonComment =  "<!--comment-->" ;
@@ -204,7 +205,7 @@ int cSerialFileParser::GetNotEOF()
 
 
 
-bool cSerialFileParser::SkeepOneString(const char * aString)
+bool cSerialFileParser::SkipOneString(const char * aString)
 {
     auto start = Ifs().tellg();
     while (*aString)
@@ -221,30 +222,30 @@ bool cSerialFileParser::SkeepOneString(const char * aString)
 }
 
 
-bool  cSerialFileParser::SkeepOneKindOfCom(const char * aBeg,const char * anEnd)
+bool  cSerialFileParser::SkipOneKindOfCom(const char * aBeg,const char * anEnd)
 {
-   if (! SkeepOneString(aBeg))
+   if (! SkipOneString(aBeg))
       return false;
 
-   while (! SkeepOneString(anEnd))
+   while (! SkipOneString(anEnd))
    {
         GetNotEOF();
    }
    return true;
 }
 
-bool  cSerialFileParser::SkeepCom()
+bool  cSerialFileParser::SkipCom()
 {
-    return    SkeepOneKindOfCom(TheXMLBeginCom,TheXMLEndCom)
-           || SkeepOneKindOfCom(TheXMLBeginCom2,TheXMLEndCom2);
+    return    SkipOneKindOfCom(TheXMLBeginCom,TheXMLEndCom)
+           || SkipOneKindOfCom(TheXMLBeginCom2,TheXMLEndCom2);
 }
 
-int cSerialFileParser::SkeepWhite()
+int cSerialFileParser::SkipWhite()
 {
    int aC=' ';
    while (isspace(aC)|| (aC==0x0A)) // Apparement 0x0A est un retour chariot
    {
-       while (SkeepCom());
+       while (SkipCom());
        //aC = Ifs().get();
        aC = GetNotEOF();
    }
@@ -291,7 +292,7 @@ cResLex cSerialFileParser::AnalysePonctuation(char aC)
 cResLex  cSerialFileParser::GetNextLex_NOEOF()
 {
 
-    SkeepWhite();
+    SkipWhite();
     std::string aRes;
 
     int aC =  GetNotEOF();
@@ -314,7 +315,7 @@ cResLex  cSerialFileParser::GetNextLex_NOEOF()
     Ifs().unget(); // put back < or ' '  etc ..
 
     //if (mTypeS!= eTypeSerial::etxt)  // else get EOF at end
-    //   SkeepWhite();
+    //   SkipWhite();
 
     return cResLex(aRes,eLexP::eStdToken_UK,eTAAr::eUndef);
 }
@@ -325,7 +326,7 @@ cResLex  cSerialFileParser::GetNextLex()
     {
          return GetNextLex_NOEOF();
     }
-    catch (cEOF_Exception anE)
+    catch (cEOF_Exception)
     {
          return cResLex("",eLexP::eEnd,eTAAr::eUndef);
     }
@@ -345,8 +346,25 @@ cXmlSerialTokenParser::cXmlSerialTokenParser(const std::string & aName) :
 
 bool  cXmlSerialTokenParser::BeginPonctuation(char aC) const { return aC=='<'; }
 
+
+bool  IsCarOkRestrictedTag(char aC)
+{
+   return    std::isalpha(aC)
+          || std::isdigit(aC)
+          || (aC==':')    // not XML !!  for micmac opt => to change ???
+          || (aC=='_')
+          || (aC=='.')
+          || (aC=='-');
+}
 cResLex cXmlSerialTokenParser::AnalysePonctuation(char aC)
 {
+    // This rule ar used to parse correctly, for example, <Tag "V=3.03"> and return "Tag" 
+    bool endTag = false;  // once we get a "bad car , we no longer accumulate tag
+    bool mRestrictedTag = true;  // do we accept only standard carac for tags,
+
+    if (mRestrictedTag)  // if restricted, supress white at begin
+        SkipWhite();
+
     aC =  GetNotEOF();
     eLexP aLex= eLexP::eDown;
     std::string aRes ;
@@ -360,7 +378,10 @@ cResLex cXmlSerialTokenParser::AnalysePonctuation(char aC)
     while (aC!='>')
     {
          aC =  GetNotEOF();
-         if (aC!='>')
+         if (mRestrictedTag && !IsCarOkRestrictedTag(aC))
+            endTag = true;
+
+         if ((aC!='>') && (!endTag))
             aRes += aC;
     }
 
@@ -369,7 +390,12 @@ cResLex cXmlSerialTokenParser::AnalysePonctuation(char aC)
 
 void cXmlSerialTokenParser::CheckOnClose(const cSerialTree & aTree,const std::string & aStr)  const
 {
-     MMVII_INTERNAL_ASSERT_tiny(aTree.Value() == aStr,"Close tag unexpected");
+     if (aTree.Value() != aStr)
+     {
+         StdOut()<< "Expected : [" << aTree.Value() << "], Got : [" << aStr << "] " << std::endl;
+         MMVII_INTERNAL_ASSERT_tiny(false,"Close tag unexpected in file "+ mMMIs.Name());
+     }
+
 }
 
 /*============================================================*/
@@ -390,7 +416,7 @@ const  std::string  cJsonSerialTokenParser::SepCars = ",:";
 
 bool cJsonSerialTokenParser::BeginPonctuation(char aC) const 
 {
-     static std::string JSonPonct = OpenCars+CloseCars+SepCars;
+     static const std::string JSonPonct = OpenCars+CloseCars+SepCars;
      return  JSonPonct.find(aC) !=  std::string::npos;
 }
 
@@ -492,6 +518,72 @@ cSerialTree* cSerialTree::AllocSimplify(const std::string & aNameFile)
 
     return aRes;
 }
+
+void cSerialTree::RecGetAllDescFromName(std::vector<const cSerialTree *>& aRes,const std::string & aTag) const
+{
+   if (!IsTerminalNode() && (aTag==mValue))
+       aRes.push_back(this);
+
+   for (const auto & aSon : mSons)
+     aSon.RecGetAllDescFromName(aRes,aTag);
+}
+
+/// Extract a descendant from its name
+std::vector<const cSerialTree *> cSerialTree::GetAllDescFromName(const std::string & aTag) const
+{
+    std::vector<const cSerialTree *> aRes;
+    RecGetAllDescFromName(aRes,aTag);
+    return aRes;
+}
+/// Test if there is a one and only one descendant
+const cSerialTree * cSerialTree::GetUniqueDescFromName(const std::string & aTag,bool SVP) const
+{
+    std::vector<const cSerialTree *> aRes = GetAllDescFromName(aTag);
+    if (aRes.size()!=1)
+    {
+        if (! SVP)
+	{
+            MMVII_INTERNAL_ASSERT_tiny
+            (
+                  false,
+                  "cSerialTree::GetUniqueDescFromName, size="+ToStr(aRes.size()) + " Tag=" + aTag
+            );
+	}
+	return nullptr;
+    }
+
+    return aRes.at(0);
+}
+
+const std::string * cSerialTree::ValueInside(bool SVP) const 
+{
+   if (Sons().size() != 1)
+      return nullptr;
+   const cSerialTree &  aSon = UniqueSon();
+   
+   if (aSon.Sons().size() != 0)
+      return nullptr;
+
+   return & aSon.Value() ;
+}
+
+const std::string * cSerialTree::GetUniqueValFromName(const std::string &aTag,bool SVP) const
+{
+     const cSerialTree * aTree=  cSerialTree::GetUniqueDescFromName(aTag,SVP);
+
+     if (aTree==nullptr)
+        return nullptr;
+
+     return aTree->ValueInside(SVP);
+}
+
+bool cSerialTree::HasValAtUniqueTag(const std::string &aTag,const std::string &aVal) const
+{
+    const std::string * aGetVal = GetUniqueValFromName(aTag,SVP::Yes);
+    return (aGetVal!=nullptr) && (*aGetVal==aVal);
+}
+
+
 
 
 bool cSerialTree::IsTerminalNode() const
@@ -776,7 +868,7 @@ std::string cSerialTree::TagJsonComment(int & aCpt)
 bool cSerialTree::IsJsonComment(const std::string& aName) 
 {
     cMemManager::SetActiveMemoryCount(false);
-    static  tNameSelector aPat = AllocRegex("<!--comment[0-9]+-->");
+    thread_local static  tNameSelector aPat = AllocRegex("<!--comment[0-9]+-->");
     cMemManager::SetActiveMemoryCount(true);
 
     return aPat.Match(aName);
@@ -864,15 +956,15 @@ void cSerialTree::Unfold(std::list<cResLex> & aRes,eTypeSerial aTypeS) const
 }
 
 
-void cSerialTree::Rec_AnalyseDiffTree(const cSerialTree &aT1,const std::string & aSkeep) const
+void cSerialTree::Rec_AnalyseDiffTree(const cSerialTree &aT1, const std::string & aSkip) const
 {
-   if ((mValue != aT1.mValue) && (mValue!=aSkeep) && (aT1.mValue!=aSkeep))
+   if ((mValue != aT1.mValue) && (mValue!=aSkip) && (aT1.mValue!=aSkip))
       throw cResDifST(this,&aT1);
 
    size_t aSz = std::min(mSons.size(),aT1.mSons.size());
 
    for (size_t aK =0 ; aK<aSz ; aK++)
-       mSons[aK].Rec_AnalyseDiffTree(aT1.mSons[aK],aSkeep);
+       mSons[aK].Rec_AnalyseDiffTree(aT1.mSons[aK],aSkip);
 
    if (mSons.size() > aT1.mSons.size())
         throw cResDifST(&(mSons[aSz]),nullptr);
@@ -886,11 +978,11 @@ cResDifST::cResDifST(const cSerialTree* aST1,const cSerialTree* aST2) :
 {
 }
 
-cResDifST  cSerialTree::AnalyseDiffTree(const cSerialTree &aT1,const std::string & aSkeep) const
+cResDifST  cSerialTree::AnalyseDiffTree(const cSerialTree &aT1, const std::string & aSkip) const
 {
     try
     {
-         Rec_AnalyseDiffTree(aT1,aSkeep);
+         Rec_AnalyseDiffTree(aT1,aSkip);
     }
     catch (cResDifST aRes)
     {
@@ -939,12 +1031,14 @@ class cIMakeTreeAr : public cAr2007,
 	tIterCTk              mItLR;
         std::string           mNameFile;
 	eTypeSerial           mTypeS;
+        bool mError;
 };
 
 cIMakeTreeAr::cIMakeTreeAr(const std::string & aName,eTypeSerial aTypeS)  :
     cAr2007   (true,true,false),
     mNameFile (aName),
-    mTypeS    (aTypeS)
+    mTypeS    (aTypeS),
+    mError    (false)
 {
    DEBUG = true;
 
@@ -977,6 +1071,7 @@ cIMakeTreeAr::cIMakeTreeAr(const std::string & aName,eTypeSerial aTypeS)  :
 cResLex cIMakeTreeAr::GetNextLex() 
 {
 
+   if (mError) return cResLex("Tree error",{},{});
    if (mItLR==mListRL.end())
    {
         MMVII_INTERNAL_ASSERT_tiny(false,"End of list in mListRL for :" + mNameFile);
@@ -988,6 +1083,7 @@ cResLex cIMakeTreeAr::GetNextLex()
 
 void cIMakeTreeAr::OnTag(const cAuxAr2007& aTag,bool IsUp)
 {
+   if (mError) return;
    if ((mTypeS==eTypeSerial::ejson)  && ( (aTag.Name() == StrElCont) || (aTag.Name()==StrElMap)))
        return;
    cResLex aRL = GetNextLexNotSizeCont();
@@ -995,12 +1091,15 @@ void cIMakeTreeAr::OnTag(const cAuxAr2007& aTag,bool IsUp)
 
    if (aRL.mLexP != (IsUp ? eLexP::eUp  : eLexP::eDown))
    {
-        StdOut() <<  "LEX " << int(aRL.mLexP)  << "VALS ,got " << aRL.mVal  << " Exp=" <<  aTag.Name() << " F=" << mNameFile << std::endl;
+        StdOut() <<  "Error on lex " << int(aRL.mLexP)  << ", got '" << aRL.mVal  << "' when expecting '" <<  aTag.Name() << "' in file " << mNameFile << std::endl;
+        mError = true;
         MMVII_INTERNAL_ASSERT_tiny(false ,"Bad token cIMakeTreeAr::RawBegin-EndName");
+        return;
    }
    if (aRL.mVal  != aTag.Name())
    {
-      StdOut() <<  "LEX " << int(aRL.mLexP)  << "VALS ,got " << aRL.mVal  << " Exp=" <<  aTag.Name() << " F=" << mNameFile << std::endl;
+      StdOut() <<  "Error on lex " << int(aRL.mLexP)  << ", got '" << aRL.mVal  << "' when expecting '" <<  aTag.Name() << "' in file " << mNameFile << std::endl;
+      mError = true;
       MMVII_INTERNAL_ASSERT_tiny(false,"Bad tag cIMakeTreeAr::RawBegin-EndName");
    }
 }
@@ -1008,11 +1107,12 @@ void cIMakeTreeAr::OnTag(const cAuxAr2007& aTag,bool IsUp)
 
 void cIMakeTreeAr::RawBeginName(const cAuxAr2007& anIT)
 {
+   if (mError) return;
    OnTag(anIT,true);
 	/*
    cResLex aRL = GetNextLexNotSizeCont();
 
-   StdOut() <<  "LEX " << int(aRL.mLexP)  << "VALS ,got " << aRL.mVal  << " Exp=" <<  anIT.Name() << std::endl;
+   StdOut() <<  "Error on lex " << int(aRL.mLexP)  << ", got '" << aRL.mVal  << "' when expecting '" <<  anIT.Name() << "'" <<´ std::endl;
 
    MMVII_INTERNAL_ASSERT_tiny(aRL.mLexP == eLexP::eUp  ,"Bad token cIMakeTreeAr::RawBeginName");
    MMVII_INTERNAL_ASSERT_tiny(aRL.mVal  == anIT.Name() ,"Bad tag cIMakeTreeAr::RawBeginName");
@@ -1021,6 +1121,7 @@ void cIMakeTreeAr::RawBeginName(const cAuxAr2007& anIT)
 
 void cIMakeTreeAr::RawEndName(const cAuxAr2007& anIT)
 {
+   if (mError) return;
    OnTag(anIT,false);
    /*
    cResLex aRL = GetNextLexNotSizeCont();
@@ -1033,6 +1134,7 @@ void cIMakeTreeAr::RawEndName(const cAuxAr2007& anIT)
 
 void cIMakeTreeAr::AddDataSizeCont(int & aNb,const cAuxAr2007 & anAux)
 {
+   if (mError) return;
    cResLex aRL = GetNextLexSizeCont();
 
    aNb = cStrIO<int>::FromStr(aRL.mVal);
@@ -1040,6 +1142,7 @@ void cIMakeTreeAr::AddDataSizeCont(int & aNb,const cAuxAr2007 & anAux)
 
 int cIMakeTreeAr::NbNextOptionnal(const std::string & aTag) 
 {
+    if (mError) return 0;
     tIterCTk    aCurIt =  mItLR;
     int aResult = 0;
 
@@ -1055,30 +1158,35 @@ int cIMakeTreeAr::NbNextOptionnal(const std::string & aTag)
 
 void cIMakeTreeAr::RawAddDataTerm(int &    anI)  
 {
+   if (mError) return;
    cResLex aRL = GetNextLexNotSizeCont();
    FromS(aRL.mVal,anI);
 }
 
 void cIMakeTreeAr::RawAddDataTerm(size_t &    aSz)  
 {
+   if (mError) return;
    cResLex aRL = GetNextLexNotSizeCont();
    FromS(aRL.mVal,aSz);
 }
 
 void cIMakeTreeAr::RawAddDataTerm(double &    aD)  
 {
+   if (mError) return;
    cResLex aRL = GetNextLexNotSizeCont();
    FromS(aRL.mVal,aD);
 }
 
 void cIMakeTreeAr::RawAddDataTerm(std::string &    aS)  
 {
+   if (mError) return;
    cResLex aRL = GetNextLexNotSizeCont();
    aS = aRL.mVal;
 }
 
 void cIMakeTreeAr::RawAddDataTerm(cRawData4Serial &    aRDS)  
 {
+   if (mError) return;
    cResLex aRL = GetNextLexNotSizeCont();
    const char * aCPtr = aRL.mVal.c_str();
 
@@ -1169,13 +1277,13 @@ class cOMakeTreeAr : public cAr2007
 
 	void AddComment(const std::string &) override;
 
-	bool                  SkeepStrElCont(const cAuxAr2007& anOT) const;
+	bool                  SkipStrElCont(const cAuxAr2007& anOT) const;
 
 	tContToken            mContToken;
 	tContToken::iterator  mItToken;
         std::string           mNameFile;
 	eTypeSerial           mTypeS;
-	bool                  mSkeepStrElCont;
+	bool                  mSkipStrElCont;
 	int                   mLevel;
 	std::string           mLastTag;
 };
@@ -1194,22 +1302,22 @@ cOMakeTreeAr::cOMakeTreeAr(const std::string & aName,eTypeSerial aTypeS,bool IsS
     cAr2007           (false,true,false),   // Input,  Tagged, Binary
     mNameFile         (aName),
     mTypeS            (aTypeS),
-    mSkeepStrElCont   (false), // ((aTypeS == eTypeSerial::ejson) || (aTypeS == eTypeSerial::etagt))
+    mSkipStrElCont   (false), // ((aTypeS == eTypeSerial::ejson) || (aTypeS == eTypeSerial::etagt))
     mLevel            (0)
 {
     mIsSpecif = IsSpecif;
 }
 
-bool  cOMakeTreeAr::SkeepStrElCont(const cAuxAr2007& anOT) const
+bool  cOMakeTreeAr::SkipStrElCont(const cAuxAr2007& anOT) const
 {
-	return mSkeepStrElCont && (anOT.Name()== StrElCont) ;
+	return mSkipStrElCont && (anOT.Name()== StrElCont) ;
 }
 
 void cOMakeTreeAr::RawBeginName(const cAuxAr2007& anOT)  
 {
    mLevel++;
    mLastTag = anOT.Name();
-   if ( !SkeepStrElCont(anOT))
+   if ( !SkipStrElCont(anOT))
        mContToken.push_back(cResLex(anOT.Name(),eLexP::eUp,anOT.Type()));
 }
 
@@ -1217,7 +1325,7 @@ void cOMakeTreeAr::RawEndName(const cAuxAr2007& anOT)
 {
     mLevel--;
    // if (anOT.Name()!= StrElCont)
-   if ( !SkeepStrElCont(anOT))
+   if ( !SkipStrElCont(anOT))
       mContToken.push_back(cResLex(anOT.Name(),eLexP::eDown,anOT.Type()));
 }
 
@@ -1241,7 +1349,9 @@ void cOMakeTreeAr::RawAddDataTerm(std::string &    anS)
     if (mIsSpecif)
     {
        int aLevHeader = (mTypeS== eTypeSerial::exml) ? 2 : 1;
-       if ((mLevel != aLevHeader) || ((mLastTag!=TagMMVIIType) && (mLastTag!=TagMMVIIVersion)) )
+       if  (  ((mLevel != aLevHeader) || ((mLastTag!=TagMMVIIType) && (mLastTag!=TagMMVIIVersion)) )
+             && (!starts_with(anS,"enum_"))
+	   )
 	       aStr = JSonQuote("std::string");
     }
 
@@ -1251,7 +1361,8 @@ void cOMakeTreeAr::RawAddDataTerm(cRawData4Serial & aRDS)
 { 
    if (mTypeS == eTypeSerial::ecsv)
    {
-       MMVII_INTERNAL_ERROR("No cRawData4Serial for CSV file");
+        // StdOut() << " ====================== cOMakeTreeAr::RawAddDataTermCSV\n";
+        MMVII_INTERNAL_ERROR("No cRawData4Serial for CSV file");
    }
    std::string aStr ="\"";  // quote the string because of json
    tU_INT1 * aPtr = static_cast<tU_INT1*>(aRDS.Adr());
@@ -1340,9 +1451,10 @@ void  cSerialTree::CSV_PrettyPrint(std::vector<std::string> & aRes,bool IsSpecif
 	Rec_CSV_PrettyPrint(aRes,IsSpecif);
 }
 
+static const std::vector<std::string>  aVxyzt{"x","y","z","t"};
+
 void  cSerialTree::Rec_CSV_PrettyPrint(std::vector<std::string> & aRes,bool IsSpecif) const
 {
-     static std::vector<std::string>  aVxyzt{"x","y","z","t"};
      if (IsSingleTaggedVal())
      {
          if (IsSpecif) 
@@ -1403,6 +1515,27 @@ void PutLineCSV(cMMVII_Ofs & anOfs,const std::vector<std::string>  & aVS)
    anOfs.Ofs() << "\n";
 }
 
+/* ==================================================================== */
+/*                                                                      */
+/*                      ::                                              */
+/*                                                                      */
+/* ==================================================================== */
+
+void TestReadXML(const std::string& aNameFile)
+{
+    cSerialFileParser * aSFP = cSerialFileParser::Alloc(aNameFile,eTypeSerial::exml);
+    cSerialTree  aTree(*aSFP);
+    const cSerialTree * aDirect = aTree.GetUniqueDescFromName("Direct_Model");
+    const cSerialTree * aSNC6 = aDirect->GetUniqueDescFromName("SAMP_NUM_COEFF_6");
+
+
+    StdOut() <<  "TEST COEFF" << aSNC6->UniqueSon().Value() << "\n";
+
+    delete aSFP;
+
+
+    StdOut() << "Bonjour World!" << std::endl;
+}
 
 };
 

@@ -1,5 +1,4 @@
 #include "MMVII_PCSens.h"
-#include "MMVII_MMV1Compat.h"
 #include "MMVII_DeclareCste.h"
 #include "MMVII_BundleAdj.h"
 
@@ -31,11 +30,13 @@ cCorresp32_BA::cCorresp32_BA
     mCFix          (false), // By default we use fix point for GCP (contrary only interesting 4 bench)
     mSetCorresp    (aSetCorresp),
     mSzBuf         (100),
-    mEqColinearity (mSensor->EqColinearity(true,mSzBuf,false))
+    mEqColinearity (mSensor->SetAndGetEqColinearity(true,mSzBuf,false))
 {
-
+// StdOut() << "cCorresp32_BA::cCorresp32_BAcCorresp32_BA::cCorresp32_BAcCorresp32_BA::cCorresp32_BA\n"; getchar();
     for (auto & anObj : mSensor->GetAllUK())
+    {
         mSetInterv.AddOneObj(anObj); // #DOC-AddOneObj
+    }
     //   mSetInterv.AddOneObj(m CamPC); // #DOC-AddOneObj
     //   mSetInterv.AddOneObj(m Calib);  // #DOC-AddOneObj
 
@@ -77,13 +78,15 @@ void cCorresp32_BA::OneIteration()
      std::vector<int> aVIndGlob = aVIndGround;
      // m CamPC->PushIndexes(aVIndGlob); // #DOC-PushIndex
      // m Calib->PushIndexes(aVIndGlob); // #DOC-PushIndex
+
      for (auto & anObj : mSensor->GetAllUK())
         anObj->PushIndexes(aVIndGlob); // #DOC-PushIndex
 
      for (const auto & aCorresp : mSetCorresp.Pairs())
      {
+        //  StdOut() << "WWWWW " << aCorresp.mWeight << "\n";
          if (mSensor->PairIsVisible(aCorresp))
-	 {
+         {
             // structure for points substistion, in mode test they are free
             cSetIORSNL_SameTmp<tREAL8>   aStrSubst
                                          (
@@ -101,11 +104,17 @@ void cCorresp32_BA::OneIteration()
             // "observation" of equation  : PTIm (real obs) + Cur-Rotation (Rot = Axiator*CurRot : to avoid guimbal-lock)
             std::vector<double> aVObs = aCorresp.mP2.ToStdVector(); //  Add X-Im, Y-Im in obs
 
-	    mSensor->PushOwnObsColinearity(aVObs); // For PC cam dd all matrix coeff og current rot
+            mSensor->PushOwnObsColinearity(aVObs,aCorresp.mP3); // For PC cam dd all matrix coeff og current rot
 
-            mSys->AddEq2Subst(aStrSubst,mEqColinearity,aVIndGlob,aVObs);
+            // StdOut() << "WWWWWWWWWWWWW=" << aCorresp.mWeight << "\n";
+            cResidualWeighter<tREAL8> aWeighter(aCorresp.mWeight);
+            mSys->AddEq2Subst(aStrSubst,mEqColinearity,aVIndGlob,aVObs,aWeighter);
             mSys->AddObsWithTmpUK(aStrSubst);
-	 }
+         }
+         else
+         { 
+               // StdOut() << "Hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh " <<  aCorresp.mP2 << "\n";
+         }
      }
 
      const auto & aVectSol = mSys->SolveUpdateReset();

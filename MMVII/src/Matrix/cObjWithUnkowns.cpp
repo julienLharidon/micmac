@@ -21,16 +21,44 @@ template <class Type> cGetAdrInfoParam<Type>::cGetAdrInfoParam(const std::string
 }
 */
 
-template <class Type> cGetAdrInfoParam<Type>::cGetAdrInfoParam(const std::string & aPattern,cObjWithUnkowns<Type> & aObj) :
+template <class Type> cGetAdrInfoParam<Type>::cGetAdrInfoParam(const std::string & aPattern,cObjWithUnkowns<Type> & aObj,bool isRecurs) :
       // cGetAdrInfoParam<Type>(aPattern)
-	mPattern  (AllocRegex(aPattern))
+	mPattern  (AllocRegex(aPattern)),
+	mNameType ("???"),
+	mIdObj    ("???")
 {
+    if (isRecurs)
+    {
+        std::vector<cObjWithUnkowns<Type> *>  aVObj = aObj.RecursGetAllUK() ;
+
+        for (auto  aPtr : aVObj)
+        {
+            aPtr->FillGetAdrInfoParam(*this);
+        }
+    }
+    else
+    {
+       aObj.FillGetAdrInfoParam(*this);
+    }
+	/*
      std::vector<cObjWithUnkowns<Type> *>  aVObj = aObj.RecursGetAllUK() ;
 
      for (auto  aPtr : aVObj)
      {
           aPtr->GetAdrInfoParam(*this);
      }
+     */
+}
+template <class Type> const std::string & cGetAdrInfoParam<Type>::NameType() const {return mNameType;}
+template <class Type> const std::string & cGetAdrInfoParam<Type>::IdObj() const {return mIdObj;}
+
+template <class Type> void cGetAdrInfoParam<Type>::SetNameType(const std::string & aNameType)
+{
+    mNameType = aNameType;
+}
+template <class Type> void cGetAdrInfoParam<Type>::SetIdObj(const std::string & aIdObj)
+{
+    mIdObj = aIdObj;
 }
 
 template <class Type> void cGetAdrInfoParam<Type>::TestParam(tObjWUK * anObj,Type * anAdr,const std::string & aName)
@@ -44,34 +72,62 @@ template <class Type> void cGetAdrInfoParam<Type>::TestParam(tObjWUK * anObj,Typ
 }
 
 template <class Type> const std::vector<std::string>  &   cGetAdrInfoParam<Type>::VNames() const { return mVNames; }
-template <class Type> const std::vector<Type*> &        cGetAdrInfoParam<Type>::VAdrs()  const {return mVAdrs;}
+template <class Type> const std::vector<Type*> &        cGetAdrInfoParam<Type>::VAdrs() const {return mVAdrs;}
 template <class Type> const std::vector<cObjWithUnkowns<Type>*>& cGetAdrInfoParam<Type>::VObjs()  const {return mVObjs;}
 
 template <class Type> void cGetAdrInfoParam<Type>::ShowAllParam(cObjWithUnkowns<Type> & anObj)
 {
-    cGetAdrInfoParam aGAIP(".*",anObj);
+    cGetAdrInfoParam<Type> aGAIP(".*",anObj,true);
 
     StdOut() << "===============  Avalaible names =================" << std::endl;
     for (const auto & aName  : aGAIP.VNames())
         StdOut()  << "  -[ " << aName << "]" << std::endl;
 }
 
+/*
 template <class Type> void cGetAdrInfoParam<Type>::PatternSetToVal(const std::string & aPattern,tObjWUK & aObj,const Type & aVal)
 {
     cGetAdrInfoParam<Type> aGAIP(aPattern,aObj);
     for (auto & anAdr : aGAIP.mVAdrs)
         *anAdr = aVal;
 }
+*/
 
 /* ******************************** */
 /*       cSetInterUK_MultipeObj     */
 /* ******************************** */
 
 //  put all value to "bull shit"
-template <class Type> cObjWithUnkowns<Type>::cObjWithUnkowns() 
+template <class Type> cObjWithUnkowns<Type>::cObjWithUnkowns() :
+    mOUK_NameType  (NamesTypeId_NonInit()),
+    mOUK_IdObj     (NamesTypeId_NonInit())
 {
    OUK_Reset();
 }
+
+template <class Type> std::string cObjWithUnkowns<Type>::NamesTypeId_NonInit()
+{
+   return MMVII_NONE;
+}
+template <class Type> void cObjWithUnkowns<Type>::SetNameType(const std::string & aName)
+{
+   mOUK_NameType = aName;
+}
+
+template <class Type> void cObjWithUnkowns<Type>::SetNameIdObj(const std::string & aName)
+{
+   mOUK_IdObj = aName;
+}
+
+template <class Type> void cObjWithUnkowns<Type>::SetNameTypeId(cGetAdrInfoParam<tREAL8> & aGAIP) const
+{
+    if (mOUK_NameType != NamesTypeId_NonInit()) 
+       aGAIP.SetNameType(mOUK_NameType);
+
+    if (mOUK_IdObj != NamesTypeId_NonInit()) 
+       aGAIP.SetIdObj(mOUK_IdObj);
+}
+
 
 
 template <class Type> 
@@ -124,11 +180,30 @@ template <class Type> bool cObjWithUnkowns<Type>::UkIsInit()  const
 }
 
 // add indexes  of unknown in a vect, note that indexes are consecutives even if unknown are no in object
-template <class Type> void cObjWithUnkowns<Type>::PushIndexes(std::vector<int> & aVect)
+template <class Type> void cObjWithUnkowns<Type>::PushIndexes(std::vector<int> & aVect) const
 {
      for (int aInd=mIndUk0; aInd<mIndUk1 ; aInd++)
          aVect.push_back(aInd);
 }
+
+template <class Type> void cObjWithUnkowns<Type>::PushIndexes(std::vector<int> & aVInd,const Type * aAdrV0,size_t aNbVal) const
+{
+   size_t aInd0 = IndOfVal(aAdrV0);
+   for (size_t aK=0 ; aK<aNbVal ; aK++)
+       aVInd.push_back(aInd0+aK);
+}
+
+template <class Type>  void cObjWithUnkowns<Type>::PushIndexes(std::vector<int> & aVInd,const Type & aVal) const
+{
+	 PushIndexes(aVInd,&aVal,1);
+}
+
+template <class Type>  void cObjWithUnkowns<Type>::PushIndexes(std::vector<int> & aVInd,const cPtxd<Type,3> & aPt) const
+{
+    PushIndexes(aVInd,aPt.PtRawData(),3);
+}
+
+
 
 
 template <class Type> size_t cObjWithUnkowns<Type>::IndOfVal(const Type * aVal) const
@@ -137,7 +212,7 @@ template <class Type> size_t cObjWithUnkowns<Type>::IndOfVal(const Type * aVal) 
 }
 
 template <class Type> 
-    void  cObjWithUnkowns<Type>::GetAdrInfoParam(cGetAdrInfoParam<Type> &) 
+    void  cObjWithUnkowns<Type>::FillGetAdrInfoParam(cGetAdrInfoParam<Type> &) 
 {
     MMVII_INTERNAL_ERROR("No default AdrParamFromPattern");
 }
@@ -154,6 +229,23 @@ template <class Type> cSetInterUK_MultipeObj<Type>::cSetInterUK_MultipeObj() :
     mNbUk (0)
 {
 }
+
+template <class Type> size_t cSetInterUK_MultipeObj<Type>::NumberObject() const
+{
+	return mVVInterv.size();
+}
+
+template <class Type>  const cObjWithUnkowns<Type> &  cSetInterUK_MultipeObj<Type>::KthObj(size_t aKth) const
+{
+	return *(mVVInterv.at(aKth).mObj);
+}
+template <class Type>  cObjWithUnkowns<Type> &  cSetInterUK_MultipeObj<Type>::KthObj(size_t aKth) 
+{
+	return *(mVVInterv.at(aKth).mObj);
+}
+
+
+
 
 template <class Type> void  cSetInterUK_MultipeObj<Type>::SIUK_Reset()
 {
@@ -232,23 +324,46 @@ template <class Type> void cSetInterUK_MultipeObj<Type>::AddOneInterv(cPtxd<Type
 
 template <class Type> void cSetInterUK_MultipeObj<Type>::IO_UnKnowns(cDenseVect<Type> & aVect,bool isSetUK)
 {
+    // for now we offer the possibility to maintain dynamically the old behaviour
+    bool OLDBehave = AppliSpecValue("OldOnUpdate") != MMVII_NONE;
+   // StdOut() << "          --- OLDBehaveOLDBehaveOLDBehaveOLDBehaveOLDBehaveOL  " << OLDBehave << "\n";
+
     size_t anIndex=0; // index that will parse all unknowns
+    typedef std::pair<int,Type *> tModif;
 
     for (auto &   aVinterv : mVVInterv) // parse object
     {
+        std::vector<tModif> aVModif;
+
         for (auto & anInterv : aVinterv.mVInterv) // parse interv of 1 object
         {
             for (size_t aK=0 ; aK<anInterv.mNb ; aK++)  // parse element of the interv
             {
-                Type & aVal = aVect(anIndex++); // memorize ref to element of vector and increase
+                Type & aVal = aVect(anIndex); // memorize ref to element of vector and increase
+                aVModif.push_back(tModif(anIndex++,&  anInterv.mVUk[aK] ));
                 if (isSetUK)
+                {
                     anInterv.mVUk[aK] = aVal;
+
+                }
                 else
                     aVal =  anInterv.mVUk[aK];
             }
         }
         if (isSetUK)
+        {
+    //        StdOut() << OLDBehave << " OnuuuuuuuUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUuuuuuupp \n";
             aVinterv.mObj->OnUpdate();
+            // MODIF MPD : BIG BUG , if the Var wher modified it muste the Vect must be updated !!!
+            if (! OLDBehave)
+             {
+               for (auto [anInd,anAdr] : aVModif )
+               {
+      //             StdOut() << " MOD " << aVect(anInd) << " => " << *anAdr << "\n";
+                   aVect(anInd) = * anAdr;
+               }
+            }
+        }
     }
 }
 
@@ -294,5 +409,37 @@ template class cObjWithUnkowns<tREAL8>;
 template class cSetInterUK_MultipeObj<tREAL8>;
 template class cObjWithUnkowns<tREAL16>;
 template class cSetInterUK_MultipeObj<tREAL16>;
+
+/* ******************************** */
+/*       cVectorUK                  */
+/* ******************************** */
+
+cVectorUK::cVectorUK(const tVect & aVect,const std::string& aName) :
+    mVect  (aVect),
+    mName  (aName)
+{
+}
+cVectorUK::~cVectorUK()
+{
+   OUK_Reset();
+}
+const std::vector<tREAL8> & cVectorUK::Vect() const {return mVect;}
+ std::vector<tREAL8> & cVectorUK::Vect()  {return mVect;}
+
+void cVectorUK::PutUknowsInSetInterval()
+{
+    mSetInterv->AddOneInterv(mVect);
+}
+
+void  cVectorUK::FillGetAdrInfoParam(cGetAdrInfoParam<tREAL8> & aGAIP)
+{
+    for (size_t aK=0 ; aK<mVect.size() ; aK++)
+    {
+        aGAIP.TestParam(this,&mVect.at(aK),std::string("el_") + ToStr(aK));
+    }
+
+    aGAIP.SetNameType("std::vect");
+    aGAIP.SetIdObj(mName);
+}
 
 };

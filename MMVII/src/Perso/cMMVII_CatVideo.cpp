@@ -14,6 +14,24 @@ of concatenating video (in fact media mp4, mp3 ...).
 namespace MMVII
 {
 
+template <class T1>  class cTlpT1T2
+{
+   public :
+      template <class T2> void Test(const T2 & aT2);
+};
+
+template <class T1>  template <class T2>
+ void  cTlpT1T2<T1>::Test(const T2 & aT2)
+{
+   StdOut()  << " T2="  << aT2  << " T1="  << (T1) aT2 << "\n";
+}
+
+void Test_T1T2()
+{
+    cTlpT1T2<int> aTI;
+    aTI.Test(3.14);
+}
+
 
 /* ==================================================== */
 /*                                                      */
@@ -38,7 +56,7 @@ class cAppli_CatVideo : public cMMVII_Appli
          std::string mNameFoF;     ///< name of file of files
          std::string mNameResult;  ///< name of Resulting media
          bool        mVideoMode;       ///< is it video, change def options
-         std::string mOptions;     ///< is it video, change options
+         std::vector<std::string> mOptions;     ///< is it video, change options
 };
 
 
@@ -119,6 +137,11 @@ int cAppli_CatVideo::Exe()
        }
    }
 
+/*
+   JOE => modif MPD ,   else generate :
+   ffmpeg -safe 0 -f concat -i FileCatVideo.txt "-vcodec mpeg4 -b 15000k" toto.mp4
+   and the ffmpeg refuse to have  as a single string "-vcodec mpeg4 -b 15000k" 
+
    if (! IsInit(&mOptions))
    {
       if (mVideoMode)
@@ -126,6 +149,22 @@ int cAppli_CatVideo::Exe()
    }
 
    cParamCallSys aCom("ffmpeg","-safe","0","-f","concat","-i",mNameFoF,mOptions,mNameResult);
+*/
+
+   cParamCallSys aCom("ffmpeg","-safe","0","-f","concat","-i",mNameFoF);
+   if (! IsInit(&mOptions))
+   {
+      if (mVideoMode)
+         mOptions = {"-vcodec","mpeg4","-b","15000k"};
+   }
+
+
+   for (const auto & anOpt : mOptions)
+       aCom.AddArgs(anOpt);
+   aCom.AddArgs(mNameResult);
+   // End modif
+
+
    int aRes = EXIT_SUCCESS ;
    if (mExec) 
    {

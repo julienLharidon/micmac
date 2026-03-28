@@ -5,19 +5,50 @@
 namespace MMVII
 {
 
-tREAL8 AngleInRad(eTyUnitAngle aUnit)
+tREAL8 AngleFromRad(eTyUnitAngle aUnit)
 {
     switch (aUnit)
     {
         case eTyUnitAngle::eUA_radian :  return 1.0;
         case eTyUnitAngle::eUA_degree :  return (180.0/M_PI);
         case eTyUnitAngle::eUA_gon    :  return (200.0/M_PI);
+       case eTyUnitAngle::eUA_DMgon    :  return (200.0/M_PI) * 10 * 1e3;
+
 
         default : ;
     }
 
-    MMVII_INTERNAL_ERROR("should not be here in AngleInRad");
+    MMVII_INTERNAL_ERROR("should not be here in AngleFromRad");
     return 0.0;
+}
+
+tREAL8 SoftExtre(tREAL8 aWMax,tREAL8 aV1,tREAL8 aV2)
+{
+   OrderMinMax(aV1,aV2);
+   return   (1-aWMax) * aV1  + aWMax * aV2;
+         
+}
+
+
+tREAL8 AngleFromRad(tREAL8 aAngleRad,eTyUnitAngle aUnit)
+{
+  return aAngleRad * AngleFromRad(aUnit);
+}
+
+tREAL8 Rad2DMgon(tREAL8 aAngInRad)
+{
+    return AngleFromRad(aAngInRad,eTyUnitAngle::eUA_DMgon);
+}
+
+
+bool AssertRadAngleInOneRound(tREAL8 aAngleRad, bool makeError)
+{
+    if ((aAngleRad>=-2*M_PI)&&(aAngleRad<=2*M_PI))
+        return true;
+
+    if (makeError)
+        MMVII_INTERNAL_ERROR("Angle out of [-2 pi;2 pi]");
+    return false;
 }
 
 
@@ -335,9 +366,49 @@ double NormalisedRatio(double aI1,double aI2)
 
     return 1-aI2/aI1;  // 1 -1/X
 }
+
+double Der_NormalisedRatio_I1(double aI1,double aI2)
+{
+    MMVII_INTERNAL_ASSERT_tiny((aI1>=0)&&(aI2>=0),"NormalisedRatio on negative values");
+
+    if (aI1 < aI2)   // X < 1
+        return 1/aI2;
+
+    if (aI1==0)
+    {
+       return 0;
+    }
+
+    return aI2/Square(aI1);  // 1 -1/X
+}
+
+double Der_NormalisedRatio_I2(double aI1,double aI2)
+{
+    MMVII_INTERNAL_ASSERT_tiny((aI1>=0)&&(aI2>=0),"NormalisedRatio on negative values");
+    // X = I1/I2
+    if (aI1 < aI2)   // X < 1
+        return -aI1/Square(aI2);   // X -1
+    // 0<= aI2 <= aI1
+    if (aI1==0)
+    {
+       return 0;
+    }
+
+    return -1/aI1;  // 1 -1/X
+}
+
+
 double NormalisedRatioPos(double aI1,double aI2)
 {
     return NormalisedRatio(std::max(aI1,0.0),std::max(aI2,0.0));
+}
+double Der_NormalisedRatio_I1Pos(double aI1,double aI2)
+{
+    return Der_NormalisedRatio_I1(std::max(aI1,0.0),std::max(aI2,0.0));
+}
+double Der_NormalisedRatio_I2Pos(double aI1,double aI2)
+{
+    return Der_NormalisedRatio_I2(std::max(aI1,0.0),std::max(aI2,0.0));
 }
 
 
@@ -513,6 +584,16 @@ void Bench_Nums(cParamExeBench & aParam)
         MMVII_INTERNAL_ASSERT_bench( std::abs(aR12+aR21)<1e-5,"Bench NormRat");
         MMVII_INTERNAL_ASSERT_bench( std::abs(aR12-aRM12)<1e-5,"Bench NormRat");
         MMVII_INTERNAL_ASSERT_bench( aR1G2>aR12,"Bench NormRat");
+   }
+
+   for (int aK=0 ; aK<100 ; aK++)
+   {
+        double aAngOk = RandInInterval(-M_PI,M_PI);
+        double aAngBig = aAngOk + 2*M_PI * (RandUnif_N(2000)-1000);
+        double aAngFixed = DiffAngMod(aAngBig,0.);
+        if (aAngFixed>M_PI)
+            aAngFixed-=2*M_PI; // DiffAngMod returns angle in [-pi;+2pi]
+        MMVII_INTERNAL_ASSERT_bench( std::abs(aAngFixed-aAngOk)<1e-8, "Bench DiffAngMod");
    }
 
    aParam.EndBench();

@@ -77,6 +77,7 @@ template<class Type> cDenseVect<Type> EigenSolveLsqGC
 
 
 
+#if (0)
 template<class Type> cDenseVect<Type> EigenSolveCholeskyarseFromV3
                                       (
 				           const std::vector<cEigenTriplet<Type> > & aV3,
@@ -99,21 +100,90 @@ template<class Type> cDenseVect<Type> EigenSolveCholeskyarseFromV3
 
    aWRes.EW() = aChol.solve(aWVec.EW());
 
+// StdOut() << "cConst_EigenMatWrap::cConst_EigenMatWrap::cConst_EigenMatWrap::cConst_EigenMatWrap\n";
+if (NeverHappens())
+{
+    cDenseMatrix<Type> aM(1);
+    cConst_EigenMatWrap<Type> aEWM (aM);
+    aChol.solve(aEWM.EW());
+}
+
    if (EigenDoTestSuccess())
    {
       if (aChol.info()!=Eigen::Success)
       {
           ON_EIGEN_NO_SUCC("SimplicialCholesky::solve");
+          // for (int aK=0 ; aK<100 ; aK++) StdOut() << "SimplicialCholesky::solve" << std::endl;
       }
    }
 
    return aRes;
 }
 
+#endif 
+
+template<class Type> cDenseMatrix<Type> EigenSolveCholeskyarseFromV3
+                                      (
+				           const std::vector<cEigenTriplet<Type> > & aV3,
+                                           const cDenseMatrix<Type> & aMat
+				      )
+{
+   int aN= aMat.Sz().y();
+
+   Eigen::SparseMatrix<Type> aSpMat(aN,aN);
+   aSpMat.setFromTriplets(aV3.begin(), aV3.end());
+
+   // Eigen::SimplicialCholesky< Eigen::SparseMatrix<Type>  > aChol(aSpMat);  // performs a Cholesky factorization of A
+   Eigen::SimplicialLDLT< Eigen::SparseMatrix<Type>  > aChol(aSpMat);  // performs a Cholesky factorization of A
+
+   //compute matrix condition
+   /*auto diag = aChol.vectorD();
+   double lambda_max = diag.cwiseAbs().maxCoeff(); // D values are sqrt(AtPA eigen values) == A eigen values
+   double lambda_min = diag.cwiseAbs().minCoeff();
+   double condition_number = lambda_max / lambda_min;
+   StdOut() << "System approx condition number: " << condition_number << std::endl;*/
+
+   /*Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic> aDenseMat(aSpMat);
+   Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic> aDenseMatSym = aDenseMat.template selfadjointView<Eigen::Lower>();
+   StdOut() << "System matrix:\n" << aDenseMatSym << std::endl;*/
+
+   cConst_EigenMatWrap<Type> aEWM (aMat);
+   // cConst_EigenColVectWrap  aWVec(aVec);
+
+   cDenseMatrix<Type> aRes(aMat.Sz());
+   cNC_EigenMatWrap<Type> aWRes(aRes);
+
+   aWRes.EW() = aChol.solve(aEWM.EW());
+
+   if (EigenDoTestSuccess())
+   {
+      if (aChol.info()!=Eigen::Success)
+      {
+          ON_EIGEN_NO_SUCC("SimplicialCholesky::solve");
+          // for (int aK=0 ; aK<100 ; aK++) StdOut() << "SimplicialCholesky::solve" << std::endl;
+      }
+   }
+
+   return aRes;
+}
+
+template<class Type> cDenseVect<Type> EigenSolveCholeskyarseFromV3
+                                      (
+				           const std::vector<cEigenTriplet<Type> > & aV3,
+                                           const cDenseVect<Type> & aVecIn
+                                      )
+{
+
+    cDenseMatrix<Type> aMatRes = EigenSolveCholeskyarseFromV3(aV3,cDenseMatrix<Type>::MatCol(aVecIn));
+
+    return aMatRes.ReadCol(0);
+}
+
 
 
 #define INSTANTIATE_EIGEN_SPARSE(Type)\
 template cDenseVect<Type> EigenSolveCholeskyarseFromV3(const std::vector<cEigenTriplet<Type> > &,const cDenseVect<Type> & aVec);\
+template cDenseMatrix<Type> EigenSolveCholeskyarseFromV3(const std::vector<cEigenTriplet<Type> > &,const cDenseMatrix<Type> & aVec);\
 template cDenseVect<Type> EigenSolveLsqGC (const std::vector<cEigenTriplet<Type> > &, const std::vector<Type> & aVec, int   aNbVar);
 
 

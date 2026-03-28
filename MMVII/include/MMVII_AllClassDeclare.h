@@ -94,13 +94,17 @@ class cMMVII_Ofs;
 template <class Type> class cExtSet ;
 template <class Type> class cSelector ;
 template <class Type> class cDataSelector ;
-template <class Type> class cOrderedPair ;
+template <class Type> class cUnOrderedPair ;
+class cTripletName;
+typedef std::pair<std::string,std::string>  tSS;  // pair of name for storing Name x Name => Cple homol
 
 typedef cSelector<std::string>      tNameSelector;
 typedef cExtSet<std::string>        tNameSet;
-typedef cOrderedPair<std::string>   tNamePair; ///< Order does not matter
+typedef cUnOrderedPair<std::string>   tNamePair; ///< Order does not matter
+typedef cUnOrderedPair<int>            tIntPair; ///< Order does not matter
 typedef std::pair<std::string,std::string>  tNameOCple;  ///< Order matters
 typedef cExtSet<tNamePair>          tNameRel;
+typedef cExtSet<cTripletName>          tSet3N;
 
 
 
@@ -181,6 +185,9 @@ template <class Type>  class cIm1D  ;
 template <class TypeObj,class TypeLayer>  class cLayerData3D ;
 template <class TypeObj,class TypeLayer>  class cLayer3D ;
 
+class cInterpolator1D ;
+class cDiffInterpolator1D ;
+
 
 
 // MMVII_Matrix.h
@@ -224,7 +231,7 @@ class cChangSysCoordV2 ;
 
 // MMVII_Geom3D.h
 template <class Type> class cRotation3D;
-template <class Type> class cIsometrie3D;
+template <class Type> class cIsometry3D;
 template <class Type> class cSimilitud3D;
 template <class Type> class cTriangulation3D;
 
@@ -251,6 +258,9 @@ class  cPhotogrammetricProject;
 class  cSIMap_Ground2ImageAndProf ;
 class  cPerspCamIntrCalib;
 class  cMetaDataImage;
+class  cElemCamDataBase;
+class  cCamDataBase;
+
 
 // MMVII_MeasuresIm.h
 
@@ -261,11 +271,11 @@ class cSetMesPtOf1Im;
 
 class cMesIm1Pt;
 class cSetMesPtOf1Im;
-class cMes1GCP;
-class cSetMesGCP;
+class cMes1Gnd3D;
+class cSetMesGnd3D;
 
 class cMultipleImPt;
-class cSetMesImGCP;
+class cSetMesGndPt;
 
 class cVecTiePMul;
 class cTiePMul;
@@ -293,11 +303,21 @@ struct cSet2D3D ;            // Set of cWeightedPair2D3D
 class cHomogCpleIm;
 class cSetHomogCpleIm;
 
-class cSetMesImGCP;
+class cSetMesGndPt;
 class cMultipleImPt;
-class cSetMesGCP ;
+class cSetMesGnd3D ;
 class cSetMesPtOf1Im ;
 class cMesIm1Pt;
+
+      // Line detection
+class cOneLineAntiParal;
+class cLinesAntiParal1Im;
+
+// Tiling index
+template <class Type>  class  cTiling ;
+template <const int Dim>  class cPointSpInd;
+class cCpleHomIndex;
+
 
 //   MMVII_BlocRig.h
     //  RIGIDBLOC  
@@ -306,14 +326,38 @@ class cBlocMatrixSensor;
 class cDataBlocCam;      
 class cBlocOfCamera;
 
+//  Clino
+class cOneCalibRelClino;  
+class cOneCalibClino;    
+class cCalibSetClino;   
+class cBA_Clino;
+class cOneMesureClino;
+class cSetMeasureClino;
+
+// New Block of Rigid instrument
+class cIrbCal_Cam1;      // one cam in a calib-bloc
+class cIrbCal_CamSet;    // set of cam in a calib-bloc
+class cIrbCal_Clino1;    // one clino in a calib-bloc
+class cIrbCal_ClinoSet;  // set of  clino in a calib-bloc
+class cIrbCal_Block;     // calib bloc of rigid instrument
+
+class cIrb_SigmaPoseRel;   // "helper" class for storing  sigmas of rel poses
+class cIrbComp_Cam1;     // one cam in a compute-bloc
+class cIrbComp_CamSet;   // set of cam in a compute-bloc
+class cIrbComp_TimeS;    // time-stamp for a compute bloc
+class cIrbComp_Block;    // compute bloc of rigid instrument
+
+class cAppli_EditBlockInstr;    // appli of "edtiting" the bloc, "friend" of some classes
+class cAppli_BlockInstrInitCam; // appli for computing initial value of poses in block
+
+
 //   sys co
 
-class cSysCoordV2;
-class cChangSysCoordV2;
-typedef std::shared_ptr<cSysCoordV2>      tPtrSysCo;
-typedef std::shared_ptr<cChangSysCoordV2> tPtrChSys;
+class cSysCo;
+class cChangeSysCo;
+typedef std::shared_ptr<cSysCo>       tPtrSysCo;
 
-
+class cTabulateGrad;
 
 };
 

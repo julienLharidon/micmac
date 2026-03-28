@@ -81,6 +81,40 @@ void AddDataSizeCont(int& aNb,const cAuxAr2007 & anAux)
 
 void cAr2007::AddComment(const std::string &){}
 
+/*
+template <class Type> Tpl_RawAddDataTerm(cAr2007 & anAr,Type & aVal)
+{
+     if (anAr.Input())
+     {
+          MMVII_INTERNAL_ERROR("No Tpl_RawAddDataTerm for Input specif");
+     }
+     else
+     {
+          if (anAr.IsSpecif())
+          {
+               anAr
+          }
+     }
+}
+
+void cAr2007::RawAddDataTerm(int&         anI)   { PushString_RawAddDataTerm(ToStr(anI)) ; }
+*/
+/*
+void cAr2007::RawAddDataTerm(size_t&      aSz)   {PushString_RawAddDataTerm(ToStr(aSz)) ;}
+void cAr2007::RawAddDataTerm(double&      aReal) {PushString_RawAddDataTerm(ToStr(aReal)) ;}
+void cAr2007::RawAddDataTerm(std::string& aStr)  {PushString_RawAddDataTerm(ToStr(aStr)) ;}
+
+void  PushString_RawAddDataTerm(const std::string&)
+{
+}
+*/
+
+/*
+void cAr2007::RawAddDataTerm(size_t &    aSz) ; ///< Heriting class descrine how they serialze int
+void cAr2007::RawAddDataTerm(double &    aReal) ; ///< Heriting class descrine how they serialze double
+void cAr2007::RawAddDataTerm(std::string &    aStr) ; ///< Heriting class descrine how they serialze string
+*/
+
 
 /*
 void AddComment(cAr2007 & anAr, const std::string & aString)
@@ -108,6 +142,7 @@ void cAr2007::RawBeginName(const cAuxAr2007& anOT) {}
 void cAr2007::RawEndName(const cAuxAr2007& anOT) {}
 bool cAr2007::Tagged() const {return mTagged;}
 bool cAr2007::Input() const  {return mInput;}
+bool cAr2007::Binary() const  {return mBinary;}
 bool cAr2007::IsSpecif() const  {return mIsSpecif;}
 
 cAr2007::cAr2007(bool Input,bool isTagged,bool isBinary) :
@@ -148,8 +183,10 @@ void AddData(const  cAuxAr2007 & anAux, size_t  &  aVal) {anAux.Ar().RawAddDataT
 void AddData(const  cAuxAr2007 & anAux, int  &  aVal) {anAux.Ar().RawAddDataTerm(aVal); }
 void AddData(const  cAuxAr2007 & anAux, double  &  aVal) {anAux.Ar().RawAddDataTerm(aVal); }
 void AddData(const  cAuxAr2007 & anAux, std::string  &  aVal) {anAux.Ar().RawAddDataTerm(aVal); }
-void AddData(const  cAuxAr2007 & anAux, cRawData4Serial  &  aVal) {anAux.Ar().RawAddDataTerm(aVal); }
-
+void AddData(const  cAuxAr2007 & anAux, cRawData4Serial  &  aVal) 
+{
+    anAux.Ar().RawAddDataTerm(aVal); 
+}
 
 void AddData(const  cAuxAr2007 & anAux, tREAL4  &  aVal) { anAux.Ar().TplAddDataTermByCast(anAux,aVal,(double*)nullptr); }
 
@@ -162,12 +199,14 @@ void AddData(const  cAuxAr2007 & anAux, tU_INT1  &  aVal) { anAux.Ar().TplAddDat
 void AddData(const  cAuxAr2007 & anAux, tU_INT2  &  aVal) { anAux.Ar().TplAddDataTermByCast(anAux,aVal,(int*)nullptr); }
 void AddData(const  cAuxAr2007 & anAux, bool     &  aVal) { anAux.Ar().TplAddDataTermByCast(anAux,aVal,(int*)nullptr); }
 
-
+// Those 2 are dangerous ....
+void AddData(const  cAuxAr2007 & anAux, tREAL16  &  aVal) { anAux.Ar().TplAddDataTermByCast(anAux,aVal,(double*)nullptr); }
+void AddData(const  cAuxAr2007 & anAux, long     &  aVal) { anAux.Ar().TplAddDataTermByCast(anAux,aVal,(int*)nullptr); }
 
 
 // void AddData(const  cAuxAr2007 & anAux, bool  &  aVal) {anAux.Ar().RawAddDataTerm(aVal); }
 
-template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,int aNbVal,eTAAr aTAAr)
+template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,size_t aNbVal,eTAAr aTAAr)
 {
     // A precaution, probably it work but need to test
     MMVII_INTERNAL_ASSERT_always(aNbVal,"Not Sur AddTabData work for NbVal=0, check....");
@@ -179,7 +218,7 @@ template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,int
 
     if (aNbVal)
        AddData(anAux,aVD[0]);
-    for (int aK=1 ; aK<aNbVal ; aK++)
+    for (size_t aK=1 ; aK<aNbVal ; aK++)
     {
         anAux.Ar().Separator();
         AddData(anAux,aVD[aK]);
@@ -187,11 +226,10 @@ template <class Type> void AddTabData(const  cAuxAr2007 & anAux, Type *  aVD,int
     anAux.Ar().OnEndTab();
 }
 
-template void AddTabData(const  cAuxAr2007 & anAux, int *  aVD,int aNbVal,eTAAr);
-template void AddTabData(const  cAuxAr2007 & anAux, size_t *  aVD,int aNbVal,eTAAr);
-template void AddTabData(const  cAuxAr2007 & anAux, tREAL8 *  aVD,int aNbVal,eTAAr);
-template void AddTabData(const  cAuxAr2007 & anAux, tREAL4 *  aVD,int aNbVal,eTAAr);
-
+template void AddTabData(const  cAuxAr2007 & anAux, int *  aVD,size_t aNbVal,eTAAr);
+template void AddTabData(const  cAuxAr2007 & anAux, size_t *  aVD,size_t aNbVal,eTAAr);
+template void AddTabData(const  cAuxAr2007 & anAux, tREAL8 *  aVD,size_t aNbVal,eTAAr);
+template void AddTabData(const  cAuxAr2007 & anAux, tREAL4 *  aVD,size_t aNbVal,eTAAr);
 
 
 template <class Type,int Dim> void AddData(const  cAuxAr2007 & anAux, cPtxd<Type,Dim>  &  aPt) 
@@ -204,28 +242,20 @@ template <class Type,int Dim> void AddData(const  cAuxAr2007 & anAux, cPtxd<Type
    AddTabData(anAux,aPt.PtRawData(),Dim,eTAAr::ePtxd);
 }
 
-template <class Type,int Dim> void AddData(const  cAuxAr2007 & anAux, cTplBox<Type,Dim>  &  aBox) 
-{
-   AddData(cAuxAr2007("P0",anAux),aBox.P0ByRef());
-   AddData(cAuxAr2007("P1",anAux),aBox.P1ByRef());
-   // Need to recreate a coherent object
-// StdOut() << "AddDataAddDataBox " << aBox.P0ByRef() << " " << aBox.P1ByRef() << std::endl;
-   if (anAux.Input())
-      aBox = cTplBox<Type,Dim>(aBox.P0(),aBox.P1());
-}
 
-
-template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tREAL8,4>  &  aVal) ;
+// template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tREAL8,4>  &  aVal) ;
 
 #define MACRO_INSTANTIATE_AddDataPtxD(DIM)\
 template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tREAL4,DIM>  &  aVal) ;\
 template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tREAL8,DIM>  &  aVal) ;\
-template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tINT4,DIM>  &  aVal) ;\
-template  void AddData(const  cAuxAr2007 & anAux, cTplBox<tINT4,DIM>  &  aVal) ;\
+template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tREAL16,DIM>  &  aVal) ;\
+template  void AddData(const  cAuxAr2007 & anAux, cPtxd<tINT4,DIM>  &  aVal) ;
 
 MACRO_INSTANTIATE_AddDataPtxD(1)
 MACRO_INSTANTIATE_AddDataPtxD(2)
 MACRO_INSTANTIATE_AddDataPtxD(3)
+MACRO_INSTANTIATE_AddDataPtxD(4)
+MACRO_INSTANTIATE_AddDataPtxD(5)
 
 void AddData(const  cAuxAr2007 & anAux, tNamePair  &  aVal) 
 {
@@ -293,7 +323,7 @@ eTAAr cAuxAr2007::Type() const {return mType;}
 
 
 class cIBaseTxt_Ar2007 : public cAr2007,
-	                   public cXmlSerialTokenParser
+	                 public cXmlSerialTokenParser
 {
      public :
           cIBaseTxt_Ar2007(const std::string & aName,eTypeSerial aTypeS) : 
@@ -313,7 +343,7 @@ class cIBaseTxt_Ar2007 : public cAr2007,
            /// Read next tag, if its what expected return 1, restore state of file
            int NbNextOptionnal(const std::string &) override;
 	   
-	  /// retunr string after skeep whit, comm .... accept "a b c" , 
+	  /// return string after skip whitespaces, comments .... accept "a b c" ,
           std::string  GetNextStdString();
 
         // Utilitaire de manipulation 
@@ -346,7 +376,7 @@ void cIBaseTxt_Ar2007::RawAddDataTerm(std::string &    aS)
 
 void cIBaseTxt_Ar2007::RawAddDataTerm(cRawData4Serial  &    aRDS) 
 {
-   SkeepWhite();
+   SkipWhite();
    tU_INT1 * aPtr = static_cast<tU_INT1*>(aRDS.Adr());
    for (int aK=0 ; aK< aRDS.NbElem() ; aK++)
    {
@@ -403,10 +433,10 @@ class cStreamIXml_Ar2007 : public cIBaseTxt_Ar2007
 
         bool GetTag(bool aClose,const std::string & aName)
         {
-            SkeepWhite();
+            SkipWhite();
             std::string aTag = std::string(aClose ? "</" : "<") + aName + ">";
    
-            return SkeepOneString(aTag.c_str());
+            return SkipOneString(aTag.c_str());
         }
 
 };
@@ -418,7 +448,7 @@ bool cStreamIXml_Ar2007::IsFileOfFirstTag(bool Is2007,const std::string  & aName
     try {
         aRes = ((!Is2007) || GetTag(false,TagMMVIISerial)) && GetTag(false,aNameTag);
     }
-    catch (cEOF_Exception anE)
+    catch (cEOF_Exception)
     {
         return false;
     }
@@ -573,17 +603,6 @@ void cHashValue_Ar2007::RawAddDataTerm(cRawData4Serial  &    aRDS)
    }
 }
 
-// From boost:: ...
-template <class T>
-static inline void hash_combine(std::size_t& seed, T const& v)
-{
-   std::hash<T> hasher;
-   seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
-}
-
-// template <class T> void HashCombine(std::size_t& seed, T const& v);
-
-
 
 void cHashValue_Ar2007::RawAddDataTerm(size_t &  aSz) 
 {
@@ -723,7 +742,7 @@ void cIBin_Ar2007::RawAddDataTerm(cRawData4Serial  &    aRDS)
 */
 
 // std::unique_ptr<cAr2007 >  AllocArFromFile(const std::string & aName,bool Input)
-cAr2007 *  AllocArFromFile(const std::string & aName,bool Input,bool IsSpecif)
+cAr2007 *  AllocArFromFile(const std::string & aName,bool Input,bool IsSpecif,eTypeSerial aForceTypeS)
 {
    if (IsSpecif)
    {
@@ -753,7 +772,7 @@ cAr2007 *  AllocArFromFile(const std::string & aName,bool Input,bool IsSpecif)
        else
           aRes =  new cOBin_Ar2007(aName);
    }
-   else if (UCaseEqual(aPost,"txt") )
+   else if (UCaseEqual(aPost,"txt") || (aForceTypeS==eTypeSerial::etxt)  )
    {
        if (Input)
        {

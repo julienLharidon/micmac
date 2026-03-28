@@ -3,8 +3,10 @@
 #include "MMVII_MeasuresIm.h"
 #include "MMVII_UtiSort.h"
 #include "MMVII_Sensor.h"
+#include "MMVII_PCSens.h"
 
 #include "TieP.h"
+#include "MMVII_GeomTpl.h"
 
 /**
    \file  cImplemConvertHom
@@ -18,7 +20,31 @@
 namespace MMVII
 {
 
+/* ****************************************************************** */
+/*                                                                    */
+/*                cMemoryInterfImportHom                              */
+/*                                                                    */
+/* ****************************************************************** */
 
+
+bool cMemoryInterfImportHom::HasHom(const std::string & aN1,const std::string & aN2) const
+{
+    //return BoolFind(mMapN2Cple,tSS(aN1,aN2));
+
+    return mMapN2Cple.find(tSS(aN1,aN2)) != mMapN2Cple.end();
+}
+
+
+void cMemoryInterfImportHom::GetHom(cSetHomogCpleIm & aCple,const std::string & aN1,const std::string & aN2) const
+{
+    const auto & anIter = mMapN2Cple.find(tSS(aN1,aN2));
+    aCple = anIter->second;
+}
+
+void cMemoryInterfImportHom::Add(const cSetHomogCpleIm & aCple,const std::string & aN1,const std::string & aN2)
+{
+     mMapN2Cple[tSS(aN1,aN2)] = aCple;
+}
 
     //================================  tPairTiePMult  ===================
     //================================  tPairTiePMult  ===================
@@ -29,25 +55,62 @@ size_t NbPtsMul(const tPairTiePMult & aPair)
 	return Val(aPair).mVPIm.size()  / Multiplicity(aPair);
 }
 
+
 cPt3dr BundleInter(const tPairTiePMult & aPair,size_t aKPts,const std::vector<cSensorImage *>&  aVSI)
 {
+
     const auto &  aConfig = Config(aPair);
     const cVal1ConfTPM & aVal =  Val(aPair);
     size_t aMult = aConfig.size();
+
+    if (aMult<2) 
+       return cPt3dr(0,0,0);
 
     size_t aKP0 = aKPts*aMult;
     std::vector<tSeg3dr>  aVSeg;
     for (size_t aK= 0 ; aK<aMult ; aK++)
     {
         const cPt2dr & aPIm = aVal.mVPIm.at(aKP0+aK);
-	cSensorImage * aSI  = aVSI.at(aConfig.at(aK));
+
+        cSensorImage * aSI  = aVSI.at(aConfig.at(aK));
 
 	aVSeg.push_back(aSI->Image2Bundle(aPIm));
     }
 
-    return BundleInters(aVSeg);
+    cPt3dr aResInter = BundleInters(aVSeg);
+    return aResInter;
 }
 
+cPt3dr BundleDirInter(const tPairTiePMult & aPair,size_t aKPts,const std::vector<cSensorImage *>&  aVSI)
+{
+    double aDepth = 1.0;
+
+    const auto &  aConfig = Config(aPair);
+    const cVal1ConfTPM & aVal =  Val(aPair);
+    size_t aMult = aConfig.size();
+    size_t aKP0 = aKPts*aMult;
+
+    std::vector<tSeg3dr>  aVSeg;
+    for (size_t aK= 0 ; aK<aMult ; aK++)
+    {
+        const cPt2dr & aPBundle = aVal.mVPIm.at(aKP0+aK);
+        const double & aZ = aVal.mVPZ.at(aKP0+aK);
+
+        cSensorImage * aSI  = aVSI.at(aConfig.at(aK));
+
+        cSensorCamPC * aCamPC = aSI->GetSensorCamPC();
+
+        tSeg3dr aSeg = tSeg3dr(aCamPC->Center(),
+                               aCamPC->Pose().Value(
+                               cPt3dr(aPBundle.x(),aPBundle.y(),aZ) * (aDepth/aZ)));
+
+        aVSeg.push_back(aSeg);
+
+    }
+    cPt3dr aResInter = BundleInters(aVSeg);
+
+    return aResInter;
+}
 
 void MakePGround(tPairTiePMult & aPair,const std::vector<cSensorImage *> & aVSI)
 {
@@ -61,8 +124,19 @@ void MakePGround(tPairTiePMult & aPair,const std::vector<cSensorImage *> & aVSI)
     }
 }
 
+void MakePGroundFromBundles(tPairTiePMult & aPair,const std::vector<cSensorImage *> & aVSI)
+{
+    std::vector<cPt3dr> & aVPts = Val(aPair).mVPGround;
+    aVPts.clear();
 
+    size_t aNbPts = NbPtsMul(aPair);
 
+    for (size_t aKP=0 ; aKP<aNbPts; aKP++)
+    {
+        // change method to take bundles and Z
+        aVPts.push_back(BundleDirInter(aPair,aKP,aVSI));
+    }
+}
 
 ///========================================================
 
@@ -218,12 +292,86 @@ bool operator == (const cVal1ConfTPM & aV1,const cVal1ConfTPM & aV2)
 	       &&  (aV1.mVIdPts== aV2.mVIdPts)
         ;
 }
+cComputeMergeMulTieP::cComputeMergeMulTieP
+    (
+        const cComputeMergeMulTieP& aFullMTP,
+        const std::vector<std::string> & aVNameSelected
+        )
+{
+    std::set<std::string> aSet(aVNameSelected.begin(),aVNameSelected.end());
+    std::vector<int> aVecNewIndices;
+    int aNbIn =0;
+
+    //  compute the new images & sensor, compute the new vector of index for images
+    for (size_t aKIm=0 ; aKIm<aFullMTP.mVNames.size() ; aKIm++)
+    {
+        const std::string & aName = aFullMTP.mVNames.at(aKIm);
+        bool isIn = MapBoolFind(aSet,aName);
+        aVecNewIndices.push_back(isIn ? aNbIn++ : -1);
+        if (isIn)
+        {
+            mVNames.push_back(aName);
+            if (!aFullMTP.mVSensors.empty()) // if not empty it must be filled for all images
+            {
+                mVSensors.push_back(aFullMTP.mVSensors.at(aKIm));
+            }
+        }
+    }
+
+    //  parse all config, select those with NbIm>=2, compact the indices and reduce points
+    for (const auto & [aConfig,aVal] : aFullMTP.mPts)
+    {
+        std::vector<int> aNewConfig; // Reduced Indexes of images in new struct
+        std::vector<int> aVecKInConf; // Position in config where thise red-ind were
+        // Compute aNewConfig & aVecKInConf
+        for (size_t aKInConfig =0 ; aKInConfig<aConfig.size() ; aKInConfig++)
+        {
+            int aIndexIm = aConfig.at(aKInConfig);
+            int aNewIndexIm = aVecNewIndices.at(aIndexIm);
+            if (aNewIndexIm>=0)
+            {
+                aNewConfig.push_back(aNewIndexIm);
+                aVecKInConf.push_back(aKInConfig);
+            }
+        }
+
+        //  if there is enough point for the config to be of interest as tie-point
+        if (aNewConfig.size() >=2)
+        {
+            cVal1ConfTPM & aNewVal = mPts[aNewConfig];
+            // if there is identifier they must be copied
+            AppendIn(aNewVal.mVIdPts , aVal.mVIdPts);
+            size_t aNbIm = aConfig.size();
+            size_t aNbPts = aVal.mVPIm.size() / aNbIm;
+            // check on  total number due to structuring
+            MMVII_INTERNAL_ASSERT_medium(aVal.mVPIm.size()==aNbIm*aNbPts,"Size pb in cVal1ConfTPM");
+
+            bool aIsBun = (aVal.mVPZ.size()) ? true : false;
+
+            int aIndPt0 = 0;
+
+            for (size_t aKPt=0 ; aKPt<aNbPts ; aKPt++)
+            {
+                for (const auto aKInC : aVecKInConf)
+                {
+                    aNewVal.mVPIm.push_back(aVal.mVPIm.at(aIndPt0+aKInC));
+
+                    if (aIsBun)
+                        aNewVal.mVPZ.push_back(aVal.mVPZ.at(aIndPt0+aKInC));
+                }
+                aIndPt0 += aNbIm;
+            }
+
+        }
+    }
+}
+
 
 cComputeMergeMulTieP::cComputeMergeMulTieP
 (
        const std::vector<std::string> & aVNames,
        cInterfImportHom * anIIH,
-       cPhotogrammetricProject*  aPhP ,
+       cIPhProj*  aPhP ,
        bool                      WithImageIndexe
 ) :
     mVNames (aVNames)
@@ -237,12 +385,120 @@ cComputeMergeMulTieP::cComputeMergeMulTieP
    if (aPhP)
    {
       for (const auto & aName : mVNames)
-          mVSensors.push_back(aPhP->LoadSensor(aName,false));
+          mVSensors.push_back(aPhP->ReadSensor(aName,true,false));
    }
 
    if (WithImageIndexe)
       SetImageIndexe();
 }
+
+size_t cComputeMergeMulTieP::NbPtsTot() const
+{
+   size_t aRes = 0;
+   for (const auto & [aConfig,aVal1Conf] : mPts)
+       aRes += aVal1Conf.mVPIm.size() / aConfig.size();
+   return aRes;
+}
+
+cComputeMergeMulTieP::cComputeMergeMulTieP(const cComputeMergeMulTieP& aCMTP,int aNbPtsTarget):
+    cComputeMergeMulTieP(aCMTP.mVNames)
+{
+     size_t aNb0 =    aCMTP.NbPtsTot();
+     cRandKAmongN aSelector(aNbPtsTarget,aNb0);
+     //StdOut()  << " --SEL " << aNbPtsTarget << " ON " << aNb0 << "\n";
+     for (const auto & [aConfig,aValIn] : aCMTP.mPts)
+     {
+         size_t aNbIm = aConfig.size();
+         cVal1ConfTPM & aValOut = mPts[aConfig];
+         size_t aNbPts = aValIn.mVPIm.size() / aNbIm;
+         // StdOut() << " CONFIG " << aNb
+         for (size_t aKPts=0 ; aKPts<aNbPts ; aKPts++)
+         {
+             if (aSelector.GetNext())
+             {
+                 for (size_t aKIm=0 ; aKIm<aNbIm ; aKIm++)
+                 {
+                     aValOut.mVPIm.push_back(aValIn.mVPIm.at(aKPts*aNbIm+aKIm));
+                 }
+             }
+         }
+     }
+
+}
+
+class cDistSelSpatial_MTP
+{
+   public :
+      cDistSelSpatial_MTP(const std::vector<cPt2dr>* aVPts,int aNbIm) :
+          mVPts (aVPts),
+          mNbIm (aNbIm)
+      {
+      }
+
+      tREAL8 operator () (int aK1,int aK2,int) const
+      {
+          tREAL8 aRes = 0.0;
+          const cPt2dr * aPtr1 = mVPts->data() + aK1*mNbIm;
+          const cPt2dr * aPtr2 = mVPts->data() + aK2*mNbIm;
+
+          for (int aKIm=0 ; aKIm<mNbIm; aKIm++)
+              aRes += SqN2(aPtr1[aKIm]-aPtr2[aKIm]);
+
+          return aRes;
+      }
+
+      const std::vector<cPt2dr>* mVPts;
+      int mNbIm;
+};
+
+
+
+cComputeMergeMulTieP::cComputeMergeMulTieP(int aNbTarget,const cComputeMergeMulTieP& aCMTP):
+    cComputeMergeMulTieP(aCMTP.mVNames)
+{
+    size_t aNbTot =    aCMTP.NbPtsTot();
+    //StdOut()  << " --SEL " << aNbPtsTarget << " ON " << aNb0 << "\n";
+    for (const auto & [aConfig,aValIn] : aCMTP.mPts)
+    {
+        //  --------  read input data -----------------------
+        const std::vector<cPt2dr> & aPtsIn = aValIn.mVPIm;
+        size_t aNbIm = aConfig.size();
+        size_t aNbPtsIn = aPtsIn.size() / aNbIm;
+
+        // -------- create a vector of index in [0 1 2 ... NbPts]
+        std::vector<int> aVIndIn(aNbPtsIn);
+        for (size_t aKP=0 ; aKP<aNbPtsIn ; aKP++)
+            aVIndIn.at(aKP)= aKP;
+
+        // ------------ read output data
+        std::vector<int> aVIndOut;
+        size_t aNbPtsOut = round_up(aNbPtsIn * (aNbTarget/tREAL8(aNbTot)));
+        std::vector<cPt2dr> & aPtsOut = mPts[aConfig].mVPIm;
+
+        // ------------ select index of output --------------------
+        cDistSelSpatial_MTP aDSP(&aPtsIn,aNbIm);
+
+        // StdOut() << aDSP(1,2,3);
+
+        Tpl_SelectOnSpatialCriteria
+         (
+                   aVIndOut,
+                   aVIndIn,
+                   aNbPtsOut,
+                   aDSP,
+                   1 // unused
+         );
+        // FakeUseIt(aNbPtsOut);
+
+         // ------------- transferate index in pts ----------------
+         for (const auto  anInd : aVIndOut)
+         {
+             for (size_t aKIm=0; aKIm<aNbIm ; aKIm++)
+                 aPtsOut.push_back(aPtsIn.at(aKIm+aNbIm*anInd));
+        }
+    }
+}
+
 const std::vector<std::list<std::pair<size_t,tPairTiePMult*>>> & cComputeMergeMulTieP::IndexeOfImages()  const
 {
 	return mImageIndexes;
@@ -347,11 +603,11 @@ std::vector<cPMulGCPIm>
     for (size_t aK=0 ; aK<aNbPMul ; aK++)
     {
         aRes.at(aK).mVPIm = std::vector<cPt2dr>(aValue.mVPIm.begin()+aK*aMult,aValue.mVPIm.begin()+(aK+1)*aMult);
-	if (! aValue.mVIdPts.empty())
-            aRes.at(aK).mName = ToStr(aValue.mVIdPts.at(aK));
-	if (! aValue.mVPGround.empty())
-            aRes.at(aK).mPGround = aValue.mVPGround.at(aK);
-         aRes.at(aK).mVIm = aConfigIm;
+        if (! aValue.mVIdPts.empty())
+           aRes.at(aK).mName = ToStr(aValue.mVIdPts.at(aK));
+        if (! aValue.mVPGround.empty())
+           aRes.at(aK).mPGround = aValue.mVPGround.at(aK);
+        aRes.at(aK).mVIm = aConfigIm;
     }
 
     // sort
@@ -548,7 +804,7 @@ void cOneImMEff2MP::ComputeIndexPts(cInterfImportHom & anImport,const  cMemoryEf
      {
            public :
 	     //  static constexpr int     Dim = 2;  => dont work with local class, hapilly enum works
-	     enum {Dim=2};
+	     enum {TheDim=2};
              typedef cPt2dr           tPrimGeom;  // geometric primitives indexed are points
 	     // type of arg that we will used in call back "GetPrimGeom", we need to refer to images
              typedef cOneImMEff2MP *  tArgPG;     
@@ -919,7 +1175,6 @@ class cImage
        cGeneratePointDiff<2>  mGenPts;  ///< Generate point all different
 };
 
-typedef std::pair<std::string,std::string>  tSS;  // pair of name for storing Name x Name => Cple homol
 
 /** class for generating Multiple random points + correspond random
  * homologous for generating them
@@ -1148,7 +1403,7 @@ void OneBench(int aNbImage,int aNbPts,int aMaxCard,bool DoIt)
     cSimulHom aSimH(aNbImage,aNbPts,aMaxCard,false);
     cComputeMergeMulTieP aSetMTP1(aSimH.VNames());
 
-    int aCptErr = 0;
+    [[maybe_unused]] int aCptErr = 0;
     for (int aKPts=0 ; aKPts<aNbPts ; aKPts++)
     {
         cMultiplePt aMTP = aSimH.GenMulTieP();

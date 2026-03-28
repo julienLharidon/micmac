@@ -114,7 +114,7 @@ template <class Type,const int Dim> class cTriangulation
           typedef Type                  tCoord;
           typedef cPtxd<tCoord,Dim>     tPt;
           typedef cTriangle<tCoord,Dim> tTri;
-          typedef cPt3di                tFace;
+          typedef cPt3di                tFace; /// triplet of indexes 
           typedef std::vector<tPt>      tVPt;
           typedef std::vector<tFace>    tVFace;
 
@@ -134,6 +134,8 @@ template <class Type,const int Dim> class cTriangulation
           const tFace &  KthFace(size_t aK) const;  ///<  Faces number K
 	  const tPt  & KthPts(size_t aK) const;  ///< Points number K
 	  tPt  & KthPts(size_t aK) ;  ///< Points number K
+          bool HasPtAttribute() const;
+          float KthPtsPtAttribute(size_t aK) const;
 
           tTri  KthTri(int aK) const;  ///< Triangle corresponding to the face
 	  bool  ValidFace(const tFace &) const;  ///< is it a valide face (i.e. : all index in [0,NbPts[)

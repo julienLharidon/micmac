@@ -27,34 +27,37 @@ class cAppli_DicoRename   : public cMMVII_Appli
      protected :
      private :
         cPhotogrammetricProject  mPhProj;
-	std::string              mNameFile;
+	std::string              mNameFileTxtIn;
         std::string              mFormat;
-	std::vector<std::string> mPatSubst;
+	std::vector<std::string> mPatIm;
 	std::string              mNameDico;
-	std::vector<std::string> mNameFiles;
         int                      mL0;
         int                      mLLast;
         char                     mComment;
 	std::string              mSeparator;
+        int                      mNbMinTieP;
+	std::vector<std::string> mNameFilesListIm;
 
 };
 
 cAppli_DicoRename::cAppli_DicoRename(const std::vector<std::string> & aVArgs,const cSpecMMVII_Appli & aSpec) :
-    cMMVII_Appli (aVArgs,aSpec),
-    mPhProj      (*this),
-    mL0          (0),
-    mLLast       (-1),
-    mComment     ('#'),
-    mSeparator   ("@")
+    cMMVII_Appli      (aVArgs,aSpec),
+    mPhProj           (*this),
+    mL0               (0),
+    mLLast            (-1),
+    mComment          ('#'),
+    mSeparator        ("@"),
+    mNbMinTieP        (0),
+    mNameFilesListIm  {"AllImDicoIn.xml","AllImDicoOut.xml"}
 {
 }
 
 cCollecSpecArg2007 & cAppli_DicoRename::ArgObl(cCollecSpecArg2007 & anArgObl)
 {
     return anArgObl
-              <<  Arg2007(mNameFile ,"Name of Input File")
+              <<  Arg2007(mNameFileTxtIn ,"Name of Input File")
               <<  Arg2007(mFormat   ,"Format of file as for ex \"SNSXYZSS\" ")
-              <<  Arg2007(mPatSubst ,"Substitution pattern [Pattern,SubstIn,SubstOut]",{{eTA2007::ISizeV,"[3,3]"}})
+              <<  Arg2007(mPatIm ,"Substitution pattern [Pattern,SubstIn,SubstOut]",{{eTA2007::ISizeV,"[3,3]"}})
               <<  Arg2007(mNameDico ,"Name for output dictionnary")
            ;
 }
@@ -66,13 +69,14 @@ cCollecSpecArg2007 & cAppli_DicoRename::ArgOpt(cCollecSpecArg2007 & anArgObl)
        << AOpt2007(mL0,"NumL0","Num of first line to read",{eTA2007::HDV})
        << AOpt2007(mLLast,"NumLast","Num of last line to read (-1 if at end of file)",{eTA2007::HDV})
        << AOpt2007(mComment,"Com","Carac for commentary",{eTA2007::HDV})
-       << AOpt2007(mNameFiles,"Files","Name file to transform [Input,Output)",{{eTA2007::ISizeV,"[2,2]"}})
+       << AOpt2007(mNameFilesListIm,"Files","Name file to transform [Input,Output]",{{eTA2007::ISizeV,"[2,2]"},eTA2007::HDV})
+       << AOpt2007(mNbMinTieP,"NbMinTiep","Number minimal of tie point for save, set -1 if save w/o tiep",{eTA2007::HDV})
 
        <<   mPhProj.DPMulTieP().ArgDirInOpt()
        <<   mPhProj.DPMulTieP().ArgDirOutOpt()
 
-       <<   mPhProj.DPPointsMeasures().ArgDirInOpt()
-       <<   mPhProj.DPPointsMeasures().ArgDirOutOpt()
+       <<   mPhProj.DPGndPt2D().ArgDirInOpt()
+       <<   mPhProj.DPGndPt2D().ArgDirOutOpt()
      ;
 }
 
@@ -87,7 +91,7 @@ int cAppli_DicoRename::Exe()
 
     ReadFilesStruct
     (
-        mNameFile, mFormat,
+        mNameFileTxtIn, mFormat,
         mL0, mLLast, mComment,
         aVVNames,aVXYZ,aVWKP,aVNums,
         false
@@ -100,8 +104,8 @@ int cAppli_DicoRename::Exe()
          for (size_t aKName=1 ; aKName<aVNames.size() ; aKName++)
              aCatName = aCatName + mSeparator + aVNames.at(aKName);
 
-	 std::string  aNameIn  = ReplacePattern(mPatSubst.at(0),mPatSubst.at(1),aCatName);
-	 std::string  aNameOut = ReplacePattern(mPatSubst.at(0),mPatSubst.at(2),aCatName);
+	 std::string  aNameIn  = ReplacePattern(mPatIm.at(0),mPatIm.at(1),aCatName);
+	 std::string  aNameOut = ReplacePattern(mPatIm.at(0),mPatIm.at(2),aCatName);
 
 	 aDico[aNameIn] = aNameOut;
 
@@ -110,9 +114,11 @@ int cAppli_DicoRename::Exe()
 
     SaveInFile(aDico,mNameDico);
 
+/*
     if (IsInit(&mNameFiles))
     {
         auto aSetIn = ToVect(SetNameFromString(mNameFiles.at(0),true));
+        tNameSet aSetIn;
         tNameSet aSetOut;
 
         for (const auto & aNameIn : aSetIn)
@@ -123,29 +129,47 @@ int cAppli_DicoRename::Exe()
                aSetOut.Add(anIter->second);
             }
         }
+        SaveInFile(aSetIn,mNameFiles.at(0));
         SaveInFile(aSetOut,mNameFiles.at(1));
     }
+*/
 
-    if (mPhProj.DPMulTieP().DirInIsInit())
+    bool  isInitMTP = mPhProj.DPMulTieP().DirInIsInit();
+    if (isInitMTP)
     {
        MMVII_INTERNAL_ASSERT_User(mPhProj.DPMulTieP().DirOutIsInit(),eTyUEr::eUnClassedError,"MulTieP In w/o Out");
-       for (const auto & aPair :  aDico)
+    }
+    tNameSet aSetIn;
+    tNameSet aSetOut;
+    for (const auto & [aNameIn,aNameOut] :  aDico)
+    {
+       bool  hasTieP =    isInitMTP
+                       && ExistFile(mPhProj.DPMulTieP().FullDirIn()+ mPhProj.NameMultipleTieP(aNameIn));
+       int aNbTieP = isInitMTP ? -1 : 0;
+       if (hasTieP)
        {
-           if (ExistFile(mPhProj.DPMulTieP().FullDirIn()+ mPhProj.NameMultipleTieP(aPair.first)))
-           {
-               cVecTiePMul  aVTPM("toto");
-               mPhProj.ReadMultipleTieP(aVTPM,aPair.first);
-               mPhProj.SaveMultipleTieP(aVTPM,aPair.second);
-           }
-           else
-           {
-           }
+           cVecTiePMul  aVTPM("toto");
+           mPhProj.ReadMultipleTieP(aVTPM,aNameIn);
+           aVTPM.mNameIm = aNameOut;
+           aNbTieP = aVTPM.mVecTPM.size();
+           mPhProj.SaveMultipleTieP(aVTPM,aNameOut);
+       }
+       else
+       {
+       }
+
+       if (aNbTieP >= mNbMinTieP)
+       {
+           aSetIn.Add(aNameIn);
+           aSetOut.Add(aNameOut);
        }
     }
+    SaveInFile(aSetIn ,mNameFilesListIm.at(0));
+    SaveInFile(aSetOut,mNameFilesListIm.at(1));
 
-    if (mPhProj.DPPointsMeasures().DirInIsInit())
+    if (mPhProj.DPGndPt2D().DirInIsInit())
     {
-       MMVII_INTERNAL_ASSERT_User(mPhProj.DPPointsMeasures().DirOutIsInit(),eTyUEr::eUnClassedError,"Measure In w/o Out");
+       MMVII_INTERNAL_ASSERT_User(mPhProj.DPGndPt2D().DirOutIsInit(),eTyUEr::eUnClassedError,"Measure In w/o Out");
        for (const auto & aPair :  aDico)
        {
            if (ExistFile(mPhProj.NameMeasureGCPIm(aPair.first,true)))
@@ -199,7 +223,9 @@ class cAppli_Rename : public cMMVII_Appli
 
         void TestSet(const std::string & aName);
 
-        std::string               mPattern;
+        std::string               mPatternGlob; // in simple case, same pat for sel and replace
+        std::string               mPatternRepl; // with sub-dir we may need diff pat
+
         std::string               mSubst;
         std::vector<std::string>  mArithmReplace;
         bool                      mDoReplace;
@@ -212,7 +238,7 @@ class cAppli_Rename : public cMMVII_Appli
 cCollecSpecArg2007 & cAppli_Rename::ArgObl(cCollecSpecArg2007 & anArgObl)
 {
    return anArgObl
-            << Arg2007(mPattern,"Pattern of file to replace",{{eTA2007::MPatFile,"0"},{eTA2007::FileDirProj}})
+            << Arg2007(mPatternGlob,"Pattern of file to replace",{{eTA2007::MPatFile,"0"},{eTA2007::FileDirProj}})
             << Arg2007(mSubst,"Pattern of substituion")
 ;
 }
@@ -221,8 +247,9 @@ cCollecSpecArg2007 & cAppli_Rename::ArgOpt(cCollecSpecArg2007 & anArgOpt)
 {
    return anArgOpt
             << AOpt2007(mDoReplace,"DoReplace","do the replacement ",{{eTA2007::HDV}})
+            << AOpt2007(mPatternRepl,"PatRepl","Pattern 4 replace, when != Pattern glob")
             << AOpt2007(mArithmReplace,"AR","arthim repacement like [+,33,2,4] to add 33 to second expr and put on 4 digt ",{{eTA2007::ISizeV,"[3,4]"}})
-            ;
+          ;
 }
 
 
@@ -243,7 +270,10 @@ void cAppli_Rename::TestSet(const std::string & aNameOut)
 
 std::vector<std::string>  cAppli_Rename::Samples() const
 {
-  return {"MMVII UtiRename \"948_(.*).JPG\" \"\\$0\" AR=[-,1,1] DoReplace=true"};
+  return {
+             "MMVII UtiRename \"948_(.*).JPG\" \"\\$&\" AR=[-,1,1] DoReplace=true",
+             "MMVII UtiRename  'CCAM_(.*)' 'CCAMBefore_$1'  FFI0=[0000,0030]  PatFFI0=['CCAM_.*_(.*).tif','$1'] DoReplace=true"
+         };
 }
 
 int cAppli_Rename::Exe()
@@ -253,11 +283,18 @@ int cAppli_Rename::Exe()
 
     std::vector<std::pair<std::string,std::string>  > aVInOut;
 
+    StdOut() << "RRR " << __LINE__ << "\n";
 
-     std::regex aPat(mPattern);
+    if (! IsInit(&mPatternRepl))
+        mPatternRepl = mPatternGlob;
+
+    std::regex aPat(mPatternRepl);
+
+    StdOut() << "RRR " << __LINE__ << "\n";
 
     for (const auto & aStrIn0 : VectMainSet(0))
     {
+  StdOut() << "aStrIn0aStrIn0=[" << aStrIn0 << "]\n";
         std::string aStrIn = aStrIn0;
         if (IsInit(&mArithmReplace))
 	{
@@ -296,10 +333,14 @@ int cAppli_Rename::Exe()
 
 	     aStrIn.replace(aBoundMatch.position(aKExpr),aBoundMatch.length(aKExpr),aStrNumOut);
 	}
-        std::string aStrOut =  ReplacePattern(mPattern,mSubst,aStrIn);
+        if (0)
+        {
+            StdOut() << "P=" << mPatternRepl << " S=" << mSubst << " I=" << aStrIn << "\n";
+        }
+        std::string aStrOut =  ReplacePattern(mPatternRepl,mSubst,aStrIn);
         StdOut() << "[" << aStrIn0  << "] ";
         if (IsInit(&mArithmReplace))
-           StdOut() << " ==> [" << aStrIn  << "] ";
+           StdOut() << " AR==> [" << aStrIn  << "] ";
 
         StdOut() << " ==> [" << aStrOut  << "]  " << std::endl;
 
@@ -317,6 +358,7 @@ int cAppli_Rename::Exe()
            MMVII_UnclasseUsEr("File already exist");
        }
     }
+    StdOut() << " NbFiles= " << aVInOut.size() << "\n";
 
     std::string aPrefTmp = "MMVII_Tmp_Replace_"+ PrefixGMA() + "_";
 
@@ -327,7 +369,7 @@ int cAppli_Rename::Exe()
         {
             auto [aStrIn0,aStrOut] = aPair;
             StdOut() << "mv " << aStrIn0  << " " << aPrefTmp+aStrIn0  << std::endl;
-	    RenameFiles(aStrIn0,aPrefTmp+aStrIn0);
+            RenameFiles(aStrIn0,aPrefTmp+aStrIn0);
         }
 	// the put, safely, "tmp" in "output"
         for (const auto & aPair : aVInOut)
@@ -351,7 +393,7 @@ cSpecMMVII_Appli  TheSpecRename
 (
     "UtiRename",
     Alloc_Rename,
-    "This command is rename files using expr and eventually arithmetic",
+    "This command renames files using regexpr and eventually arithmetic",
     {eApF::Project},
     //  {eApF::ManMMVII, eApF::Project},  JOE ?  j'ai enleve eApF::ManMMVI, je sais plus qui l'a mis
     {eApDT::FileSys},

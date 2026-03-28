@@ -116,7 +116,7 @@ static std::string QuoteCmdLine(const std::string& aParam)
 #elif (THE_MACRO_MMVII_SYS==MMVII_SYS_W)
 static std::string QuoteCmdLine(const std::string& aParam)
 {
-    constexpr const char* DoubleQuoting=" \t&|()<>^\"";
+    constexpr const char* DoubleQuoting=" \t*?&|()<>^\"";
 
     if (aParam.size() == 0)
         return "\"\"";
@@ -179,9 +179,17 @@ void cMMVII_Appli::AddObj2DelAtEnd(cObj2DelAtEnd * aPtrO)
      mVectObj2DelAtEnd.insert(aPtrO);
 }
 
+void cMMVII_Appli::ToDoBeforeDestruction()
+{
+   // Merge report call virtual methode :q
+ 
+   DoMergeReport();
+
+}
+
 cMMVII_Appli::~cMMVII_Appli()
 {
-   DoMergeReport();
+   // Maybe part, or all, the remaining can/should be done in ToDoBeforeDestruction ...
    if (mMainAppliInsideP)
    {
         for (auto  aPtrO : mVectObj2DelAtEnd)
@@ -266,6 +274,7 @@ cMMVII_Appli::cMMVII_Appli
    mVMainSets     (NbMaxMainSets,tNameSet(eTySC::NonInit)),
    mResulMultiS   (EXIT_FAILURE),
    mRMSWasUsed    (false),
+   mNumTagObjCr   (-1),
    mNumOutPut     (0),
    mOutPutV1      (false),
    mOutPutV2      (false),
@@ -273,13 +282,15 @@ cMMVII_Appli::cMMVII_Appli
    mHasInputV2    (false),
    mStdCout       (std::cout),
    mSeedRand      (msDefSeedRand), // In constructor, don't use virtual, wait ...
+   mExtandPattern (true),
    mVSPO          (aVSPO),
    mCarPPrefOut   (MMVII_StdDest),
    mCarPPrefIn    (MMVII_StdDest),
    mTiePPrefOut   (MMVII_StdDest),
    mTiePPrefIn    (MMVII_StdDest),
    mIsInBenchMode (false),
-   mPatternInitGMA (MMVII_NONE) 
+   mReportSubDir   (""),
+   mPatternInitGMA (MMVII_NONE)
 {
    mNumCallInsideP = TheNbCallInsideP;
    TheNbCallInsideP++;
@@ -339,6 +350,13 @@ void cMMVII_Appli::InitMMVIIDirs(const std::string& aMMVIIDir)
 }
 
 const std::vector<eSharedPO>    cMMVII_Appli::EmptyVSPO;  ///< Deafaut Vector  shared optional parameter
+bool cMMVII_Appli::mIsMultiThread = false;
+void cMMVII_Appli::SetMultiThread(bool isMuliThread)
+{
+   mIsMultiThread = isMuliThread;
+}
+bool cMMVII_Appli::IsMultiThread() {return mIsMultiThread;}
+
 
 
 /// This one is always std:: cout, to be used by StdOut and cMMVII_Appli::StdOut ONLY
@@ -366,7 +384,7 @@ cMultipleOfs& ErrOut()  {return StdOut();}
 
 
 
-cMultipleOfs &  cMMVII_Appli::StdOut()
+cMultipleOfs &  cMMVII_Appli::NC_StdOut()
 {
    /// Maybe mStdCout not correctly initialized if we are in constructor or in destructor ?
    if ((!cMMVII_Appli::ExistAppli()) || msInDstructor)
@@ -376,6 +394,10 @@ cMultipleOfs &  cMMVII_Appli::StdOut()
 cMultipleOfs &  cMMVII_Appli::HelpOut() {return StdOut();}
 cMultipleOfs &  cMMVII_Appli::ErrOut() {return StdOut();}
 
+cMultipleOfs &  cMMVII_Appli::StdOut() const
+{
+	return const_cast<cMMVII_Appli *>(this)->NC_StdOut();
+}
 
 void TestMainSet(const cCollecSpecArg2007 & aVSpec,bool &aMain0,bool & aMain1)
 {
@@ -424,13 +446,6 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
   cSpecOneArg2007::tAllSemPL aGlob{eTA2007::Global}; // just to make shorter lines
   cSpecOneArg2007::tAllSemPL aGlobHDV{eTA2007::Global,eTA2007::HDV}; // just to make shorter lines
 
-
-  /*  Decoding AOpt2007(mIntervFilterMS[0],GOP_Int0,"File Filter Interval, Main Set"  ,{eTA2007::Common,{eTA2007::FFI,"0"}})
-        mIntervFilterMS[0]  => string member, will store the value
-        GOP_Int0 => const name, Global Optionnal Interval , num 0, declared in MMVII_DeclareCste.h
-        {eTA2007::Common,{eTA2007::FFI,"0"}}  attibute, it's common, it's intervall with attribute "0"
-  */
-
   if (HasSharedSPO(eSharedPO::eSPO_CarPO))
   {
      mArgFac << AOpt2007(mCarPPrefOut,"CarPOut","Name for Output caracteristic points",{eTA2007::HDV});
@@ -451,19 +466,31 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
       TestMainSet(anArgObl,HasMain0,HasMain1);
       TestMainSet(anArgFac,HasMain0,HasMain1);
       if (HasMain0)
+      {
         mArgFac <<  AOpt2007(mIntervFilterMS[0],GOP_Int0,"File Filter Interval, Main Set"  ,{eTA2007::Shared,{eTA2007::FFI,"0"}});
+        mArgFac <<  AOpt2007(mTransfoFFI[0],"Pat"+GOP_Int0,"Pattern Transfo File Filter Interval, Main Set"  ,{eTA2007::Shared,{eTA2007::ISizeV,"[2,2]"}});
+      }
       if (HasMain1)
+      {
         mArgFac <<  AOpt2007(mIntervFilterMS[1],GOP_Int1,"File Filter Interval, Second Set",{eTA2007::Shared,{eTA2007::FFI,"1"}});
+        mArgFac <<  AOpt2007(mTransfoFFI[1],"Pat"+GOP_Int1,"Pattern Transfo File Filter Interval, Main Set"  ,{eTA2007::Shared,{eTA2007::ISizeV,"[2,2]"}});
+      }
+  }
+  if  (The_MMVII_DebugLevel >= The_MMVII_DebugLevel_InternalError_micro)
+  {
+      mArgFac
+         <<  AOpt2007(mNumTagObjCr,"NTOC4ML","Num of tagged object at creation for memory leak",{eTA2007::Global});
   }
   mArgFac
-      // <<  AOpt2007(mIntervFilterMS[0],GOP_Int0,"File Filter Interval, Main Set"  ,{eTA2007::Common,{eTA2007::FFI,"0"}})
-      // <<  AOpt2007(mIntervFilterMS[1],GOP_Int1,"File Filter Interval, Second Set",{eTA2007::Common,{eTA2007::FFI,"1"}})
       <<  AOpt2007(mNumOutPut,GOP_NumVO,"Num version for output format (1 or 2)",{eTA2007::Global,{eTA2007::Range,"[1,2]"}})
       <<  AOpt2007(mSeedRand,GOP_SeedRand,"Seed for random,if <=0 init from time",aGlobHDV)
+      <<  AOpt2007(mVecAppliSpecParam,"AppSpecParam","Parameters for specific Appli Behaviour")
+      <<  AOpt2007(mExtandPattern,"ExtPatFile","Do we extang patterns for files (or interpret them literally)",aGlobHDV)
+
       <<  AOpt2007(msWithWarning,GOP_WW,"Do we print warnings",aGlobHDV)
       <<  AOpt2007(mNbProcAllowed,GOP_NbProc,"Number of process allowed in parallelisation",aGlobHDV)
       <<  AOpt2007(aDP ,GOP_DirProj,"Project Directory",{eTA2007::DirProject,eTA2007::Global})
-      <<  AOpt2007(mParamStdOut,GOP_StdOut,"Redirection of Ouput (+File for add,"+ MMVII_NONE + "for no out)",aGlob)
+      <<  AOpt2007(mParamStdOut,GOP_StdOut,"Redirection of Ouput (+File for terminal and file output, 0File to reset file, "+ MMVII_NONE + " for no out)",aGlob)
       <<  AOpt2007(mLevelCall,GIP_LevCall," Level Of Call",aInternal)
       <<  AOpt2007(mKthCall,GIP_KthCall," Ordre Of Call when multiple call",aInternal)
       <<  AOpt2007(mPatternInitGMA,GIP_PatternGMA,"Initial pattern of global main appli ",aInternal)
@@ -598,7 +625,7 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
          GenerateHelp();
          return;
       }
-      MMVII_UsersErrror
+      MMVII_UserError
       (
           eTyUEr::eInsufNbParam,
           "Not enough Arg, expecting " + ToS(aNbObl)  + " , Got only " +  ToS(aNbArgGot)
@@ -610,7 +637,8 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
   // First compute the directory of project that may influence all other computation
      // Try with Optional value
   {
-     bool HasDirProj=false;
+// StdOut() << " DDPP " << __LINE__ << " DP=" << mDirProject << "\n";
+      bool HasDirProj=false;
      for (size_t aK=0 ; aK<aNbArgTot; aK++)
      {
         if (aVSpec[aK]->HasType(eTA2007::DirProject))
@@ -621,6 +649,7 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
            mDirProject = aVValues[aK];
         }
      }
+ //StdOut() << " DDPP " << __LINE__ << " DP=" << mDirProject << "\n";
 
   
      {
@@ -635,14 +664,18 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
                else
                {
                   // More or less a limit case, dont know really what must be accepted
-                  aVValues[aK] = mDirProject + aVValues[aK];
-                  mDirProject = DirOfPath(aVValues[aK],false);
+             // MPD MODIF if HasDirProj was forced, it overrid potential FileDirProj
+                   aVValues[aK] = mDirProject + aVValues[aK];
+             //     mDirProject = DirOfPath(aVValues[aK],false);
                }
                HasFileDirProj = true;
             }
          }
      }
   }
+
+//StdOut() << " DDPP " << __LINE__ << " DP=" << mDirProject << "\n";
+
   // Add a "/" at end  if necessary
   MakeNameDir(mDirProject);
 
@@ -668,6 +701,11 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
        mPrefixGMA  = mPrefixNameAppli;
        mPrefix_TIM_GMA = StrIdTime();
        mDirProjGMA = mDirProject;
+   }
+
+   if (IsInit(&mNumTagObjCr))
+   {
+       cMemCountable::SetTaggedObjectAtCreation(mNumTagObjCr);
    }
 
   // Manange OutPut redirection
@@ -704,6 +742,8 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
      {
          mFileStdOut.reset(new cMMVII_Ofs(aPSO,aModeAppend ? eFileModeOut::AppendText : eFileModeOut::CreateText));
          // separator between each process , to refine ... (date ? Id ?)
+         mFileStdOut->Ofs() << "  " << CommandOfMain().Com() << "\n";
+         mFileStdOut->Ofs() << "  begining at : " <<  StrDateCur() << "\n";
          mFileStdOut->Ofs() << "=============================================" << std::endl;
          mStdCout.Add(mFileStdOut->Ofs());
      }
@@ -739,7 +779,7 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
       {
          if (!IsFileGivenTag(true,aVValues[aK],aNameTag))
 	 {
-	       MMVII_UsersErrror(eTyUEr::eBadXmlTopTag,"[" + aVValues[aK] + "] is not an existing xml file of main tag <" + aNameTag + ">");
+	       MMVII_UserError(eTyUEr::eBadXmlTopTag,"[" + aVValues[aK] + "] is not an existing xml file of main tag <" + aNameTag + ">");
 			      // IntervalOk=" + anArg + " Got=" + ToStr(int(aVal.size())));
 	 }
 	 //        MMVII_UsersErrror(eTyUEr::eBadSize4Vect,"IntervalOk=" + anArg + " Got=" + ToStr(int(aVal.size())));
@@ -747,6 +787,7 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
       }
       // XmlOfTag,
   }
+
 
   // Analyse the possible main patterns
   for (size_t aK=0 ; aK<aNbArgTot; aK++)
@@ -763,14 +804,26 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
          if (!mVMainSets.at(aNum).IsInit())
          {
             // mVMainSets.at(aNum)= SetNameFromString(mDirProject+aVValues[aK],true);
-            mVMainSets.at(aNum)= SetNameFromString(mDirProject+FileOfPath(aVValues[aK],false),true);
+            if (mExtandPattern)
+            {
+        // StdOut() << "LLLLLL=" << __LINE__  << mDirProject << "##" << aVValues[aK] << "\n";
+                 mVMainSets.at(aNum)= SetNameFromString(mDirProject+FileOfPath(aVValues[aK],false),true);
+            }
+            else
+            {
+                mVMainSets.at(aNum)=  tNameSet (eTySC::US);
+                mVMainSets.at(aNum).Add(aVValues[aK]);
+            }
 
             //  Filter with interval
             {
-               std::string & aNameInterval = mIntervFilterMS[aNum];
+               const std::string & aNameInterval = mIntervFilterMS[aNum];
                if (IsInit(&aNameInterval))
                {
-                   mVMainSets.at(aNum).Filter(Str2Interv<std::string>(aNameInterval));
+                   // JOE
+                   cPatternTransfo aPat(mTransfoFFI[aNum]);
+                   mVMainSets.at(aNum).Filter(Str2Interv<std::string>(aNameInterval),aPat);
+                   // mVMainSets.at(aNum).Filter(Str2Interv<std::string>(aNameInterval));
                }
             }
             // Test non empty
@@ -778,26 +831,24 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
             {
                 // if we are in a recall mode, posibly pattern comes file xml, and file insid can be un-existent
                 if (mLevelCall>0)
-		{
-                   mVMainSets.at(aNum).Add(aVValues[aK]);
-		}
-		else
                 {
-                   MMVII_UsersErrror(eTyUEr::eEmptyPattern,"Specified set of files was empty");
+                    mVMainSets.at(aNum).Add(aVValues[aK]);
                 }
+                else
+                {
+                    MMVII_UserError(eTyUEr::eEmptyPattern,"Specified set of files was empty");
+                }
+            } else if (mVMainSets.at(aNum).size() == 1){
+                // If only 1 file matches the pattern, we replace the pattern in this arg by the matched file
+                // If RunMultiSet is called, the Appli can use this arg name to retrieve the file
+                // (if not doing this, arg will be the pattern (i.e ".*.tif") and the appli will fail to open that)
+                aVSpec.at(aK)->InitParam(UniqueStr(aNum));
             }
          }
          else
          {
             MMVII_INTERNAL_ASSERT_always(false,"Multiple main set im for num:"+ToStr(aNum));
          }
-/*
-         std::string & aNameInterval = mIntervFilterMS[aNum];
-         if (IsInit(&aNameInterval))
-         {
-             mVMainSets.at(aNum).Filter(Str2Interv<std::string>(aNameInterval));
-         }
-*/
       }
   }
   // Check validity of main set initialization
@@ -806,7 +857,7 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
       // Why should user init interval if there no set ?
       if (IsInit(&mIntervFilterMS[aNum]) && (!  mVMainSets.at(aNum).IsInit()))
       {
-         MMVII_UsersErrror(eTyUEr::eIntervWithoutSet,"Interval without filter for num:"+ToStr(aNum));
+         MMVII_UserError(eTyUEr::eIntervWithoutSet,"Interval without filter for num:"+ToStr(aNum));
       }
       if (aNum>0)
       {
@@ -859,7 +910,26 @@ void cMMVII_Appli::InitParam(cGenArgsSpecContext *aArgsSpecs)
 
   if (mMainAppliInsideP) 
      InitProfile();
+
+  MMVII_INTERNAL_ASSERT_strong(mVecAppliSpecParam.size()%2==0,"Odd size for AppSpecParam");
+  for (size_t aKP=0 ; aKP<mVecAppliSpecParam.size() ; aKP+=2)
+      mMapAppliSpecParam[mVecAppliSpecParam.at(aKP)] =  mVecAppliSpecParam.at(aKP+1);
 }
+
+std::string cMMVII_Appli::AppliSpecValue(const std::string & aKey ) const
+{
+    const auto & anIter = mMapAppliSpecParam.find(aKey);
+
+    if (anIter == mMapAppliSpecParam.end())
+        return MMVII_NONE;
+    return anIter->second;
+}
+
+std::string AppliSpecValue(const std::string & aKey )
+{
+    return cMMVII_Appli::CurrentAppli().AppliSpecValue(aKey);
+}
+
 
 void cMMVII_Appli::InitProfile()
 {
@@ -963,6 +1033,7 @@ const std::string & cMMVII_Appli::TaggedNameDefSerial   () const
 const std::string & GlobVectNameDefSerial() {return cMMVII_Appli::CurrentAppli().VectNameDefSerial();}
 const std::string & GlobTaggedNameDefSerial() {return cMMVII_Appli::CurrentAppli().TaggedNameDefSerial();}
 
+const cSpecMMVII_Appli & cMMVII_Appli::Specs() const {return mSpecs;}
 
 
 // const  std::string & cMMVII_Appli::UserName() {return mParamProfile.mUserName;}
@@ -972,6 +1043,7 @@ tPtrArg2007 cMMVII_Appli::AOptBench()
 {
      return   AOpt2007(mIsInBenchMode,GIP_BenchMode,"Is the command executed in bench mode",{eTA2007::Internal,eTA2007::HDV});
 }
+
 
 
 
@@ -1117,7 +1189,9 @@ void cMMVII_Appli::LogCommandOut(const std::string & aName,bool MainLogFile)
       return;
    cMMVII_Ofs  aOfs(aName,eFileModeOut::AppendText);
    // Add id, if several process were throw in // there is a mix and we no longer know which was closed
-   aOfs.Ofs() << "  ending correctly at : " <<  StrDateCur()  << " (Id=" << mPrefixNameAppli << ")\n\n";
+   aOfs.Ofs() << "  ending correctly at : " <<  StrDateCur()  
+              << " Time=" << SecFromT0() - TimeSegm().CurBeginTime()
+              << " (Id=" << mPrefixNameAppli << ")\n\n";
    aOfs.Ofs().close();
 }
 
@@ -1233,8 +1307,7 @@ void cMMVII_Appli::GenerateOneArgSpec(cCollecSpecArg2007& aSpecArgs, const std::
         std::string range;
         std::string vectorSize;
         for (const auto& a : Arg->SemPL()) {
-
-            if (a.Type() < eTA2007::AddCom) {
+            if (a.Type() < eTA2007::AddCom || a.Type() == eTA2007::XmlOfTopTag) {
                 semantic.push_back(E2Str(a.Type()));
             }
             if (a.Type() == eTA2007::AllowedValues) {
@@ -1692,7 +1765,7 @@ cParamCallSys  cMMVII_Appli::StrCallMMVII
 
    // std::string aComGlob = mFullBin + " ";
    aRes.AddArgs(mFullBin);
-   int aNbSubst=0;
+   [[maybe_unused]] int aNbSubst=0;
    std::vector<bool>  aVUsedSubst(aSubst.V().size(),false);
 /*
    cSpecMMVII_Appli*  aSpec = cSpecMMVII_Appli::SpecOfName(aCom2007,false); // false => dont accept no match
@@ -1773,7 +1846,7 @@ cParamCallSys  cMMVII_Appli::StrCallMMVII
 
    if (aPatInit !="")
    {
-        aRes.AddArgs(GIP_PatternGMA + "=" +  Quote(aPatInit));
+        aRes.AddArgs(GIP_PatternGMA + "=" +  aPatInit);
    }
 
    // If no substitution, it means it was to be added simply
@@ -1839,8 +1912,13 @@ int  cMMVII_Appli::ExeCallMMVII
          const cColStrAOpt& anAOpt
       )
 {
+
     cParamCallSys aComGlob = StrCallMMVII(0,aCom2007,anAObl,anAOpt);
-    return  GlobSysCall(aComGlob,false);
+
+    int aRes =   GlobSysCall(aComGlob,false);
+
+
+    return aRes;
 }
 
 int cMMVII_Appli::ExeComSerial(const std::list<cParamCallSys> & aL, bool forceExternal)

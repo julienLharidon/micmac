@@ -8,6 +8,8 @@ namespace MMVII
 
 template <> const std::string  & XMLTagSet<std::string> () {return TagSetOfName;}
 template <> const std::string  & XMLTagSet<tNamePair>   () {return TagSetOfCpleName;}
+const std::string TheNameSetOfTriplets = "SetOfTriplets";
+template <> const std::string  & XMLTagSet<cTripletName>   () {return TheNameSetOfTriplets;}
 
 
 template <> const std::string  & MMv1_XMLTagSet<std::string> () {return MMv1XmlTag_SetName;}
@@ -96,6 +98,14 @@ const std::string MMVIIBin2007 = "MMVII.exe";
 const   std::string MMVII_NONE = "NONE";
 const   std::string MMVII_StdDest = "STD";
 const   std::string MMVII_PrefRefBench = "RefBench-";
+
+// Prefix for SysCo names
+const   std::string MMVII_SysCoLocal  = "Local";
+const   std::string MMVII_SysCoLEuc   = "LEuc";
+const   std::string MMVII_SysCoRTL    = "RTL";
+const   std::string MMVII_SysCoGeoC   = "GeoC";
+const   std::string MMVII_SysCoDefLatLong = "+proj=latlong +datum=WGS84";
+const   std::string MMVII_SysCoDefGeoC = "+proj=geocent +datum=WGS84";
 
 // PostFix 4 files
 const   std::string PostF_XmlFiles  = "xml";

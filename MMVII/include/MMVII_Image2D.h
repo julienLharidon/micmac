@@ -1,6 +1,7 @@
 #ifndef  _MMVII_Images2D_H_
 #define  _MMVII_Images2D_H_
 
+#include "MMVII_ExifData.h"
 #include "MMVII_Images.h"
 
 namespace MMVII
@@ -24,34 +25,75 @@ namespace MMVII
 */
 
 
+enum class eForceGray
+           {
+                Yes,    
+                No
+           };
 
 class cDataFileIm2D : public cRect2
 {
      public :
+    // Vector of string that are passed to the image file driver as options
+    // See GDAL drivers documentation
+    // Example for jpeg driver : {"QUALITY=90"}
+    // Example for tiff driver : {"TILED=YES","BLOCKXSIZE=256","BLOCKYSIZE=256"}
+        typedef std::vector<std::string> tOptions;
+
         const cPt2di & Sz() const ;  ///< From cRect2
         const int  & NbChannel ()  const ;  ///< std accessor
         const eTyNums &   Type ()  const ;  ///< std accessor
         const std::string &  Name() const;  ///< std accessor
-	bool IsEmpty() const;
-	void AssertNotEmpty() const;
+        bool IsEmpty() const;
+        void AssertNotEmpty() const;
+        const cExifData& ExifDataAll(bool SVP=true) const;
+        const cExifData& ExifDataMain(bool SVP=true) const;
+        std::vector<std::string> ExifStrings(bool SVP=true) const;
+        std::map<std::string, std::vector<std::string>> AllMetadata(bool SVP=true) const;
+
         /// Create a descriptor on existing file
-        static cDataFileIm2D Create(const std::string & aName,bool ForceGray);
+        static cDataFileIm2D Create(const std::string & aName,eForceGray);
         /// Create the file before returning the descriptor
-        static cDataFileIm2D Create(const std::string & aName,eTyNums,const cPt2di & aSz,int aNbChan=1);
+        static cDataFileIm2D Create(const std::string & aName,eTyNums,const cPt2di & aSz, int aNbChan=1);
+        /// Options depends on each format driver and may be not applied if the file already exits ...
+        static cDataFileIm2D Create(const std::string & aName,eTyNums,const cPt2di & aSz, const tOptions& aOptions, int aNbChan=1);
+
+        // Special creation for fully write format : jpeg, png, ... File will be (re)created on each write and the full file must be written at once
+        // This function guarantees that the options will be applied (if driver allows them ...)
+        static cDataFileIm2D CreateOnWrite(const std::string & aName,eTyNums,const cPt2di & aSz, const tOptions& aOptions={}, int aNbChan=1);
+        static cDataFileIm2D CreateOnWrite(const std::string & aName,eTyNums,const cPt2di & aSz, int aNbChan=1);
 
         static cDataFileIm2D Empty();
 
-        virtual ~cDataFileIm2D();
-        
-	static bool IsPostFixNameImage(const std::string & aPost);
-	static bool IsNameWith_PostFixImage(const std::string & aPost);
-     private :
-        cDataFileIm2D(const std::string &,eTyNums,const cPt2di & aSz,int aNbChannel) ;
+        bool IsCreateAtFirstWrite() const;     // Set by CreateOnWrite, must then be fully write and only one time
+        bool IsCreatedNoUpdate() const;
 
-        cMemCheck    mMemCheck;  ///< Inheritage may be multiple, member will have the same effect
-        std::string  mName;      ///< Name on the disk
-        eTyNums      mType;      ///< Type of value for pixel
-        int          mNbChannel; ///< Number of channels
+        const tOptions& CreateOptions() const;
+
+        virtual ~cDataFileIm2D();
+
+        static bool IsPostFixNameImage(const std::string & aPost);
+        static bool IsNameWith_PostFixImage(const std::string & aPost);
+        eForceGray ForceGray() const; ///< Accessor
+
+     private :
+        friend class cGdalApi;
+        enum class eCreationState {Created, AtFirstWrite, CreatedNoUpdate};
+        enum class eExifState {NotRead, MainTagsRead, AllTagsRead};
+        cDataFileIm2D(const std::string &,eTyNums,const cPt2di & aSz,int aNbChannel, const tOptions& aOptions, eForceGray, eCreationState) ;
+
+        void SetCreated() const;
+        void SetCreatedNoUpdate() const;
+
+        cMemCheck   mMemCheck;  ///< Inheritage may be multiple, member will have the same effect
+        std::string mName;      ///< Name on the disk
+        eTyNums     mType;      ///< Type of value for pixel
+        int         mNbChannel; ///< Number of channels
+        eForceGray  mForceGray;
+        tOptions    mCreateOptions; ///< GDAL Creations options, depend of output driver (JPEG, TIFF, ...)
+        mutable cExifData  mExifData;
+        mutable eExifState mExifState;
+        mutable eCreationState mCreationState;  ///< support for creation of non updatable file image (create/write at once: .png, .jpg, ...)
 };
 
 /// Size differnce of associated file images
@@ -83,6 +125,8 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
         typedef cPixBox<2>               tPB;
         typedef typename tBI::tBase  tBase;
         typedef cDataIm2D<Type>      tIm;
+        
+        typedef cDataFileIm2D::tOptions tFileOptions;
 
 	void CropIn(const cPt2di & aP0,const tIm &);
 
@@ -94,8 +138,23 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
            tPB::AssertInsideBL(aP);
            AddValueBL(aP,aVal);
         }
-       /// Bilinear valie
-       inline double GetVBL(const cPt2dr & aP) const 
+
+       /** Compute a resampling of the image, note the origin is not necesarly in [0,0], Map direct is used
+         to compute domain while map inverse is used for computing values  , i.a if Map : X -> S*X , size of
+         result will be multiplied by S.
+            The point returned is the value of pixel(0,0) of image in out coordinates.
+        */
+       std::pair<cPt2di,cIm2D<Type>>  ReSample(const cInterpolator1D &,const cDataInvertibleMapping<tREAL8,2> &,Type aValOut) const;
+       /// Interpolated value, using a generic interpolator
+       double GetValueInterpol(const cInterpolator1D &,const cPt2dr & aP) const ;
+       /// Interpolated value+derivative, using a generic diffentiable interpolator
+       std::pair<tREAL8,cPt2dr> GetValueAndGradInterpol(const cDiffInterpolator1D &,const cPt2dr & aP) const override;
+       /// Interpolated value, using a generic interpolator, accept point partially inside, if accept no point
+       /// must give a def value & Ok
+       double ClipedGetValueInterpol(const cInterpolator1D &,const cPt2dr & aP,double  aDefVal=0,bool * Ok=nullptr) const ;
+
+       /// Bilinear value
+       inline double GetVBL(const cPt2dr & aP) const  override
        {
            tPB::AssertInsideBL(aP);
            return  ValueBL(aP);
@@ -106,6 +165,8 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
            tPB::AssertInsideBL(aP);
            return  ValueAndGradBL(aP);
        }
+       /// idem "GetGradAndVBL" but a more standard interface for use as " auto [Val,Grad] = "
+       std::pair<tREAL8,cPt2dr>  GetPairGradAndVBL(const cPt2dr & aP)  const;
 
        inline double DefGetVBL(const cPt2dr & aP,double aDef) const
        {
@@ -191,6 +252,10 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
         void VI_SetV(const  cPt2di & aP,const int & aV)    override ; ///< call SetV
         void VD_SetV(const  cPt2di & aP,const double & aV) override ; ///< call SetV
 
+        void VPtsSetV(const  std::vector<cPt2di> & aP,Type aVl) ;
+        void VI_VPtsSetV(const  std::vector<cPt2di> & aP, int  aV) override; ///< Call VPtsSetV
+        void VD_VPtsSetV(const  std::vector<cPt2di> & aP, tREAL8 aV) override; ///< Call VPtsSetV
+
         // ==  raw pointer on origin of line
         const Type * GetLine(int aY)  const;
         Type * GetLine(int aY) ;
@@ -221,29 +286,31 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
         void Write(const cDataFileIm2D &,const cPt2di & aP0,double aDyn=1,const cRect2& =cRect2::TheEmptyBox) const;  // 1 to 1
         void Write(const cDataFileIm2D &,const tIm &aIG,const tIm &aIB,const cPt2di & aP0,double aDyn=1,const cRect2& =cRect2::TheEmptyBox) const;  // 1 to 1
         virtual ~cDataIm2D();  ///< will delete mRawData2D
-
-        void ToFile(const std::string& aName) const; ///< Create a File having same size/type ...
-        void ToJpgFile(const std::string& aName) const; ///< Make a Jpg file of image
-        void ToFile(const std::string& aName,eTyNums) const; ///< Create a File of given type, having same size ...
-        void ClipToFile(const std::string& aName,const cRect2&) const; ///< Create a Clip File of Box
-        void ToFile(const std::string& aName,const tIm &aIG,const tIm &aIB) const; ///< Create a File having same size/type ...
+        
+        void ToFile(const std::string& aName, const tFileOptions& aOptions={}) const; ///< Create a File having same size/type ...
+        void ToFile(const std::string& aName,eTyNums, const tFileOptions& aOptions={}) const; ///< Create a File of given type, having same size ...
+        void ClipToFile(const std::string& aName,const cRect2&, const tFileOptions& aOptions={}) const; ///< Create a Clip File of Box
+        void ToFile(const std::string& aName,const tIm &aIG,const tIm &aIB, const tFileOptions& aOptions={}) const; ///< Create a File having same size/type ...
         
         /// Raw image, lost all waranty is you use it...
         tVal ** ExtractRawData2D() {return mRawData2D;}
         const tPVal * ExtractRawData2D() const {return mRawData2D;}
 
 
+   // public for used by cDataIm2D::AllocIm
+        cDataIm2D(const cPt2di & aP0,const cPt2di & aP1,
+                 Type * DataLin=nullptr,eModeInitImage=eModeInitImage::eMIA_NoInit); ///< Called by shared ptr (cIm2D)
     protected :
     private :
         void PostInit();
         cDataIm2D(const cDataIm2D<Type> &) = delete;  ///< No copy constructor for big obj, will add a dup()
-        cDataIm2D(const cPt2di & aP0,const cPt2di & aP1,
-                 Type * DataLin=nullptr,eModeInitImage=eModeInitImage::eMIA_NoInit); ///< Called by shared ptr (cIm2D)
+        void operator = (const cDataIm2D<Type> &) = delete;  ///< No affectation for big obj, will add a dup()
 
 
         
         Type & Value(const cPt2di & aP)   {return mRawData2D[aP.y()][aP.x()];} ///< Data Access
         const Type & Value(const cPt2di & aP) const   {return mRawData2D[aP.y()][aP.x()];} /// Const Data Access
+        const Type & Value(int aX,int aY) const   {return mRawData2D[aY][aX];} /// Const Data Access
 
         /** Bilinear interpolation */
         double  ValueBL(const cPt2dr & aP)  const
@@ -319,8 +386,6 @@ template <class Type>  class cDataIm2D  : public cDataTypedIm<Type,2>
         tPVal * mRawData2D;  ///< Pointers on DataLin
 };
 
-void Convert_JPG(const std::string &  aNameIm,bool DeleteAfter,tREAL8 aQuality,const std::string & aPost);
-
 
 
 ///  Class for memorzing 2D images
@@ -358,6 +423,9 @@ template <class Type>  class cIm2D
        static cIm2D<Type> FromFile(const std::string& aName);  ///< Allocate and init from file
        static cIm2D<Type> FromFile(const std::string& aName,const cBox2di & );  ///< Allocate and init from file
 
+       /// Create a "Dirac image" : null except in aPDirac where it values aValDirac
+       static cIm2D<Type> DiracImage(const cPt2di & aP0,const cPt2di & aP1,Type aValDirac,const cPt2di & aPDirac);
+
        // void Read(const cDataFileIm2D &,cPt2di & aP0,cPt3dr Dyn /* RGB*/);  // 3 to 1
        // void Read(const cDataFileIm2D &,cPt2di & aP0,cIm2D<Type> aI2,cIm2D<Type> aI3);  // 3 to 3
 
@@ -370,6 +438,15 @@ template <class Type>  class cIm2D
        /**  Apply gaussian filter before dezoom to have good ressampling, may be a bit slow
             Dilate => to change defautl gaussian kernel */
        cIm2D<Type>  GaussDeZoom(int aFact, int aNbIterExp=3,double Dilate=1.0) const;  
+
+
+       /**  a more "sophisticated" version, adapted to non integer factor and using interpolator adapted to scaling */
+       cIm2D<Type>  Scale(tREAL8 aFX,tREAL8 aFY=-1,tREAL8 aSzSinC=-1,tREAL8 DilateKernel=1.0,
+                           const std::vector<std::string> & aVNameKernI = {"Linear"}  // Kernel for down scale
+                         ) const;
+       /// Version allowing to fix the interpolator (called by version above)
+       cIm2D<Type>  Scale(const cInterpolator1D &,tREAL8 aFX,tREAL8 aFY=-1) const;
+
 
        /** Transposition, needed it once, maybe usefull later */
        cIm2D<Type> Transpose() const;
@@ -409,10 +486,10 @@ template<class TypeEl> class  cAppliParseBoxIm
                APBI_WriteIm(aName,anIm,tElemNumTrait<Type2>::TyNum());
         }
 
-        cAppliParseBoxIm(cMMVII_Appli & anAppli,bool IsGray,const cPt2di & aSzTiles,const cPt2di & aSzOverlap,bool ParalTiles) ;
+        cAppliParseBoxIm(cMMVII_Appli & anAppli,eForceGray IsGray,const cPt2di & aSzTiles,const cPt2di & aSzOverlap,bool ParalTiles) ;
         ~cAppliParseBoxIm();
 
-	void  APBI_ExecAll(); ///< Execute Action on all Box of file  OR  only on Test Box if exist
+        void  APBI_ExecAll(bool Silence=false); ///< Execute Action on all Box of file  OR  only on Test Box if exist
 
         cCollecSpecArg2007 & APBI_ArgObl(cCollecSpecArg2007 & anArgObl) ; ///< For sharing mandatory args
         cCollecSpecArg2007 & APBI_ArgOpt(cCollecSpecArg2007 & anArgOpt); ///< For sharing optionnal args
@@ -453,7 +530,7 @@ template<class TypeEl> class  cAppliParseBoxIm
         cPt2di         mIndBoxRecal;  ///< Index for box when recalling in paral
 
         cMMVII_Appli & mAppli;   ///< Ineriting appli ("daughter")
-        bool           mIsGray;  ///< Is it a gray file
+        eForceGray     mIsGray;  ///< Is it a gray file
         cParseBoxInOut<2> *mParseBox;  ///<Current structure used to parse the  box
 	cPt2di         mCurPixIndex; ///< Index of parsing box
         cDataFileIm2D  mDFI2d;   ///< Data for file image to parse
@@ -472,12 +549,13 @@ class cRGBImage
 {
      public :
         typedef cIm2D<tU_INT1>   tIm1C;  // Type of image for 1 chanel
+        typedef cDataFileIm2D::tOptions tFileOptions;
 
         cRGBImage(const cPt2di & aSz,int aZoom=1);
         cRGBImage(const cPt2di & aSz,const cPt3di & aCoul,int aZoom=1);
-        void ToFile(const std::string & aName);
-	void ToFileDeZoom(const std::string & aName,int aDeZoom);
-	void ToJpgFileDeZoom(const std::string & aName,int aDeZoom);
+        void ToFile(const std::string & aName, const tFileOptions& aOptions={});
+        void ToFileDeZoom(const std::string & aName,int aDeZoom, const tFileOptions& aOptions={});
+        void ToJpgFileDeZoom(const std::string & aName,int aDeZoom, const tFileOptions& aOptions={});
 
 
         static cRGBImage FromFile(const std::string& aName,int aZoom=1);  ///< Allocate and init from file
@@ -490,6 +568,8 @@ class cRGBImage
         void Write(const std::string &,const cPt2di & aP0,double aDyn=1,const cRect2& =cRect2::TheEmptyBox) const;  // 1 to 1
 	/*
        */
+	// transformate the RGB internal image in gray
+	void ResetGray();
 
         /// set values iff param are OK,  RGB image are made for visu, not for intensive computation
         void SetRGBPix(const cPt2di & aPix,int aR,int aG,int aB);
@@ -500,10 +580,13 @@ class cRGBImage
 	bool InsideBL(const cPt2dr & aPix) const;
 
 
-        ///  Alpha =>  1 force colour  , 0 no effect
+        //  Alpha =>  0 force colour  , 1 no effect
+        ///  Fill a pixel (only for Z1)
         void SetRGBPixWithAlpha(const cPt2di & aPix,const cPt3di &,const cPt3dr & aAlpha);
-        ///  
+        ///  Fill a rectangle
         void SetRGBrectWithAlpha(const cPt2di & aPix,int aSzW,const cPt3di & aCoul,const double & aAlpha);
+        ///  Fill a border of rectangle
+        void SetRGBBorderRectWithAlpha(const cPt2di & aPix,int aSzW,int aBorder,const cPt3di & aCoul,const double & aAlpha);
 
         void SetGrayPix(const cPt2di & aPix,int aGray);
 
@@ -511,7 +594,7 @@ class cRGBImage
 	/// draw only 1 pixel , use zoom for change geom
 	void SetRGBPoint(const cPt2dr & aPoint,const cPt3di & aCoul);  
 	void DrawLine(const cPt2dr & aP1,const cPt2dr & aP2,const cPt3di & aCoul,tREAL8 aWitdh=-1);
-	void DrawEllipse(const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8 aGA,tREAL8 aSA,tREAL8 aTeta,tREAL8 aWitdh=-1);
+	void DrawEllipse(const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8 aGA,tREAL8 aSA,tREAL8 aTeta);
 	void DrawCircle (const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8 aRay);
 	void FillRectangle (const cPt3di& aCoul,const cPt2di & aP1,const cPt2di & aP2,const cPt3dr & aAlpha);
 
@@ -540,6 +623,7 @@ class cRGBImage
         static const  cPt3di  Cyan;
         static const  cPt3di  Orange;
         static const  cPt3di  White;
+        static const  cPt3di  Black;
         static const  cPt3di  Gray128;
 
 	/// return a lut adapted to visalise label in one chanel (blue), an maximize constrat in 2 other
@@ -563,18 +647,24 @@ class cRGBImage
         cPt2di mSzz;   ///< Sz with zoom, "physicall" pixel
         int    mZoom;
         tREAL8 mRZoom;
-	cPt2dr mOffsetZoom;  ///< Offset for corresponding real pixel to physicall
+	cPt2dr mOffsetZoom;  ///< Offset for corresponding real pixel to physical
         tIm1C  mImR;
         tIm1C  mImG;
         tIm1C  mImB;
 };
 
-template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cPt2di & aPix,const cDataIm2D<Type> & aGrayIm,const double & aMul=1.0);
-template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cDataIm2D<Type> & aGrayIm,const double & aMul=1.0);
-template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,const double & aMul=1.0,int aZoom=1);
+template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cPt2di & aPix,const cDataIm2D<Type> & aGrayIm, double aMul=1.0);
+template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cDataIm2D<Type> & aGrayIm, double aMul=1.0);
+template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm, double aMul=1.0,int aZoom=1);
+template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,const cBox2di&, double aMul=1.0,int aZoom=1);
 
 
-
+/// 8 neighboors stored in order compatible with freeman-numbering
+extern const  cPt2di FreemanV8[8];
+extern const  cPt2di FreemanV4[4];
+/// = FreemanV8 with  FreemanV9[8] = FreemanV9[0]
+extern const  cPt2di FreemanV9[9]; // FreemanV9[0] = 0,0
+extern const  cPt2di FreemanV10[10];
 
 
 };

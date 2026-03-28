@@ -20,6 +20,9 @@ MACRO_SD_DEFINE_STD_BINARY_FUNC_OP_DERIVABLE(MMVII,AtanXsY_sX,DerXAtanXsY_sX,Der
 MACRO_SD_DEFINE_STD_BINARY_FUNC_OP_DERIVABLE(MMVII,ATan2,DerX_ATan2,DerY_ATan2)
 
 
+MACRO_SD_DEFINE_STD_BINARY_FUNC_OP_DERIVABLE(MMVII,DiffAngMod,DerA_DiffAngMod,DerB_DiffAngMod)
+
+
 /*   A test that it works also like that, btw not used for now ...  */
 MACRO_SD_DECLARE_STD_UNARY_FUNC_OP(cosH)
 MACRO_SD_DECLARE_STD_UNARY_FUNC_OP(sinH)
@@ -264,6 +267,8 @@ class cMMVIIUnivDist
                    + std::string("_Rad") + std::to_string(DegRad())
                    + std::string("_Dec") + std::to_string(DegDec())
                    + std::string("_XY") + std::to_string(DegUniv())
+		   // if not mIsModelFraser, it's special cas for systematism cylindric : Dx=Ax Dy=Bx
+		   + (mIsModelFraser ?  std::string("") :  std::string("_D1aXbX"))
            ;
 
        }
@@ -288,7 +293,8 @@ class cMMVIIUnivDist
                    (
                        bool isX,  // Is it x component of distorsion
                        int aDegX, // Degree in x
-                       int aDegY  // Degree in y
+                       int aDegY,  // Degree in y
+                       bool IsFraserConv  // Fraser Conv Dx=b1x+b2y,  else Dx = aX  , Dy = by
                    ) const
        {
             // degre 0 : avoid, it's already modelized by PP
@@ -300,10 +306,25 @@ class cMMVIIUnivDist
             // (because its coherent with most current  convention on "fraser" model :
             //  dx = b1 x + b2 y ...
 
-            if ((!isX) && ((aDegX + aDegY) ==1))    
+            if ((aDegX + aDegY) ==1)
             {
-               ShowElim("Aff",isX,aDegX,aDegY);
-               return false; 
+	       if (IsFraserConv)
+	       {
+                  if (! isX)
+		  {
+                      ShowElim("Aff",isX,aDegX,aDegY);
+                      return false; 
+		  }
+	       }
+	       else
+	       {
+                  if (aDegY!=0)
+		  {
+                      ShowElim("Aff",isX,aDegX,aDegY);
+                      return false; 
+		  }
+	       }
+               return true;
             }
 
             // because of redundaucy with non plane rotation, we supress 2 degree 2 function
@@ -362,17 +383,18 @@ class cMMVIIUnivDist
        {
            // static_assert(DegRad>=DegDec(),"Too much decentrik");
               std::vector<cDescOneFuncDist>  VDesc;
+              eModeDistMonom aMode = mIsModelFraser ? eModeDistMonom::eModeFraser : eModeDistMonom::eModeSysCyl;
               // Generate description of radial parameters, x used for num, y not used => -1
               for (int aDR=1 ; aDR<=DegRad() ; aDR++)
               {
-                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eRad,cPt2di(aDR,-1)));
+                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eRad,cPt2di(aDR,-1),aMode));
               }
 
               // Generate description of decentrik parameter, x used for num, y not used => -1
               for (int aDC=1 ; aDC<=DegDec() ; aDC++)
               {
-                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eDecX,cPt2di(aDC,-1)));
-                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eDecY,cPt2di(aDC,-1)));
+                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eDecX,cPt2di(aDC,-1),aMode));
+                  VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eDecY,cPt2di(aDC,-1),aMode));
               }
 
               // Generate description of monomes in X and Y that are to maintain
@@ -381,14 +403,14 @@ class cMMVIIUnivDist
                   for (int aDx=0 ; (aDx+aDy)<=DegUniv() ; aDx++)
                   {
                       cPt2di aDXY(aDx,aDy);
-                      if (OkMonome(true,aDx,aDy))
+                      if (OkMonome(true,aDx,aDy,mIsModelFraser))
                       {
-                         VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eMonX,aDXY));
+                         VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eMonX,aDXY,aMode));
                       }
 
-                      if (OkMonome(false,aDx,aDy))
+                      if (OkMonome(false,aDx,aDy,mIsModelFraser))
                       {
-                         VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eMonY,aDXY));
+                         VDesc.push_back(cDescOneFuncDist(eTypeFuncDist::eMonY,aDXY,aMode));
                       }
                   }
               }
@@ -515,18 +537,21 @@ class cMMVIIUnivDist
 
            if (mForBase) 
 	   {
-		   // StdOut()  << "aVBaseXaVBaseX " << aVBaseX.size() <<  " " << aVBaseY.size() << std::endl;
+              // It would be incoherent to have a different size because implicitely if will be cut in
+              // two part   (A0 A1 A2 A3)  => X : (A0 A1)  , Y (A2 A3)
+              MMVII_INTERNAL_ASSERT_always(aVBaseX.size()== aVBaseY.size(),"Inconsistent base size in cMMVIIUnivDist");
               return Append(aVBaseX,aVBaseY) ;
 	   }
 
            return        {xDist,yDist}  ;
        }
 
-       cMMVIIUnivDist(const int & aDegRad,const int & aDegDec,const int & aDegUniv,bool ForBase) :
-          mTheDegRad  (aDegRad),
-          mTheDegDec  (aDegDec),
-          mTheDegUniv (aDegUniv),
-          mForBase    (ForBase)
+       cMMVIIUnivDist(const int & aDegRad,const int & aDegDec,const int & aDegUniv,bool ForBase,bool isModelFraser) :
+          mTheDegRad     (aDegRad),
+          mTheDegDec     (aDegDec),
+          mTheDegUniv    (aDegUniv),
+          mForBase       (ForBase),
+	  mIsModelFraser (isModelFraser)
        {
        }
 
@@ -537,6 +562,7 @@ class cMMVIIUnivDist
        int    mTheDegDec;
        int    mTheDegUniv;
        bool   mForBase;   // If true, generate the base of function and not the sum
+       bool   mIsModelFraser;
 };
 
 /**  Class to generate formula for distorsion with x,y unknown and paramaters as observations */
@@ -574,19 +600,41 @@ template <typename TypeDist>  class cEqDist
 
 /**   C */
 
+/*   For line equation : 
+
+     Unknowns are   Dx1, Dy1, Dx2,Dy2
+     Obs are :
+         p1 , p2 two point of the line
+         nx,ny two  vector orthog 
+         l the coord of centroid on the line (l=0 -> p1)
+
+     Q1 = (p1 + Dx1 nx+ Dy1 ny)
+     Q2 = (p2 + Dx2 nx+ Dy2 ny)
+
+     Q = (1-l) Q1 +l Q2
+*/
+
 template <typename TypeDist,typename TypeProj>  class cEqColinearityCamPPC
 {
 	public :
-           cEqColinearityCamPPC(const TypeDist & aDist) :
-		   mDist (aDist)
+           cEqColinearityCamPPC(const TypeDist & aDist,eTypeEqCol aTypeEq) :
+                mDist     (aDist),
+                mTypeEq   (aTypeEq),
+                mLine     (mTypeEq==eTypeEqCol::eLine)
 	   {
 	   }
-           std::string FormulaName() const { return "EqColinearityCamPPC_" + E2Str(TypeProj::TypeProj())    + "_" + mDist.NameModel();}
-           std::vector<std::string>  VNamesUnknowns() const
+       std::string FormulaName() const
+       {
+               return (mLine ?  "EqLineProjCamPPC_"  : "EqColinearityCamPPC_") + E2Str(TypeProj::TypeProj())    + "_" + mDist.NameModel();
+       }
+       std::vector<std::string>  VNamesUnknowns() const
 	   {
+            std::vector<std::string>  aVUkGround =     mLine                                               ?
+                                                           Append(NamesP2("N1Coords"),NamesP2("N2Coords")) :
+                                                           NamesP3("PGround")                              ;
 		   return Append
 			  (
-			      NamesP3("PGround"),     //  0-3
+			      aVUkGround,
 			      NamesPose("CCam","W"),  // 3-9
 		              NamesIntr(""),          // 9-12
 			      mDist.VNamesParams()
@@ -595,6 +643,19 @@ template <typename TypeDist,typename TypeProj>  class cEqColinearityCamPPC
 
            std::vector<std::string>    VNamesObs() const 
 	   {
+                if (mLine)
+                {
+                    std::vector<std::string>  aVecLIne2D = Append(NamesP2("Line2D_Pt"),NamesP2("Line2D_Norm"));
+
+                    std::vector<std::string> aVPtsLine     =  Append(NamesP3("Line3d_Pt1"),NamesP3("Line3d_Pt2"));
+                    std::vector<std::string> aVPtsNormLine =  Append(NamesP3("Line3d_Norm_x"),NamesP3("Line3d_Norm_y"));
+                    std::vector<std::string> aVLambdaLine  {"Line3d_Lambda"};
+
+                    std::vector<std::string>  aVecLIne3D =  Append(aVPtsLine,aVPtsNormLine,aVLambdaLine);
+
+
+                    return Append(aVecLIne2D,aVecLIne3D,NamesMatr("M",cPt2di(3,3)));
+                }
                 return Append(NamesP2("Im"),NamesMatr("M",cPt2di(3,3)));
 	   }
 
@@ -605,15 +666,43 @@ template <typename TypeDist,typename TypeProj>  class cEqColinearityCamPPC
                           const std::vector<tUk> & aVObs
                        ) const
            {
-		   //  extract unknown parameters from vector
-		   cPtxd<tUk,3>  aPGround = VtoP3(aVUk,0);
-		   cPtxd<tUk,3>  aCCcam   = VtoP3(aVUk,3);
-		   cPtxd<tUk,3>  aW       = VtoP3(aVUk,6);
-		   tUk           aFoc     = aVUk.at(9);
-		   cPtxd<tUk,2>  aPP      = VtoP2(aVUk,10);
+                   tUk aC1 = CreateCste(1.0,aVUk.at(0));
+                   cPtxd<tUk,3>  aPGround;
+                   size_t aIndUk = 0;
+                   size_t aIndObs = 0;
 
-		   // obs pixel
-		   cPtxd<tUk,2>  aPtIm    = VtoP2(aVObs,0);
+                   cPtxd<tUk,2>  aPtIm    = VtoP2AutoIncr(aVObs,&aIndObs);
+                   cPtxd<tUk,2>  aPtNormIm;
+                   if (mLine)
+                   {
+                        aPtNormIm = VtoP2AutoIncr(aVObs,&aIndObs);
+
+                        cPtxd<tUk,3> aP3d_1 = VtoP3AutoIncr(aVObs,&aIndObs);
+                        cPtxd<tUk,3> aP3d_2 = VtoP3AutoIncr(aVObs,&aIndObs);
+
+                        cPtxd<tUk,3> aNorm3d_x = VtoP3AutoIncr(aVObs,&aIndObs);
+                        cPtxd<tUk,3> aNorm3d_y = VtoP3AutoIncr(aVObs,&aIndObs);
+                        tUk  aLambda = aVObs.at(aIndObs++);
+
+                        cPtxd<tUk,2> aWeightN_1 =   VtoP2AutoIncr(aVUk,&aIndUk);
+                        cPtxd<tUk,2> aWeightN_2 =   VtoP2AutoIncr(aVUk,&aIndUk);
+
+                        cPtxd<tUk,3>  aQ1 = aP3d_1 + aNorm3d_x * aWeightN_1.x() + aNorm3d_y * aWeightN_1.y() ;
+                        cPtxd<tUk,3>  aQ2 = aP3d_2 + aNorm3d_x * aWeightN_2.x() + aNorm3d_y * aWeightN_2.y() ;
+
+                        aPGround = aQ1 * (aC1-aLambda)  +  aQ2 * aLambda ;
+                   }
+		   //  extract unknown parameters from vector
+                   else
+                   {
+		       // aPGround = VtoP3(aVUk,0);
+		       aPGround = VtoP3AutoIncr(aVUk,&aIndUk);
+                   }
+                   cPtxd<tUk,3>  aCCcam = VtoP3AutoIncr(aVUk,&aIndUk);
+                   cPtxd<tUk,3>  aW     = VtoP3AutoIncr(aVUk,&aIndUk);
+                   tUk           aFoc   =  aVUk.at(aIndUk++);
+                   cPtxd<tUk,2>  aPP   =  VtoP2AutoIncr(aVUk,&aIndUk);
+
 
                    cPtxd<tUk,3>  aVCP = aPGround - aCCcam;     // vector  CenterCam -> PGround
 		   
@@ -625,22 +714,161 @@ template <typename TypeDist,typename TypeProj>  class cEqColinearityCamPPC
 		   */
 
 #else
-                   cMatF<tUk> aRotInit (3,3,aVObs,2);
+                   // cMatF<tUk> aRotInit (3,3,aVObs,2);
+                   cMatF<tUk> aRotInit (3,3,&aIndObs,aVObs);
+                   // cMatF(size_t aSzX,size_t aSzY, size_t * anIndAutoIncr, const std::vector<Type> & aVal) :
+
                    cMatF<tUk> aDeltaRot =  cMatF<tUk>::MatAxiator(aW);
                    cPtxd<tUk,3> aPCam =  aDeltaRot * (aRotInit * aVCP);
 #endif
 
-		   cPtxd<tUk,2>  aPProj = cHelperProj<TypeProj>::Proj(aPCam);  // project 3D-> photogram point
-		   cPtxd<tUk,2> aPDist = VtoP2(mDist.PProjToImNorm (aPProj.x(),aPProj.y(),aVUk,12));  // add distorsion
+                  cPtxd<tUk,2>  aPProj = cHelperProj<TypeProj>::Proj(aPCam);  // project 3D-> photogram point
+                  cPtxd<tUk,2> aPDist = VtoP2(mDist.PProjToImNorm (aPProj.x(),aPProj.y(),aVUk,aIndUk));  // add distorsion
 
-		   cPtxd<tUk,2> aPPix =  aPP + aPDist * aFoc; // Use Focal and PP to make pixel
+                   cPtxd<tUk,2> aPPix =  aPP + aPDist * aFoc; // Use Focal and PP to make pixel
 
-		   cPtxd<tUk,2> aResidual = aPPix - aPtIm;  // compare to mesured point
 
-		   return {aResidual.x(),aResidual.y()};
+                   MMVII_INTERNAL_ASSERT_always(aIndUk+mDist.VNamesParams().size()==aVUk.size(),"cEqColinearityCamPPC : Uk-size");
+                   MMVII_INTERNAL_ASSERT_always(aIndObs== aVObs.size(),"cEqColinearityCamPPC : Obs-size");
+
+                   cPtxd<tUk,2> aResidual = aPPix - aPtIm;  // compare to mesured point
+                   if (mLine)
+                   {
+                       return {Scal(aPtNormIm,aResidual)};
+                   }
+                   else
+                   {
+                       return {aResidual.x(),aResidual.y()};
+                   }
            }
 	   
-	   TypeDist  mDist;
+	   TypeDist    mDist;
+           eTypeEqCol  mTypeEq;
+           bool        mLine;
+};
+
+//to be removed ultimately
+class cFormula_EqColinearityCamProj
+{
+public :
+    cFormula_EqColinearityCamProj() {}
+    std::string FormulaName() const { return "cFormula_EqColinearityCamProj";} // ToStr("cFormula_EqColinearityCamProj"
+    std::vector<std::string>  VNamesUnknowns() const
+    {
+        return Append
+            (
+                NamesP3("PGround"),     //  0-3
+                NamesPose("CCam","W")  // 3-9
+                );
+    }
+
+    std::vector<std::string>    VNamesObs() const
+    {
+        return Append(NamesP2("Bundle"),NamesMatr("M",cPt2di(3,3)));
+    }
+
+    template <typename tUk>
+    std::vector<tUk> formula
+        (
+            const std::vector<tUk> & aVUk,
+            const std::vector<tUk> & aVObs
+            ) const
+    {
+        //  extract unknown parameters from vector
+        cPtxd<tUk,3>  aPGround = VtoP3(aVUk,0);
+        cPtxd<tUk,3>  aCCcam   = VtoP3(aVUk,3);
+        cPtxd<tUk,3>  aW       = VtoP3(aVUk,6);
+
+        // obs pixel
+        cPtxd<tUk,2>  aBundle    = VtoP2(aVObs,0);
+
+        cPtxd<tUk,3>  aVCP = aPGround - aCCcam;     // vector  CenterCam -> PGround
+
+
+        cMatF<tUk> aRotInit (3,3,aVObs,2);
+        cMatF<tUk> aDeltaRot =  cMatF<tUk>::MatAxiator(aW);
+        cPtxd<tUk,3> aPCam =  aDeltaRot * (aRotInit * aVCP);
+
+
+        cPtxd<tUk,2>  aBundleProj = VtoP2(cProjStenope::Proj(ToVect(aPCam)));  // project 3D-> bundle
+
+        cPtxd<tUk,2> aResidual = aBundleProj - aBundle;  // compare to mesured bundle
+
+        return {aResidual.x(),aResidual.y()};
+    }
+
+};
+
+/**    */
+class cFormula_EqColinearityOnBundle
+{
+public:
+    cFormula_EqColinearityOnBundle() {}
+    std::string FormulaName() const { return "cFormula_EqColinearityOnBundle";} // ToStr("cFormula_EqColinearityOnBundle"
+    std::vector<std::string>  VNamesUnknowns() const
+    {
+        return Append
+            (
+                NamesP3("PGround"),     //  0-3
+                NamesPose("CCam","W")  // 3-9
+                );
+    }
+
+    std::vector<std::string>    VNamesObs() const
+    {
+        return Append(NamesP3("u"),NamesP3("v"),{"focal"},NamesMatr("M",cPt2di(3,3)));
+    }
+
+    template <typename tUk>
+    std::vector<tUk> formula
+        (
+            const std::vector<tUk> & VUk,
+            const std::vector<tUk> & VObs
+            ) const
+    {
+        // unknown parameters from vector
+        cPtxd<tUk,3>  PGround = VtoP3(VUk,0);
+        cPtxd<tUk,3>  CCcam   = VtoP3(VUk,3);
+        cPtxd<tUk,3>  W       = VtoP3(VUk,6);
+
+        // 'predicted' bundle in world frame (perspective center - ground pt)
+        cPtxd<tUk,3> CG = (PGround - CCcam);
+
+        // transform 'predicted' bundle to camera frame
+        cMatF<tUk> RotInit (3,3,VObs,7);
+        cMatF<tUk> DeltaRot =  cMatF<tUk>::MatAxiator(W);
+        cPtxd<tUk,3> cg =  DeltaRot * (RotInit * CG);
+
+        // vectors orthogonal to 'observed' bundle in camera frame
+        cPtxd<tUk,3> u = VtoP3(VObs,0);
+        cPtxd<tUk,3> v = VtoP3(VObs,3);
+
+        // focal length for residual scaling
+        tUk f = VObs.at(6);
+
+        // angle-based residual ~
+        //          minimises the difference between predicted and
+        //          observed bundles in camera frame
+        //
+        //     (cg * u) / |cg| |u| = cos alpha = 0 [rad] (because u _|_ to cg)
+        //     (cg * v) / |cg| |v| = cos alpha = 0 [rad] (because v _|_ to cg)
+        //
+        // or in pixels :
+        //
+        //   f * (cg * u) / |cg| |u| = 0 [pix]
+        //   f * (cg * v) / |cg| |v| = 0 [pix]
+        //
+        tUk cgNorm = Sqrt(cg.x()*cg.x() + cg.y()*cg.y() + cg.z()*cg.z());
+        tUk uNorm = Sqrt(u.x()*u.x() + u.y()*u.y() + u.z()*u.z());
+        tUk vNorm = Sqrt(v.x()*v.x() + v.y()*v.y() + v.z()*v.z());
+
+        tUk cguResAng = f*(cg.x()*u.x() + cg.y()*u.y() + cg.z()*u.z())/(cgNorm*uNorm);
+        tUk cgvResAng = f*(cg.x()*v.x() + cg.y()*v.y() + cg.z()*v.z())/(cgNorm*vNorm);
+
+
+        return {cguResAng,cgvResAng};
+    }
+
 };
 
 

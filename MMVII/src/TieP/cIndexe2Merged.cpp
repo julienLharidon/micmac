@@ -1,5 +1,4 @@
 #include "MMVII_PCSens.h"
-#include "MMVII_MMV1Compat.h"
 #include "MMVII_DeclareCste.h"
 #include "MMVII_BundleAdj.h"
 #include "MMVII_2Include_Serial_Tpl.h"
@@ -42,7 +41,7 @@ void  c1ConfigLogMTP::AddData(const cAuxAr2007 & anAux)
      {
         mIndIm.resize(aNbIm);
      }
-     AddTabData(cAuxAr2007("IndIm", anAux),mIndIm.data(),mIndIm.size());
+     MMVII::AddData(cAuxAr2007("IndIm", anAux),mIndIm);
      MMVII::AddData(cAuxAr2007("IdP0", anAux),mIdP0);
      MMVII::AddData(cAuxAr2007("NbPts", anAux),mNbPts);
 }
@@ -178,19 +177,22 @@ static cParamHeap_MTP The_cParamHeap_MTP;
 
 
 
-class cReadMTP_Std 
+class cReadMTP_Std
 {
       public :
               typedef cIndexedHeap<cObjHeapMTP,cParamHeap_MTP,cParamHeap_MTP> tHeap;
 	      cReadMTP_Std
               (
+                     const std::string & aFolder,
                      const std::vector<std::string> &aVNames,
-		     cPhotogrammetricProject & aPhProj,
+		     cIPhProj & aPhProj,
 		     bool WithInd,
 		     bool WithSensor
               );
 
 	      cComputeMergeMulTieP *      CompMerge();
+	      bool WithSensor() const { return mWithSensor;}
+
       private :
               bool GetNextConfig();
 	      bool                        mWithIndex;
@@ -252,8 +254,9 @@ bool cReadMTP_Std::GetNextConfig()
 
 cReadMTP_Std::cReadMTP_Std
 (
+    const std::string & aFolder,
     const std::vector<std::string> &aVNames,
-    cPhotogrammetricProject & aPhProj,
+    cIPhProj & aPhProj,
     bool  WithIndex,
     bool  WithSensor
 ) :
@@ -263,9 +266,10 @@ cReadMTP_Std::cReadMTP_Std
      mHeap        (The_cParamHeap_MTP),
      mCompMerge   (new cComputeMergeMulTieP(aVNames,nullptr,(WithSensor ? &aPhProj : nullptr)))
 {
+     bool GotSomething = false;
      for (size_t aKIm=0 ; aKIm<aVNames.size() ; aKIm++)
      {
-	  aPhProj.ReadMultipleTieP(mVTpm[aKIm],aVNames[aKIm]);
+	  aPhProj.ReadMultipleTiePFromFolder(aFolder,mVTpm[aKIm],aVNames[aKIm],true);  // true=SVP , ok if no file
 	  const auto & aVec = mVTpm[aKIm].mVecTPM;
 	  if (! aVec.empty())
 	  {
@@ -275,13 +279,37 @@ cReadMTP_Std::cReadMTP_Std
 	     aPt.mIdIm = aKIm;
 	     aPt.mHeapIndex = HEAP_NO_INDEX;   // probably not necessary, but no harm
 	     mHeap.Push(aPt);
+	     GotSomething = true;
 	  }
+     }
+
+     if (!GotSomething)
+     {
+         MMVII_UnclasseUsEr("Could not get any tie points for DirIn=[" + aPhProj.MulTiePDirIn() + "]");
      }
 
      while ( GetNextConfig()) ;
 }
 
 cComputeMergeMulTieP * cReadMTP_Std::CompMerge() {return mCompMerge;}
+
+cComputeMergeMulTieP * AllocStdFromMTPFromFolder
+                      (
+                            const std::string & aFolder,
+                            const std::vector<std::string> &aVNames,
+                            cIPhProj & aPhProj,
+                            bool  WithIndexPt,
+                            bool  WithSensor,
+                            bool  WithIndexImages
+                      )
+{
+    cReadMTP_Std aRStd(aFolder,aVNames,aPhProj,WithIndexPt,WithSensor);
+
+    if (WithIndexImages)
+        aRStd.CompMerge()->SetImageIndexe();
+
+    return aRStd.CompMerge();
+}
 
 cComputeMergeMulTieP * AllocStdFromMTP
                       (
@@ -292,13 +320,18 @@ cComputeMergeMulTieP * AllocStdFromMTP
                             bool  WithIndexImages
                       )
 {
-    cReadMTP_Std aRStd(aVNames,aPhProj,WithIndexPt,WithSensor);
-
-    if (WithIndexImages)
-        aRStd.CompMerge()->SetImageIndexe();
-
-    return aRStd.CompMerge();
+   return AllocStdFromMTPFromFolder(aPhProj.DPMulTieP().DirIn(),aVNames,aPhProj,WithIndexPt,WithSensor,WithIndexImages);
 }
+
+
+
+   // cDirsPhProj     DPPointsMeasures;  ///<  For GCP measures  Image + Grounds
+   // cDirsPhProj     DPTieP;            ///<  For Homologous point
+   // cDirsPhProj     DPMulTieP;         //
+
+
+
+
 
 
 }; // MMVII

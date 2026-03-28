@@ -1,5 +1,17 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.10)
+
+# Interfaces de saisie des param�tres
+option(WITH_QT5 "compile Qt interfaces" OFF)
+
+# VCPKG_MANIFEST_FEATURES must be set before project()
+# It will trigger download and install of QT5 via vcpkg.json 
+# if needed and vcpkg is used
+if(WITH_QT5)
+  list(APPEND VCPKG_MANIFEST_FEATURES "qt5")
+endif()
+
 project(MICMAC)
+
 
 function(print_list list_name)
 	message("${list_name}:")
@@ -203,8 +215,8 @@ if(${WITH_QT5})
 			foreach( sdk_dir ${WINDOWSSDK_DIRS} )
 				list( APPEND SDK_LIB_DIRS "${sdk_dir}/lib" )
 			endforeach()
-			set( CMAKE_PREFIX_PATH "${SDK_LIB_DIRS}" )
-			message (" WindowsSDKDir : " ${CMAKE_PREFIX_PATH} )
+			list(APPEND CMAKE_PREFIX_PATH "${SDK_LIB_DIRS}" )
+			message (" WindowsSDKDir : " ${SDK_LIB_DIRS} )
 		endif()
 
 		add_compile_definitions(QT_NO_DEPRECATED_WARNINGS=1) # to work with both ubuntu 20.04 and 22.04... MPD ->
@@ -613,7 +625,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	#~ add_compile_options(-O2 -Wall -fPIC) // pas gere par le cmake de la forge
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 if (${WERROR})
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall -fPIC -Werror")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall -fPIC -Werror -Wno-error=overloaded-virtual -Wno-error=unused-result -Wno-error=stringop-overflow")
 else ()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall -fPIC")
 endif()

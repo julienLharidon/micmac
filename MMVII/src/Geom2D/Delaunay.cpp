@@ -354,7 +354,7 @@ Delaunator::Delaunator(SafeVector<double> const& in_coords)
 
     hull_start = i0;
 
-    size_t hull_size = 3;
+    [[maybe_unused]] size_t hull_size = 3;
 
     hull_next[i0] = hull_prev[i2] = i1;
     hull_next[i1] = hull_prev[i0] = i2;
@@ -744,7 +744,9 @@ void BenchDelaunay(cParamExeBench & aParam)
     BenchDelaunayGrid(cPt2di(10,20));
     for (int aK=0 ; aK<30 ;aK++)
     {
-         cPt2di aSz(2+RandUnif_N(10),2+RandUnif_N(10));
+         auto v1 = 2+RandUnif_N(10);
+         auto v2 = 2+RandUnif_N(10);
+         cPt2di aSz(v1,v2);
          BenchDelaunayGrid(aSz);
     }
 
@@ -778,7 +780,7 @@ template <class Type> void cTriangulation2D<Type>::WriteFile(const std::string &
     }
     else
     {
-       MMVII_UsersErrror(eTyUEr::eBadPostfix,"Unknown postfix in cTriangulation3D");
+       MMVII_UserError(eTyUEr::eBadPostfix,"Unknown postfix in cTriangulation3D");
     }
 }
 

@@ -27,6 +27,14 @@ namespace fs=std::filesystem;
 namespace MMVII
 {
 
+std::vector<std::string >  AddPostFix(const std::vector<std::string>  & aV,const std::string  & aPost)
+{
+    std::vector<std::string > aRes;
+    for (const auto & aStr :aV)
+        aRes.push_back(aStr+aPost);
+    return aRes;
+}
+
 /* ************************************************* */
 /*                                                   */
 /*                cCarLookUpTable                    */
@@ -96,6 +104,12 @@ cCarLookUpTable::cCarLookUpTable() :
 {
     MEM_RAZ(&mDTable,1);
 }
+
+void cCarLookUpTable::InitIdGlob()
+{
+    InitId(std::numeric_limits<char>::min(),std::numeric_limits<char>::max()-1);
+}
+
 
 /* ************************************************* */
 /*                                                   */
@@ -433,7 +447,7 @@ std::string  Quote(const std::string & aStr)
    return aStr;
 }
 
-void SkeepWhite(const char * & aC)
+void SkipWhite(const char * & aC)
 {
     while (isspace(*aC)) 
          aC++;
@@ -459,7 +473,7 @@ bool CreateDirectories(const std::string & aDir,bool SVP)
         }
         else
         {
-            MMVII_UsersErrror(eTyUEr::eCreateDir,"Cannot create directory for arg " + aDir);
+            MMVII_UserError(eTyUEr::eCreateDir,"Cannot create directory for arg " + aDir);
         }
     }
     return Ok;
@@ -584,6 +598,7 @@ void  MakeBckUp(const std::string & aDir,const std::string & aNameFile,int aNbDi
 
 void GetFilesFromDir(std::vector<std::string> & aRes,const std::string & aDir,const tNameSelector &  aNS,bool OnlyRegular)
 {
+    MMVII_INTERNAL_ASSERT_User(IsDirectory(aDir), eTyUEr::eOpenFile, aDir+" is not a directory!");
     for (fs::directory_iterator itr(aDir); itr!=fs::directory_iterator(); ++itr)
    {
       std::string aName ( itr->path().filename().generic_string().c_str());
@@ -618,6 +633,7 @@ std::vector<std::string> GetSubDirFromDir(const std::string & aDir,const tNameSe
 */
 void RecGetFilesFromDir( std::vector<std::string> & aRes, const std::string & aDir,tNameSelector  aNS,int aLevMin, int aLevMax)
 {
+    MMVII_INTERNAL_ASSERT_User(IsDirectory(aDir), eTyUEr::eOpenFile, aDir+" is not a directory!");
     for (fs::recursive_directory_iterator itr(aDir); itr!=fs::recursive_directory_iterator(); ++itr)
     {
         int aLev = itr.depth();
@@ -658,9 +674,26 @@ bool starts_with(const std::string & aFullStr,const std::string & aPrefix)
     return anItPref==aPrefix.end();
 }
 
+bool ends_with(const std::string & aFullStr,const std::string & aEnding)
+{
+    if (aFullStr.size() < aEnding.size())
+        return false;
+    auto it = aEnding.begin();
+    return std::all_of(std::next(aFullStr.begin(),aFullStr.size()-aEnding.size()), aFullStr.end(),
+                       [&it](const char& c) { return c == *(it++);});
+
+}
+
+
+bool contains(const std::string & aFullStr,char aC)
+{
+	return aFullStr.find(aC) != std::string::npos;
+}
+
 bool IsPrefixed(const std::string & aStr,char aSep)
 {
-	return aStr.find(aSep) != std::string::npos;
+	return contains(aStr,aSep);
+	// return aStr.find(aSep) != std::string::npos;
 }
 
 

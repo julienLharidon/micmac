@@ -1,15 +1,15 @@
-
 #include "MMVII_Tpl_Images.h"
 #include "MMVII_Linear2DFiltering.h"
 #include "MMVII_DeclareCste.h"
+#include "MMVII_Geom2D.h"
 
 namespace MMVII
 {
 
 cPt2di DifInSz(const std::string & aN1,const std::string & aN2)
 {
-    cDataFileIm2D aD1 = cDataFileIm2D::Create(aN1,false);
-    cDataFileIm2D aD2 = cDataFileIm2D::Create(aN2,false);
+    cDataFileIm2D aD1 = cDataFileIm2D::Create(aN1,eForceGray::No);
+    cDataFileIm2D aD2 = cDataFileIm2D::Create(aN2,eForceGray::No);
 
     return aD1.Sz() - aD2.Sz();
 }
@@ -97,6 +97,22 @@ template <class Type> void  cDataIm2D<Type>::VD_SetV(const cPt2di& aP,const doub
    SetVTrunc(aP,aV);
 }
 
+template <class Type> void  cDataIm2D<Type>::VPtsSetV(const  std::vector<cPt2di> & aVPt,Type aVal)
+{
+    for (const auto & aPix : aVPt)
+        SetV(aPix,aVal);
+}
+
+template <class Type> void  cDataIm2D<Type>::VI_VPtsSetV(const  std::vector<cPt2di> & aVPt, int  aV)
+{
+  VPtsSetV(aVPt,tNumTrait<Type>::Trunc(aV));
+}
+
+template <class Type> void  cDataIm2D<Type>::VD_VPtsSetV(const  std::vector<cPt2di> & aVPt,tREAL8  aV)
+{
+  VPtsSetV(aVPt,tNumTrait<Type>::Trunc(aV));
+}
+
 template <class Type> const Type * cDataIm2D<Type>::GetLine(int aY)  const
 {
    AssertYInside(aY);
@@ -107,33 +123,38 @@ template <class Type> Type * cDataIm2D<Type>::GetLine(int aY)
    AssertYInside(aY);
    return mRawData2D[aY];
 }
-template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName,eTyNums aType) const
+template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName,eTyNums aType, const tFileOptions& aOptions) const
 {
-    cDataFileIm2D aDFI = cDataFileIm2D::Create(aName,aType,Sz(),1);
+    cDataFileIm2D aDFI = cDataFileIm2D::CreateOnWrite(aName,aType,Sz(),aOptions,1);
     Write(aDFI,P0());
 }
 
-template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName) const
+template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName, const tFileOptions& aOptions) const
 {
-    ToFile(aName,tElemNumTrait<Type>::TyNum());
+    ToFile(aName,tElemNumTrait<Type>::TyNum(),aOptions);
 }
 
-template <class Type>  void cDataIm2D<Type>::ClipToFile(const std::string & aName,const cRect2& aBox) const
+template <class Type>  void cDataIm2D<Type>::ClipToFile(const std::string & aName,const cRect2& aBox, const tFileOptions& aOptions) const
 {
-    cDataFileIm2D aDFI = cDataFileIm2D::Create(aName,tElemNumTrait<Type>::TyNum(),aBox.Sz(),1);
+    cDataFileIm2D aDFI = cDataFileIm2D::CreateOnWrite(aName,tElemNumTrait<Type>::TyNum(),aBox.Sz(),aOptions,1);
     Write(aDFI,-aBox.P0(),1.0,aBox);
 }
 
 
 
-
-
-
-template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName,const tIm &aIG,const tIm &aIB) const
+template <class Type>  void cDataIm2D<Type>::ToFile(const std::string & aName,const tIm &aIG,const tIm &aIB, const tFileOptions& aOptions) const
 {
-    cDataFileIm2D aDFI = cDataFileIm2D::Create(aName,tElemNumTrait<Type>::TyNum(),Sz(),3);
+    cDataFileIm2D aDFI = cDataFileIm2D::CreateOnWrite(aName,tElemNumTrait<Type>::TyNum(),Sz(),aOptions,3);
     Write(aDFI,aIG,aIB,P0());
 }
+
+template <class Type>  std::pair<tREAL8,cPt2dr> cDataIm2D<Type>::GetPairGradAndVBL(const cPt2dr & aP)  const
+{
+	cPt3dr aGV = GetGradAndVBL(aP);
+
+	return std::pair<tREAL8,cPt2dr>(aGV.z(),MMVII::Proj(aGV));
+}
+
 
 
 /* ========================== */
@@ -182,10 +203,17 @@ template <class Type>  cIm2D<Type>::cIm2D(const cBox2di & aBox,const cDataFileIm
     Read(aDataF,aBox.P0());
 }
 
+template <class Type>  cIm2D<Type> cIm2D<Type>::DiracImage(const cPt2di & aP0,const cPt2di & aP1,Type aValDirac,const cPt2di & aPDirac)
+{
+   cIm2D<Type> aRes(aP0,aP1,nullptr,eModeInitImage::eMIA_Null); // image test for filter on X
+   aRes.DIm().InitDirac(aPDirac,aValDirac);
+   return aRes;
+}
 
 template <class Type>  cIm2D<Type> cIm2D<Type>::FromFile(const std::string & aName)
 {
-   cDataFileIm2D  aFileIm = cDataFileIm2D::Create(aName,true);
+  //  StdOut() << "cIm2D<Type>::FromFile> cIm2D<Type>::FromFile " << aName << "\n";
+   cDataFileIm2D  aFileIm = cDataFileIm2D::Create(aName,eForceGray::Yes);
    cIm2D<Type> aRes(aFileIm.Sz());
    aRes.Read(aFileIm,cPt2di(0,0));
 
@@ -194,7 +222,7 @@ template <class Type>  cIm2D<Type> cIm2D<Type>::FromFile(const std::string & aNa
 
 template <class Type>  cIm2D<Type> cIm2D<Type>::FromFile(const std::string & aName,const cBox2di & aBox)
 {
-   cDataFileIm2D  aFileIm = cDataFileIm2D::Create(aName,true);
+   cDataFileIm2D  aFileIm = cDataFileIm2D::Create(aName,eForceGray::Yes);
    cIm2D<Type> aRes(aBox.Sz());
    aRes.Read(aFileIm,aBox.P0());
 
@@ -344,7 +372,7 @@ static std::string NameIndBoxRecal="INTERNAL_IndexBoxRecall";
 template<class TypeEl>  cAppliParseBoxIm<TypeEl>::cAppliParseBoxIm
                         (
 			      cMMVII_Appli & anAppli,
-                              bool IsGray,
+                              eForceGray IsGray,
 			      const cPt2di & aSzTiles,
 			      const cPt2di & aSzOverlap,
                               bool  doTilesInParal
@@ -371,13 +399,13 @@ template<class TypeEl> bool  cAppliParseBoxIm<TypeEl>::TopCallParallTile() const
    return  mParalTiles && (!InsideParalRecall());
 }
 
-template<class TypeEl> void  cAppliParseBoxIm<TypeEl>::APBI_ExecAll()
+template<class TypeEl> void  cAppliParseBoxIm<TypeEl>::APBI_ExecAll(bool Silence)
 {
      mDFI2d = cDataFileIm2D::Create(mNameIm,mIsGray);
      if (APBI_TestMode())
      {
         LoadI(CurBoxIn());
-	mAppli.ExeOnParsedBox();
+        mAppli.ExeOnParsedBox();
         return;
      }
      AssertNotInParsing();
@@ -402,12 +430,12 @@ template<class TypeEl> void  cAppliParseBoxIm<TypeEl>::APBI_ExecAll()
             {
                 mCurPixIndex = aPixI;
                 LoadI(CurBoxIn());
-	        mAppli.ExeOnParsedBox();
+                mAppli.ExeOnParsedBox();
             }
          }
      }
      mParseBox = nullptr ;   // No longer inside parsing
-     mAppli.ExeComParal(aLComParal);
+     mAppli.ExeComParal(aLComParal,Silence);
 }
 
 template<class TypeEl> const std::string & cAppliParseBoxIm<TypeEl>::APBI_NameIm() const

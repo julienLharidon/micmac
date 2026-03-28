@@ -1,7 +1,11 @@
+#define WITH_MMV1_FUNCTION false
+
 #include "MMVII_PCSens.h"
-#include "MMVII_MMV1Compat.h"
+#include "MMVII_MMV1Compat.h" // TO SEE
 #include "MMVII_DeclareCste.h"
 #include "MMVII_BundleAdj.h"
+
+
 
 /**
    \file cConvCalib.cpp  testgit
@@ -159,7 +163,7 @@ cPerspCamIntrCalib * cV1PCConverter::AllocCalibV1
 )
 { 
      // If object already created
-     static std::map<std::string,cPerspCamIntrCalib *> TheMap;
+     thread_local static std::map<std::string,cPerspCamIntrCalib *> TheMap;
      cPerspCamIntrCalib * & aPersp = TheMap[aFullName];
 
      if (aPersp==0)
@@ -211,7 +215,7 @@ cSensorCamPC * cV1PCConverter::AllocSensorPCV1
 
 void BenchCentralePerspective_ImportCalibV1(cParamExeBench & aParam,const std::string & aName,bool HCG,bool  CenterFix,double aAccuracy)
 {
-static int aCpt=0; aCpt++;
+     thread_local static int aCpt=0; aCpt++;
 
      std::string aFullName = cMMVII_Appli::CurrentAppli().InputDirTestMMVII() + "Ori-MMV1" +  StringDirSeparator() + aName;
 
@@ -298,6 +302,9 @@ void BenchPoseImportV1(const std::string & aNameOriV1,double anAccuracy)
 
 void BenchCentralePerspective_ImportV1(cParamExeBench & aParam)
 {
+#if (!WITH_MMV1_FUNCTION)
+    return;
+#endif
     BenchPoseImportV1("Orientation-_DSC8385.tif.xml" ,1e-5);
     BenchPoseImportV1("Orientation-Img0937.tif.xml"  ,1e-5);
 
@@ -382,7 +389,7 @@ int cAppli_OriConvV1V2::Exe()
 	if (mUseStdNameCalib)
            aNameCalib = mPhProj.StdNameCalibOfImage(aNameIm);
 
-        cSensorCamPC * aPC =  cV1PCConverter::AllocSensorPCV1(aNameIm,mDirMMV1+aNameOri,aNameCalib,mDownScale,mDegree,mFileInterne);
+        cSensorCamPC * aPC =  cV1PCConverter::AllocSensorPCV1(aNameIm,mDirMMV1+StringDirSeparator()+aNameOri,aNameCalib,mDownScale,mDegree,mFileInterne);
 
 	mPhProj.SaveCamPC(*aPC);
 

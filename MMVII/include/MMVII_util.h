@@ -47,7 +47,7 @@ class cCarLookUpTable
 	 void InitId(char aC1,char aC2);
 	 void Chg1C(char aC1,char aC2);
 
-
+	 void InitIdGlob();
 
          inline char Val(const int & aV) const
          {
@@ -66,6 +66,7 @@ class cCarLookUpTable
          bool          mInit;        ///< Is it initialize
          bool          mReUsable;    ///< If InitId of Chg1C used -> no longer reusable
 };
+
 
 // Indicate if all "word" of list are in KeyList, use aSpace to separate word
 // Si aMes=="SVP"=> No Error just return false, else aMes is error message
@@ -89,8 +90,9 @@ std::string Postfix(const std::string & aStr,char aSep='.',bool SVP=false,bool P
 std::string LastPostfix(const std::string & aStr,char aSep='.'); ///< No error:  a=> ""  a.b.c => "c"
 
 bool starts_with(const std::string & aFullStr,const std::string & aBegining); /// as c++20  std::string.starts_with
-bool ends_with(const std::string & aFullStr,const std::string & aEnding); /// as c++20  std::string.starts_with TO IMPLEMENT
+bool ends_with(const std::string & aFullStr,const std::string & aEnding); /// as c++20  std::string.ends_with
 bool contains(const std::string & aFullStr,const std::string & aEnding); /// as c++23  std::string.contains TO IMPLEMENT
+bool contains(const std::string & aFullStr,char); /// does the string contain the char (use find)
 
 // Direcytory and files names, Rely on std::filesystem
 void MakeNameDir(std::string & aDir); ///< Add a '/', or equiv, to make a name of directory
@@ -131,11 +133,12 @@ const std::string & StrWDef(const std::string & aValue,const std::string & aDef)
 
 
 bool CaseSBegin(const char * aBegin,const char * aStr); ///< Is aBegin the case SENS-itive premisse of aStr ?
-void SkeepWhite(const char * & aC);
+void SkipWhite(const char * & aC);
 const std::string & StringDirSeparator();
 bool IsDirectory(const std::string & aName);
 
 
+//     '$0' =>   '$&'
 
 /// Create a selector associated to a regular expression, by convention return Cste-true selector if string=""
 tNameSelector  AllocRegex(const std::string& aRegEx);
@@ -164,6 +167,8 @@ int  FromHexaCode(char aC);
 
 
 std::string replaceFirstOccurrence(const std::string& s,const std::string& toRep,const std::string& Rep,bool SVP=false);
+
+std::vector<std::string >  AddPostFix(const std::vector<std::string>  & aV,const std::string  & aPost);
 
 
 
@@ -356,7 +361,7 @@ class cSetIntDyn
           void Clear();
           void AddIndFixe(size_t aK)  ///< Add an element, assume sizeof vector of
           {
-               if (!mOccupied[aK])
+               if (!mOccupied.at(aK))
                {
                    mOccupied[aK] = true;
                    mVIndOcc.push_back(aK);
@@ -405,19 +410,24 @@ class cSetIExtension
 /** Generate Q subset of cardinal K [0,N], all different,  if Q too big, truncated */
 void GenRanQsubCardKAmongN(std::vector<cSetIExtension> & aRes,int aQ,int aK,int aN);
 
+/**  Class to compute the number of test of Ransac, assumming :
+*     o independance of errors
+*     o a known probability of error of each sample
+*     o a known target of acceptable global error
+*  Also, all this hypothesis are questionnable, it's better than nothing ...
+*/
+
 class cParamRansac
 {   
     public :
-
+        /// given the number of sample required to compute a solution, return the number of tests to do
         int  NbTestOfErrAdm(int aNbSample) const;
+        /// constructor pretty basic
         cParamRansac(double  aProba1Err,double anErrAdm);
     private :
-        double mProba1Err;
-        double mErrAdm;
+        double mProba1Err;  //< probability of error of each samples, assumed to be globally independant
+        double mErrAdm;      //< admissible global error
 };
-
-
-
 
 
 };

@@ -194,6 +194,17 @@ template <class Type,const int DimIn,const int DimOut>
 {
 }
 
+template <class Type,const int DimIn,const int DimOut> cPtxd<Type,DimIn>     
+    cDataMapping<Type,DimIn,DimOut>::EpsJac() const
+{
+	return mEpsJac;
+}
+
+template <class Type,const int DimIn,const int DimOut> 
+    void    cDataMapping<Type,DimIn,DimOut>::SetEpsJac(const tPtIn & aNewEps) 
+{
+    mEpsJac = aNewEps;
+}
 
 
      //  =========== Compute values =============
@@ -204,6 +215,7 @@ template <class Type,const int DimIn,const int DimOut>
                    cDataMapping<Type,DimIn,DimOut>::Values(tVecOut & aBufOut,const tVecIn & aVIn) const
 {
 /**/MACRO_CHECK_RECURS_BEGIN;
+    aBufOut.clear(); // MPD 18/05/2025, seems logical, but why not before ???
     for (const auto  & aP : aVIn)
         aBufOut.push_back(Value(aP));
 /**/MACRO_CHECK_RECURS_END;
@@ -241,9 +253,11 @@ template <class Type,const int DimIn,const int DimOut>
 #endif
 {
 #if (MAP_STATIC_BUF)
+   ASSERT_NO_MUTI_THREAD(); //in multi thread pb with SetActiveMemoryCount !!
+
    cMemManager::SetActiveMemoryCount(false);  // static vector of shared matrix will never be unallocated
-   static tVecJac  mJacReserve;
-   static tVecJac  mJacResult;
+   thread_local static tVecJac  mJacReserve;
+   thread_local static tVecJac  mJacResult;
 #endif
    while (mJacReserve.size()<aSz)
          mJacReserve.push_back(tJac(DimIn,DimOut));
@@ -354,17 +368,40 @@ template <class Type,const int DimIn,const int DimOut>
       cTplBox<Type,DimOut> cDataMapping<Type,DimIn,DimOut>::BoxOfCorners(const cTplBox<Type,DimIn>& aBoxIn) const
 {
    typename cTplBox<Type,DimIn>::tCorner aCornersIn;
+
+   // extract the corners of input  box
    aBoxIn.Corners(aCornersIn);
    std::vector<tPtIn> aVIn(&(aCornersIn[0]),&(aCornersIn[0]) + cTplBox<Type,DimIn>::NbCorners);
+   // compute the image of corners by mapping
    const std::vector<tPtOut> & aVOut = Values(aVIn);
-
+   // compute the cTplBoxOfPts
    cTplBoxOfPts<Type,DimOut> aBoxOfPts;
    for (const auto & aP : aVOut)
        aBoxOfPts.Add(aP);
+   // transformat in cTplBoxOfPts
+   return  cTplBox<Type,DimOut>(aBoxOfPts.P0(),aBoxOfPts.P1());
+}
+
+template <class Type,const int DimIn,const int DimOut>
+      cTplBox<Type,DimOut> cDataMapping<Type,DimIn,DimOut>::BoxOfFrontier(const cTplBox<Type,DimIn>& aBoxIn,Type aStep) const
+{
+   typedef cPtxd<int,DimIn> tI_Pt;
+   tI_Pt  aSzI = Pt_round_up(aBoxIn.Sz() / aStep);                  // number of pixel roun to Up value
+   tPtIn  aNewStep =   DivCByC(aBoxIn.Sz(),tPtIn::FromPtInt(aSzI)); // ~ step but adjusted
+   cPixBox<DimIn>  aRect(tI_Pt::PCste(0),aSzI+tI_Pt::PCste(1));     // rectangle of pixels, add 1 because up will be avoided
+
+   cTplBoxOfPts<Type,DimOut> aBoxOfPts;
+   for (const auto & aPix : aRect.Border(1))
+   {
+       tPtIn aPt = aBoxIn.P0() + MulCByC(aNewStep,tPtIn::FromPtInt(aPix));
+       aBoxOfPts.Add(Value(aPt));
+   }
 
    return  cTplBox<Type,DimOut>(aBoxOfPts.P0(),aBoxOfPts.P1());
-   
 }
+
+
+
 
 template <class Type,const int DimIn,const int DimOut>
       cTriangle<Type,DimOut> cDataMapping<Type,DimIn,DimOut>::TriValue(const cTriangle<Type,DimIn> &aTriIn) const
@@ -407,6 +444,29 @@ template <class Type,const int Dim>
       cDataNxNMapping<Type,Dim>::cDataNxNMapping(const tPt &  aEps) :
            cDataMapping<Type,Dim,Dim> (aEps)
 {
+}
+
+template <class Type,const int Dim>
+      cPtxd<Type,Dim> cDataNxNMapping<Type,Dim>::InvertQuasiTrans(const tPt& aP2Inv,tPt aGuess,Type aMaxErr,int aNbIterMax) const
+{
+       tREAL8  aSqE = Square(aMaxErr);
+       tREAL8 aD2 = 1e30 + aSqE;
+
+       while ((aD2>aSqE) && (aNbIterMax>0))
+       {
+          tPt aValueGuess = this->Value(aGuess);
+          Type aNextD2  = SqN2(aValueGuess-aP2Inv);
+          if (aNextD2>aD2) return aGuess;
+          aD2 = aNextD2;
+          // We make the taylor expansion assume Correc2InitPix ~Identity
+          //  Value(aGuess+aDelta)  = Value(aGuess) + aDelta = aP2Inv ;
+          //  aDelta =  aP2Inv -  Value(aGuess)
+          aGuess += aP2Inv -  aValueGuess;
+
+          aNbIterMax--;
+       }
+
+       return aGuess;
 }
 
 
@@ -474,11 +534,16 @@ template class cMappingIdentity<double,DIM>;\
 INSTANCE_TWO_DIM_MAPPING(DIM,2);\
 INSTANCE_TWO_DIM_MAPPING(DIM,3);
 
+INSTANCE_TWO_DIM_MAPPING(1,1);
+INSTANCE_TWO_DIM_MAPPING(2,1);
 
+INSTANCE_ONE_DIM_MAPPING(1)
 INSTANCE_ONE_DIM_MAPPING(2)
 INSTANCE_ONE_DIM_MAPPING(3)
+// INSTANCE_ONE_DIM_MAPPING(4)
+INSTANCE_TWO_DIM_MAPPING(3,1)
 
-
+template class cDataMapping<double,5,1>;
 /* ============================================= */
 /* ============================================= */
 /* ====                                      === */       
@@ -567,8 +632,8 @@ template <class TypeMap> void OneBenchMapping(cParamExeBench & aParam)
         }
         TypeMap aMap;
         cDataMapping<tREAL16,2,3> * aPM = &aMap; // use a pointer because virtuality
-        // compute vector of input
-        const auto & aVO2 = aPM->Values(aVIn);
+        // compute vector of input  !! not a "&" because static buffer will be modified
+        const auto   aVO2 = aPM->Values(aVIn);
         // check size
         MMVII_INTERNAL_ASSERT_bench(aVOut.size()==aSzV,"Sz in BenchMapping");
         MMVII_INTERNAL_ASSERT_bench(aVO2.size() ==aSzV,"Sz in BenchMapping");
@@ -576,8 +641,10 @@ template <class TypeMap> void OneBenchMapping(cParamExeBench & aParam)
         // check vector  of input with by buffer (VO2) and by Value elem
         for (tU_INT4 aKP=0 ; aKP<aSzV ; aKP++) 
         {
-            MMVII_INTERNAL_ASSERT_bench(Norm2(aVOut[aKP] - aVO2[aKP])<1e-5,"Buf/UnBuf in mapping");
-            MMVII_INTERNAL_ASSERT_bench(Norm2(aVOut[aKP] - aPM->Value(aVIn[aKP]) )<1e-5,"Buf/UnBuf in mapping");
+		// JOE => MPD
+            MMVII_INTERNAL_ASSERT_bench(Norm2(aVOut.at(aKP) - aVO2.at(aKP))<1e-5,"Buf/UnBuf in mapping");
+            // MMVII_INTERNAL_ASSERT_bench(Norm2(aVOut[aKP] - aVO2[aKP])<1e-5,"Buf/UnBuf in mapping");
+            MMVII_INTERNAL_ASSERT_bench(Norm2(aVOut.at(aKP) - aPM->Value(aVIn.at(aKP)) )<1e-5,"Buf/UnBuf in mapping");
         }
 
         // check jacobian

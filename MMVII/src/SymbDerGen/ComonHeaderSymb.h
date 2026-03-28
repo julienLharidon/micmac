@@ -8,14 +8,23 @@
 #include "MMVII_Ptxd.h"
 #include "SymbDer/SymbolicDerivatives.h"
 #include <typeinfo>       // operator typeid
+#include "MMVII_PhgrDist.h"
+
 
 using namespace NS_SymbolicDerivative;
 
 
 namespace MMVII
 {
-/// required so that we can define points on formula ...
 
+///  A genrealizaion of the post incremenation aIndex++
+inline size_t IndexAutoIncr(size_t * aIndex,size_t aIncr)
+{
+      *aIndex += aIncr;
+      return (*aIndex) - aIncr;
+}
+
+/// required so that we can define points on formula ...
 template <> class tNumTrait<cFormula <tREAL8> >
 {
     public :
@@ -27,9 +36,17 @@ template <> class tNumTrait<cFormula <tREAL8> >
         static void AssertValueOk(const cFormula<double> & ) {}
 };
 
+/**  Class for defining matrix on formula/real ... and the operation required in matrix of formula
+ *   Why not use the dense matrix that is already templated ?  Because, if not unfeasible, it was a bit tricky
+ *   to have a class that is both :
+ *       - intantiable with formula
+ *       - easily interfacable with eigen
+ */
 template <class Type> class cMatF
 {
     private :
+
+      /// for ex create some of matrix if used with + (used also with -)
          template <class TypeFunc>  cMatF<Type>  OpBin(const cMatF<Type> &  aM2,const TypeFunc & Oper) const
          {
               MMVII_INTERNAL_ASSERT_always(mSz==aM2.mSz,"Sz diff in op bin");
@@ -41,19 +58,27 @@ template <class Type> class cMatF
 			   aRes(aKx,aKy) =  Oper((*this)(aKx,aKy),aM2(aKx,aKy));
 
 	      return aRes;
-	 }
+        }
 
 
     public :
 
       typedef std::vector<Type> tLine;
 
+      // constructor that that create a constant matrix
       cMatF(size_t aSzX,size_t aSzY,const Type & aVal) :
          mSz   (aSzX,aSzY),
-	 mMatr (mSz.y(),tLine(mSz.x(),aVal)),
+         mMatr (mSz.y(),tLine(mSz.x(),aVal)),
          mC0   (CreateCste(0.0,aVal)) 
       {
       }
+
+      // dummy constructor
+      cMatF() :
+          mSz   (0,0)
+      {
+      }
+
       const Type & operator () (size_t anX,size_t anY) const {return mMatr.at(anY).at(anX);}
       Type & operator () (size_t anX,size_t anY) {return mMatr.at(anY).at(anX);}
 
@@ -80,6 +105,11 @@ template <class Type> class cMatF
 		      (*this)(aKx,aKy) = aVal.at(anInd0++);
 	      }
 	  }
+      }
+      // put paremeter in this order to avoid ambiguity because 0 ~ nullptr !
+      cMatF(size_t aSzX,size_t aSzY, size_t * anIndAutoIncr, const std::vector<Type> & aVal) :
+         cMatF(aSzX,aSzY,aVal,IndexAutoIncr(anIndAutoIncr,aSzX*aSzY))
+      {
       }
 
       cMatF<Type> Transpose() const
@@ -166,9 +196,10 @@ template <class Type> class cMatF
 	       return this->OpBin(aM2,[](const Type & A,const Type &B) {return A+B;});
       }
 
-      cPt2di             mSz;
-      std::vector<tLine> mMatr;     
-      Type               mC0;
+      //  ============  Data part ===========================================
+      cPt2di             mSz;     //< size of the matrix
+      std::vector<tLine> mMatr;   //<  storage as a vector of vector
+      Type               mC0;     //<  some facilty to have the 0 on formula
 };
 
 
@@ -210,19 +241,43 @@ template  <typename tScal> std::vector<tScal> ToVect(const cPtxd<tScal,2> & aPt)
 }
 
 
-
 template  <typename tScal> tScal PScal(const cPtxd<tScal,3> & aP1,const cPtxd<tScal,3> & aP2)
 {
-         return aP1.x()*aP2.x() + aP1.y() *aP2.y() + aP1.z() * aP2.z();
+    return aP1.x()*aP2.x() + aP1.y() *aP2.y() + aP1.z() * aP2.z();
 }
+template  <typename tScal> tScal PScal(const cPtxd<tScal,2> & aP1,const cPtxd<tScal,2> & aP2)
+{
+    return aP1.x()*aP2.x() + aP1.y() *aP2.y() ;
+}
+
+
 template  <typename tScal> cPtxd<tScal,3>  VtoP3(const  std::vector<tScal> & aV,size_t aInd=0)
 {
         return cPtxd<tScal,3>(aV.at(aInd),aV.at(aInd+1),aV.at(aInd+2));
 }
+template  <typename tScal> cPtxd<tScal,3>  VtoP3AutoIncr(const  std::vector<tScal> & aV,size_t *aInd)
+{
+	 return VtoP3(aV,IndexAutoIncr(aInd,3));
+}
+
 template  <typename tScal> cPtxd<tScal,2>  VtoP2(const  std::vector<tScal> & aV,size_t aInd=0)
 {
         return cPtxd<tScal,2>(aV.at(aInd),aV.at(aInd+1));
 }
+template  <typename tScal> cPtxd<tScal,2>  VtoP2AutoIncr(const  std::vector<tScal> & aV,size_t *aInd)
+{
+	 return VtoP2(aV,IndexAutoIncr(aInd,2));
+}
+
+/*
+template  <typename tScal> cPtxd<tScal,2>  VtoP2(const  std::vector<tScal> & aV,size_t * aIndAutoIncr)
+{
+     *aIndAutoIncr +=2;
+     return VtoP2(aV,*aIndAutoIncr-2);
+}
+*/
+
+
 
 template  <typename tScal> cPtxd<tScal,3>   MulMat(const std::vector<tScal> & aV,size_t aInd,const  cPtxd<tScal,3> & aP)
 {
@@ -286,38 +341,122 @@ template  <typename tScal>
 }
 
 
+template <class Type> class cRot3dF
+{
+      public :
+         typedef cPtxd<Type,3>      tPt;
+
+         cRot3dF(const cMatF<Type> & aMat) :
+              mIJK     (aMat)
+         {
+         }
+
+         cRot3dF(const std::vector<Type> &  aVecObs,size_t aK0Obs) :
+             cRot3dF<Type>(cMatF<Type>(3,3,aVecObs,aK0Obs))
+         {
+         }
+
+         cRot3dF(const std::vector<Type> &  aVecUk,size_t aK0Uk,const std::vector<Type> &  aVecObs,size_t aK0Obs) :
+             cRot3dF<Type> (cMatF<Type>(3,3,aVecObs,aK0Obs)  *  cMatF<Type>::MatAxiator(-VtoP3(aVecUk,aK0Uk)))
+         {
+         }
+
+         cRot3dF(const std::vector<Type> &  aVecUk,size_t * aK0Uk,const std::vector<Type> &  aVecObs,size_t * aK0Obs) :
+              cRot3dF(aVecUk,IndexAutoIncr(aK0Uk,3),aVecObs,IndexAutoIncr(aK0Obs,9))
+         {
+         }
+
+         tPt   Value(const tPt & aPt) const  {return mIJK*aPt;}
+
+         cRot3dF<Type> Inverse() const {return cRot3dF<Type>( mIJK.Transpose());}
+
+         cRot3dF<Type> operator * (const cRot3dF<Type> & aP2) const
+         {
+             const cRot3dF<Type> & aP1 = *this;
+             return cRot3dF<Type> (aP1.mIJK * aP2.mIJK);
+         }
+
+
+         cRot3dF<Type>  PoseRel(const cRot3dF<Type> & aP2) const
+         {
+             return Inverse() * aP2;
+         }
+
+         cMatF<Type>    mIJK;
+
+};
+
+
+
 /** this class represent a Pose on  forumla (or real if necessary)
  *    It contains a Center and the rotation Matrix IJK
  */
+
+
 template <class Type> class cPoseF
 {
      public :
+         typedef cPtxd<Type,3>      tPt;
+         typedef cRot3dF<Type>      tRot;
+
+        cPoseF(const cPtxd<Type,3> & aCenter,const tRot & aRot) :
+             mCenter  (aCenter),
+             mRot     (aRot)
+        {
+        }
 
         cPoseF(const cPtxd<Type,3> & aCenter,const cMatF<Type> & aMat) :
-             mCenter  (aCenter),
-             mIJK     (aMat)
+            cPoseF(aCenter,tRot(aMat))
         {
         }
 
 
-        cPoseF(const std::vector<Type> &  aVecUk,size_t aK0Uk,const std::vector<Type> &  aVecObs,size_t aK0Obs) :
-            cPoseF<Type>
-            (
-                 VtoP3(aVecUk,aK0Uk),
-             //  The matrix is Current matrix *  Axiator(-W) , the "-" in omega comming from initial convention
-             //  See  cPoseWithUK::OnUpdate()  &&  cEqColinearityCamPPC::formula
-                 cMatF<Type>(3,3,aVecObs,aK0Obs)  *  cMatF<Type>::MatAxiator(-VtoP3(aVecUk,aK0Uk+3))
-            )
+        ///  With Axiator means we add some unknowns
+        cPoseF(const std::vector<Type> &  aVecUk,size_t aK0Uk,const std::vector<Type> &  aVecObs,size_t aK0Obs,bool WithAxiator) :
+            mCenter (VtoP3(aVecUk,aK0Uk)),
+            mRot( WithAxiator   ?    tRot(aVecUk,aK0Uk+3,aVecObs,aK0Obs) :  tRot(aVecObs,aK0Obs) )
         {
         }
+
+
+        cPoseF(const std::vector<Type> &  aVecUk,size_t * aK0Uk,const std::vector<Type> &  aVecObs,size_t * aK0Obs) :
+            cPoseF(aVecUk,*aK0Uk,aVecObs, *aK0Obs,true)
+        {
+            *aK0Uk += 6;
+            *aK0Obs += 9;
+        }
+
+
+
+        cPoseF(const std::vector<Type> &  aVecObs,size_t * aK0Obs) :
+            cPoseF( aVecObs, *aK0Obs,aVecObs,*aK0Obs+3,false)
+        {
+            //  !!!  We cannot use AutoIncr in constructor at it would be used twice with undefined order
+            *aK0Obs += 12;
+        }
+
+
+        tPt   Value(const tPt & aPt) const  {return mCenter + mRot.Value(aPt);}
+        tPt   ValueVect(const tPt & aPt) const  {return   mRot.Value(aPt);}
+
+
+        const cMatF<Type> &    IJK() const {return mRot.mIJK;}
 
         /// A pose being considered a the, isometric, mapinc X->Tr+R*X, return pose corresponding to inverse mapping
+        ///       Work as M tM = Id
         cPoseF<Type> Inverse() const
         {
              //  PA-1 =  {-tRA CA ; tRA}
-             cMatF<Type> aMatInv = mIJK.Transpose();
-             return cPoseF<Type>(- (aMatInv* mCenter),aMatInv);
+             tRot   aRInv = mRot.Inverse();
+             return cPoseF<Type>(- aRInv.Value(mCenter),aRInv);
         }
+
+        //   MatA = M0A * WA                   MatB = M0B * WB
+        //   MatA-1 =  tWA * tM0A
+        //   trA-1  =  - tWA * tM0A *CA
+        //
+        //    MatAB =  tWA * tM0A * M0B * WB
+        //    CAB   =   - tWA * tM0A *CA +   tWA * tM0A * CB = tWA tM0A * (CB-CA)
 
 
         /// A pose being considered as mapping, return their composition
@@ -328,8 +467,8 @@ template <class Type> class cPoseF
              //   {CA;RA}* {CB;RB} = {CA+RA*CB ; RA*RB}
             return cPoseF<Type>
                    (
-                        aP1.mCenter + aP1.mIJK*aP2.mCenter,
-                        aP1.mIJK * aP2.mIJK
+                        aP1.mCenter + aP1.mRot.Value(aP2.mCenter),
+                        aP1.mRot * aP2.mRot
                    );
         }
 
@@ -339,10 +478,46 @@ template <class Type> class cPoseF
             return Inverse() * aP2;
         }
 
-        cPtxd<Type,3>  mCenter;
-        cMatF<Type>    mIJK;
+
+        tPt   mCenter;
+        tRot  mRot;
 };
 
+
+template <class Type> class cP3dNorm
+{
+     public :
+         typedef cPtxd<Type,3>      tPt3;
+         typedef cPtxd<Type,2>      tPt2;
+
+         cP3dNorm(const std::vector<Type> &  aVecUk,size_t aK0Uk,const std::vector<Type> &  aVecObs,size_t aK0Obs) :
+             mPNorm (VtoP3(aVecObs,aK0Obs)),
+             mU     (VtoP3(aVecObs,aK0Obs+3)),
+             mV     (VtoP3(aVecObs,aK0Obs+6)),
+             mDuDv  (VtoP2(aVecUk,aK0Uk))
+         {
+         }
+
+        // static std::vector<std::string> NameObs(const std::string& aPref) {Append(NamesP3(aPref+"U"),NamesP3(aPref+"V"));}
+
+
+         cP3dNorm(const std::vector<Type> &  aVecUk,size_t* aK0Uk,const std::vector<Type> &  aVecObs,size_t* aK0Obs) :
+             cP3dNorm(aVecUk,IndexAutoIncr(aK0Uk,2),aVecObs,IndexAutoIncr(aK0Obs,9))
+         {
+         }
+
+
+         tPt3  CurPt() const
+         {
+              return mPNorm + mDuDv.x()*mU +  mDuDv.y() * mV;
+          }
+
+         tPt3  mPNorm;  //< Current PNorm, obs
+         tPt3  mU;      //< First vector orthog 2 PN, obs
+         tPt3  mV;      //< Second vector orthog 2 PN, obs
+         tPt2  mDuDv;   //< Unown coeff on U & V
+
+};
 
 
 

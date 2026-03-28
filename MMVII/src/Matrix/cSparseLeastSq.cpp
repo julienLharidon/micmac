@@ -124,16 +124,20 @@ template <class Type> void cSMLineTransf<Type>::TransfertInTriplet
 template<class Type>  class cSparseLeasSq : public cLeasSq<Type>
 {
       public :
-       /// Here genereate an error, no need to handle dense vector in sparse systems
-         void AddObservation(const Type& aWeight,const cDenseVect<Type> & aCoeff,const Type &  aRHS) override;
+       /**  Used to  genereate an error, no need to handle dense vector in sparse systems
+            Now less extremist, implement it by convesrsion to sparse vector, btw no need to be efficient
+       */
+         void SpecificAddObservation(const Type& aWeight,const cDenseVect<Type> & aCoeff,const Type &  aRHS) override;
          cSparseLeasSq(int  aNbVar);
 };
 
-template<class Type> void cSparseLeasSq<Type>::AddObservation
+template<class Type> void cSparseLeasSq<Type>::SpecificAddObservation
                       (const Type& aW ,const cDenseVect<Type> & aDV ,const Type & aVal ) 
 {
    // call to virtual  method, dont know why, compiler dont agre w/o cast 
-    static_cast<cLinearOverCstrSys<Type> *>(this)-> AddObservation(aW,cSparseVect(aDV),aVal);
+    // static_cast<cLinearOverCstrSys<Type> *>(this)-> SpecificAddObservation(aW,cSparseVect(aDV),aVal);
+    this->SpecificAddObs_UsingCast2Sparse(aW,cSparseVect(aDV),aVal);
+
 }
 
 template<class Type> 
@@ -323,15 +327,21 @@ template<class Type>  class cSparseLeasSqtAA : public cSparseLeasSq<Type>
          cSparseLeasSqtAA(int  aNbVar,const cParamSparseNormalLstSq & aParam);
          ~cSparseLeasSqtAA();
 
-         using cSparseLeasSq<Type>::AddObservation;         // Shutup CLANG about hiding overload virtual function
+         using cSparseLeasSq<Type>::SpecificAddObservation;         // Shutup CLANG about hiding overload virtual function
        /// Here memorize the obs
-         void AddObservation(const Type& aWeight,const cSparseVect<Type> & aCoeff,const Type &  aRHS) override;
+         void SpecificAddObservation(const Type& aWeight,const cSparseVect<Type> & aCoeff,const Type &  aRHS) override;
 
-          void Reset() override;
-          cDenseVect<Type>  Solve() override;
+          void SpecificReset() override;
+          cDenseVect<Type>  SpecificSolve() override;
+
+         void PutInTriplet(std::vector<cEigenTriplet<Type> > & aVCoeff) const;
+         cDenseMatrix<Type>  V_tAA() const override;
+         cDenseMatrix<Type> tAA_Solve(const cDenseMatrix<Type> &) const override;
+         cDenseVect<Type>    V_tARhs() const override;
 
 
-         void  AddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq)  override;
+
+         void  SpecificAddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq)  override;
 	 /// Put bufferd line in matrixs, used at end or during filling to liberate memorry
 	 void PutBufererEqInNormalMatrix() ;
 
@@ -610,7 +620,7 @@ template<class Type> void  cSparseLeasSqtAA<Type>::HeapUpdate(tLine & aDenseL)
    mHeapDL.UpDate(&aDenseL);
 }
 
-template<class Type> void cSparseLeasSqtAA<Type>::Reset()
+template<class Type> void cSparseLeasSqtAA<Type>::SpecificReset()
 {
     mBufInput.clear();
     for (auto & aLine : mtAA)
@@ -621,20 +631,55 @@ template<class Type> void cSparseLeasSqtAA<Type>::Reset()
 
 }
 
-template<class Type> cDenseVect<Type> cSparseLeasSqtAA<Type>::Solve()
+template<class Type> cDenseVect<Type> cSparseLeasSqtAA<Type>::SpecificSolve()
 {
    std::vector<cEigenTriplet<Type> > aVCoeff;            // list of non-zeros coefficients
-   PutBufererEqInNormalMatrix();
+   PutInTriplet(aVCoeff);
+   cDenseMatrix<Type> aDenseM = V_tAA();
+   cResulSymEigenValue<Type> aEig = aDenseM.SymEigenValue();
+
+   return EigenSolveCholeskyarseFromV3(aVCoeff,mtARhs);
+}
+
+template<class Type> void cSparseLeasSqtAA<Type>::PutInTriplet(std::vector<cEigenTriplet<Type> > & aVCoeff) const
+{
+   const_cast<cSparseLeasSqtAA<Type>*>(this)->PutBufererEqInNormalMatrix();
    for (auto & aLine : mtAA)
    {
        aLine->TransfertInTriplet(aVCoeff,this->mNbVar);
    }
-   return EigenSolveCholeskyarseFromV3(aVCoeff,mtARhs);
 }
 
+template<class Type> cDenseMatrix<Type> cSparseLeasSqtAA<Type>::V_tAA() const
+{
+   cDenseMatrix<Type> aRes(this->mNbVar,eModeInitImage::eMIA_Null); // result, init to null matrix
+   const_cast<cSparseLeasSqtAA<Type>*>(this)->PutBufererEqInNormalMatrix(); // transferate in matrix the result "bufferized"
+
+   for (auto & aLine : mtAA)
+   {
+       std::vector<cEigenTriplet<Type> > aVCoeff;            // list of non-zeros coefficients
+       aLine->TransfertInTriplet(aVCoeff,this->mNbVar);      
+       for (const auto & aTriplet : aVCoeff)
+       {
+          aRes.SetElem(aTriplet.col(),aTriplet.row(),aTriplet.value());
+          aRes.SetElem(aTriplet.row(),aTriplet.col(),aTriplet.value());
+       }
+   }
+
+   return aRes;
+}
+
+template<class Type> cDenseMatrix<Type> cSparseLeasSqtAA<Type>::tAA_Solve(const cDenseMatrix<Type> & aMat) const 
+{
+   std::vector<cEigenTriplet<Type> > aVCoeff;            // list of non-zeros coefficients
+   PutInTriplet(aVCoeff);
+   return EigenSolveCholeskyarseFromV3(aVCoeff,aMat);
+}
+
+template<class Type> cDenseVect<Type> cSparseLeasSqtAA<Type>::V_tARhs() const {return mtARhs;}
 
 
-template<class Type> void  cSparseLeasSqtAA<Type>::AddObservation
+template<class Type> void  cSparseLeasSqtAA<Type>::SpecificAddObservation
                            (
                                const Type& aWeight,
 			       const cSparseVect<Type> & aCoeff,
@@ -680,7 +725,7 @@ template<class Type> void  cSparseLeasSqtAA<Type>::PutBufererEqInNormalMatrix()
 }
 
 
-template<class Type>  void  cSparseLeasSqtAA<Type>::AddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq) 
+template<class Type>  void  cSparseLeasSqtAA<Type>::SpecificAddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq) 
 {
 // StdOut() << "cSparseLeasSqtAA<Type>::AddObsWithTmpUK " << std::endl;
 
@@ -775,16 +820,16 @@ template<class Type>  class cSparseLeasSqGC : public cSparseLeasSq<Type>
 
          cSparseLeasSqGC(int  aNbVar );
 
-         using cSparseLeasSq<Type>::AddObservation;         // Shutup CLANG about hiding overload virtual function
+         using cSparseLeasSq<Type>::SpecificAddObservation;         // Shutup CLANG about hiding overload virtual function
        /// Here memorize the obs
-         void AddObservation(const Type& aWeight,const cSparseVect<Type> & aCoeff,const Type &  aRHS) override;
+         void SpecificAddObservation(const Type& aWeight,const cSparseVect<Type> & aCoeff,const Type &  aRHS) override;
 
-         void Reset() override;
-         cDenseVect<Type>  Solve() override;
+         void SpecificReset() override;
+         cDenseVect<Type>  SpecificSolve() override;
 
 
 	 /// Here the temporay are in fact processed like standards equation, they decoded an memorized
-	 void AddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>&) override;
+	 void SpecificAddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>&) override;
 
 
       private :
@@ -801,7 +846,7 @@ template<class Type>
 {
 }
 
-template<class Type>  void cSparseLeasSqGC<Type>::AddObservation
+template<class Type>  void cSparseLeasSqGC<Type>::SpecificAddObservation
                            (
                                const Type& aWeight,
                                const cSparseVect<Type> & aCoeff,
@@ -818,21 +863,21 @@ template<class Type>  void cSparseLeasSqGC<Type>::AddObservation
     mVRhs.push_back(aSW*aRHS);
 }
 
-template<class Type>  void cSparseLeasSqGC<Type>::Reset() 
+template<class Type>  void cSparseLeasSqGC<Type>::SpecificReset() 
 {
     mVTri.clear();
     mVRhs.clear();
     mNbTmpVar = 0;
 }
 
-template<class Type>  cDenseVect<Type>  cSparseLeasSqGC<Type>::Solve()
+template<class Type>  cDenseVect<Type>  cSparseLeasSqGC<Type>::SpecificSolve()
 {
      cDenseVect<Type> aRes = EigenSolveLsqGC(mVTri,mVRhs,this->mNbVar+mNbTmpVar);
      // supress the temporary variables
      return aRes.SubVect(0,this->mNbVar);
 }
 
-template<class Type>  void  cSparseLeasSqGC<Type>::AddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq) 
+template<class Type>  void  cSparseLeasSqGC<Type>::SpecificAddObsWithTmpUK(const cSetIORSNL_SameTmp<Type>& aSetSetEq) 
 {
     aSetSetEq.AssertOk();
 

@@ -67,6 +67,7 @@ class cSpecBitEncoding : public cMemCheck
          size_t        mNbDigit;        ///< Number of digit for names  Computed & Specified
 	 std::string   mPrefix;        ///< For all name generated
 				
+         std::string   mTargetNamePrefix; ///< prefix for target names, before number
          size_t        mMaxNum;         ///< max num of codes
          size_t        mMaxLowCode;     ///< max of all code (in fact max of the lowest representant)
          size_t        mMaxCodeEqui;    ///< max of all equivalent code
@@ -132,7 +133,7 @@ class cGeomSimDCT
        /// defaut constructor usefull for serialization
        cGeomSimDCT();
        /// constructor used afetr randoming generating parameters
-       cGeomSimDCT(const cOneEncoding & anEncod,const  cPt2dr& aC,const double& aR1,const double& aR2);
+       cGeomSimDCT(const cOneEncoding & anEncod,const  cPt2dr& aC,const double& aR1,const double& aR2, const std::string & aName);
        /// Do to simulated target intersect, used to avoid overlapping target in images
        bool Intersect(const cGeomSimDCT &  aG2) const ;
 
@@ -147,7 +148,7 @@ class cGeomSimDCT
        cPt2dr       mCornEl2;   ///< Theoreticall corner 2 of ellipse
        double       mR1;        ///< "small" size of deformaed rectangle
        double       mR2;        ///<  "big " size ....
-       // std::string  mName;
+       std::string  mName;
 };
 /// method for serializing cGeomSimDCT
 void AddData(const  cAuxAr2007 & anAux,cGeomSimDCT & aGSD);
@@ -165,9 +166,9 @@ class cResSimul
 
        double BorderGlob() const ;
        std::string                mCom;  ///< Command used to create the file
-       cPt2dr                     mRayMinMax;
+       cPt2dr                     mRadiusMinMax;
        double                     mBorder;
-       double                     mRatioMax;
+       cPt2dr                     mRatioMinMax; //< ratio between big and small ellipse axis (maxium max = 1)
        std::vector<cGeomSimDCT>   mVG;
 };
 void AddData(const  cAuxAr2007 & anAux,cResSimul & aRS);
@@ -257,19 +258,20 @@ class cParamCodedTarget : public cMemCheck
        cPt2di ToMultiple_2DeZoom(const cPt2di&) const;
 
        /// Set value that are computed from other like mRho_0... , mRho_1...
-       void      Finish();
+       void      FinishWoSpec();
        /// fix number of pixel 4 draw
        void SetNbPixBin(int aNbPixBin);
 
-       /// Set default value that depend from the type , used only in create target
-       void      FinishInitOfSpec(const cSpecBitEncoding & aSpec);
+       /** Set default value that depend from the type , used only in create target, 
+          createInit : in mode read we dont do def init (would overwrite user's modif) */
+       void      FinishInitOfSpec(const cSpecBitEncoding & aSpec,bool createInit);
 
 
        int NbCodeAvalaible() const;                           // Number of different code we can generate
        int BaseForNum() const;                                // Base used for converting integer to string
 							      //
        std::string  NameOfBinCode(int aNum) const; // -1 if bad code
-       void AddData(const cAuxAr2007 & anAux);
+       void PCT_AddData(const cAuxAr2007 & anAux,const cSpecBitEncoding *);
 
 
        std::string NameOfNum(int) const; ///  Juste the apha num
@@ -283,6 +285,7 @@ class cParamCodedTarget : public cMemCheck
        cPt2dr    mMidle;  // Middle 
     // private :
 
+       cPt2dr    Pix2Norm(const cPt2dr &) const;
        cPt2dr    Pix2Norm(const cPt2di &) const;
        cPt2dr    Norm2PixR(const cPt2dr &) const;
        cPt2di    Norm2PixI(const cPt2dr &) const;
@@ -306,6 +309,9 @@ class cParamCodedTarget : public cMemCheck
        double    mThickN_Car;  ///< thickness of black border 
        double    mThickN_BorderExt;  ///< thickness of border 
 
+       /**  Factor to empirically make carac larger, probably redundant with other ...*/
+       double    mFactEnlargeCar;
+
        double    mChessboardAng;     ///< Origine angle of chessboard pattern
        bool      mWithChessboard;     ///< do we have a cental chess board, true 4 IGN
        bool      mWhiteBackGround;     ///< black on white, true 4 IGN
@@ -313,20 +319,23 @@ class cParamCodedTarget : public cMemCheck
        bool      mAntiClockWiseBit;        ///< Do  growin bits go in trigonometric sens (!  visuel repair is clokwise)
 
 
-       double    mRayOrientTablet;    
+       double    mRadiusOrientTablet;
        tPt2dr    mCenterOrientTablet;
-       double    mRayCenterMiniTarget;
+       double    mRadiusCenterMiniTarget;
 
        bool mModeFlight;  // Special mode for Patricio
        bool mCBAtTop;     // mean Check board at top (initial drone)			  
        // bool mCodeCirc;  // Special mode for Patricio
        double          mRho_0_EndCCB;// End of Central CB , here Rho=ThickN ...
-       double          mRho_1_BeginCode;// ray where begins the coding stuff
-       double          mRho_2_EndCode;// ray where begins the coding stuff
-       double          mRho_3_BeginCar;// ray where begins the coding stuff
-       double          mRho_4_EndCar;  // ray where begins the coding stuff
-       double          mRho_EndIm;  // ray where begins the coding stuff
+       double          mRho_1_BeginCode;// radius where begins the coding stuff
+       double          mRho_2_EndCode;// radius where begins the coding stuff
+       double          mRho_3_BeginCar;// radius where begins the coding stuff
+       double          mRho_4_EndCar;  // radius where begins the coding stuff
+       double          mRho_EndIm;  // radius where begins the coding stuff
        double          mSignAngle;
+     
+       size_t          mSzHalfStr; // size of longest of 2 half string
+       cPt2dr          mPSzCar;
 
        cPt2di    mSzBin;
        double    mScale;  // Sz of Pixel in normal coord
@@ -378,7 +387,7 @@ class cFullSpecifTarget : public cMemCheck
 	 //  -----------   Creation of images -----------------
 
 	     ///  Generate the image of one encoding
-	 tIm   OneImTarget(const cOneEncoding & aCode);
+	 tIm   OneImTarget(const cOneEncoding & aCode,bool ForTest=false);
 	     /// get the pattern for generating all image 
 	 tIm   ImagePattern();
 
@@ -390,8 +399,9 @@ class cFullSpecifTarget : public cMemCheck
          const  std::string &     Prefix()    const;  ///< Prefix used in name-generation
 	 size_t MinHammingD() const;       ///<  Number of bits
          tREAL8 Rho_0_EndCCB() const;      /// End of Central Checkboard
-         tREAL8 Rho_1_BeginCode() const;   /// ray where begins the coding stuff
-         tREAL8 Rho_2_EndCode() const;     /// ray where ends the coding stuff
+         tREAL8 Rho_1_BeginCode() const;   /// radius where begins the coding stuff
+         tREAL8 Rho_2_EndCode() const;     /// radius where ends the coding stuff
+         tREAL8 Rho_3_BeginCar() const;    /// radius where ends margin after coding (and possibly carac)
 
 
 	 bool BitIs1(bool IsWhite) const;
@@ -407,6 +417,9 @@ class cFullSpecifTarget : public cMemCheck
 	 const cPt2dr & CornerlEl_WB() const; ///<  Corner of ellipse transition W->B ( trigonometric sense)
 
          const  cParamRenderingTarget &     Render()    const;
+         const  cSpecBitEncoding &          Specs()     const;
+         cPt2dr    Pix2Norm(const cPt2dr &) const;  // integrate the DeZoomIm 
+         cPt2dr    Norm2Pix(const cPt2dr &) const;  // integrate the DeZoomIm 
       private :
 	 ///  default constructor required for step by step buildin
          cFullSpecifTarget();
@@ -418,7 +431,6 @@ class cFullSpecifTarget : public cMemCheck
 	 // static void TestReloadAndShow(const std::string & aName,int aZoom);
 
 
-         const  cSpecBitEncoding &          Specs()     const;
 	 int    DeZoomIm() const;
 
 	 std::string NameOfImPattern() const;
@@ -438,8 +450,26 @@ class cFullSpecifTarget : public cMemCheck
          cParamRenderingTarget    mRender;
          std::vector<cPt2dr>      mBitsCenters;
 };
+void AddData(const  cAuxAr2007 & anAux,cFullSpecifTarget & aSpecif);
 
-/** Minimal struct to save the result of an ellipse extracted in image */
+
+/** Helper class for computing an encoding from the colours affected to different bits */
+class cDecodeFromCoulBits
+{
+      public :
+         cDecodeFromCoulBits(const cFullSpecifTarget *);
+	 ///  Fix the colour Black/white of a given bit
+         void SetColBit(bool IsBlack,size_t aBit);
+         bool IsComplete() const;   ///< Have all the bits been fixed
+         const cOneEncoding * Encoding() const; ///< Extract encoding, asserting that "IsComplete()"
+         const  tSet32Bits &  Code () const; ///< Acces to initial code (w/o merging equivalent)
+
+      private :
+         const cFullSpecifTarget * mSpec;      /// Specification
+         tSet32Bits          mCode;      /// Flag currently computed
+         tSet32Bits          mBitsFixed; /// Flag/List of bit that where fixed
+};
+
 
 
 

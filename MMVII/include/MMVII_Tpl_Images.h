@@ -139,6 +139,20 @@ template<class T2>   cDenseVect<T2> operator -= (cDenseVect<T2> & aI2,const cDen
 	return aI2;
 }
 
+template<class T1>   cIm2D<T1> operator - (const cIm2D<T1> & aIm)
+{
+   cIm2D<T1> aRes (aIm.DIm().Sz());
+   aIm.DIm().ChSignIn(aRes.DIm());
+
+   return aRes;
+}
+
+template<class T1>   cDenseMatrix<T1> operator - (const cDenseMatrix<T1> & aMat)
+{
+    return  cDenseMatrix<T1> (-aMat.Im());
+}
+
+
        //===========   Addition ===========
 
 template<class T1,class T2,class T3,int Dim>  
@@ -158,6 +172,15 @@ template<class T1,class T2,int Dim>
 
     for (int aK=0 ; aK<aI1.NbElem() ; aK++)
         aI1.GetRDL(aK) += aI2.GetRDL(aK) ;
+}
+
+template<class T1,class T2,int Dim>
+   void AddMulIn(cDataTypedIm<T1,Dim> & aI1,const cDataTypedIm<T2,Dim> & aI2,const T2 & aMul)
+{
+   aI1.AssertSameArea(aI2);
+
+   for (int aK=0 ; aK<aI1.NbElem() ; aK++)
+       aI1.GetRDL(aK) += aI2.GetRDL(aK) * aMul ;
 }
 
 template<class T1,class T2,class T3>  
@@ -220,6 +243,9 @@ template<class T2,class T3,int Dim>
 template<class T2,class T3,int Dim>  
    void operator *=(cDataTypedIm<T2,Dim> & aI2,const T3 & aV3) {SelfMulImageCsteInPlace(aI2,aV3); }
 
+template<class T2,class T3>  
+   void operator *=(cDenseVect<T2> & aI2,const T3 & aV3) {SelfMulImageCsteInPlace(aI2.DIm(),aV3); }
+
 /*
 template<class T2,class T3> void operator *= (cDenseVect<T2> & aV2,const T3 & aV3) { aV2.DIm() *= aV3; }
 template<class T2,class T3> void operator *= (cDenseMatrix<T2> & aV2,const T3 & aV3) { aV2.DIm() *= aV3; }
@@ -263,6 +289,10 @@ template<class T2,class T3>   cDenseVect<T2> operator * (const  T3 & aV3,const c
 {
     return cDenseVect<T2>(aI2.Im()*aV3);
 }
+template<class T2,class T3>   cDenseVect<T2> operator * (const cDenseVect<T2> & aI2,const  T3 & aV3)
+{
+    return cDenseVect<T2>(aI2.Im()*aV3);
+}
 
        //===========   MulImage ===========
        
@@ -274,6 +304,14 @@ template<class T1,class T2,class T3,int Dim>
 
     for (int aK=0 ; aK<aI1.NbElem() ; aK++)
         aI1.GetRDL(aK) = aI2.GetRDL(aK) * aI3.GetRDL(aK) ;
+}
+
+template<class T1,class T3,int Dim>  
+   void MulImageInPlace(cDataTypedIm<T1,Dim> & aI1,const cDataTypedIm<T3,Dim> & aI3)
+{
+   aI1.AssertSameArea(aI3);
+    for (int aK=0 ; aK<aI1.NbElem() ; aK++)
+        aI1.GetRDL(aK) *= aI3.GetRDL(aK) ;
 }
 
 template<class T1,class T2,class T3>  

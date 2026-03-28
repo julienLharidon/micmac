@@ -7,6 +7,22 @@
 namespace MMVII
 {
 
+tREAL8 RankWeigthedAverage(const std::vector<tREAL8>& aResInit,tREAL8 aPow,bool CosTransf,tREAL8 aRkMin)
+{
+   std::vector<tREAL8> aResSort = aResInit;
+   std::sort(aResSort.begin(),aResSort.end());
+
+   cWeightAv<tREAL8,tREAL8> aWAvg;
+   for (size_t aK = 0 ; aK<aResSort.size(); aK++)
+   {
+       tREAL8 aRnk = (aK+0.5) / (aResSort.size());
+       tREAL8 aW = CosTransf ?  1+std::cos(M_PI*aRnk) : (1.0-aRnk);
+       aWAvg.Add(aRkMin+std::pow(aW,aPow),aResSort.at(aK));
+   }
+   return aWAvg.Average();
+}
+
+
 // return the variance of  exponential distribution of parameter "a" ( i.e proportiona to  "a^|x|")
 double Sigma2FromFactExp(double a)
 {
@@ -20,6 +36,21 @@ double FactExpFromSigma2(double aS2)
 {
     return (aS2+1 - sqrt(Square(aS2+1)-Square(aS2))  ) / aS2 ;
 }
+
+tREAL8  StdWeightResidual(const std::vector<tREAL8> &aWeight,tREAL8 aResidual)
+{
+    if (aResidual > GetDef(aWeight,3,1e60)) return 0.0;
+
+    tREAL8 aS0 = aWeight.at(0);
+    tREAL8 aAlpha = GetDef(aWeight,1,2.0);
+    tREAL8 aBeta = GetDef(aWeight,2,1/aAlpha);
+
+    tREAL8 aW = 1/(1+std::pow(aResidual/aS0,aAlpha));
+
+    return std::pow(aW,aBeta);
+}
+
+
 
 
 /* *********************************************************** */
@@ -130,23 +161,26 @@ int  cParamRansac::NbTestOfErrAdm(int aNbSample) const
 /*                                         */
 /* *************************************** */
 
-cParamCtrNLsq::cParamCtrNLsq()
+cParamCtrWeightedLSq::cParamCtrWeightedLSq(tREAL8 aErrRelStop,int aNbIterMax,int aNbIterMin) :
+    mErrRelStop (aErrRelStop),
+    mNbIterMax  (aNbIterMax),
+    mNbIterMin  (std::max(2,aNbIterMin))  // whatever user require, need 2 to estimate variation
 {
 }
 
-double cParamCtrNLsq::ValBack(int aK) const
+double cParamCtrWeightedLSq::ValBack(int aK) const
 {
    return mVER.at(mVER.size()-1-aK);
 }
 
 
-double cParamCtrNLsq::GainRel(int aK1,int aK2) const
+double cParamCtrWeightedLSq::GainRel(int aK1,int aK2) const
 {
     return (ValBack(aK2)-ValBack(aK1))  / ValBack(aK2);
 }
 
 
-bool cParamCtrNLsq::StabilityAfterNextError(double anErr) 
+bool cParamCtrWeightedLSq::StabilityAfterNextError(double anErr)
 {
     // Err can decrease, stop now to avoid / by 0
     if (anErr<=0) 
@@ -154,14 +188,16 @@ bool cParamCtrNLsq::StabilityAfterNextError(double anErr)
 
     mVER.push_back(anErr);
 
-    int aNb = mVER.size() ; // If less 2 value, cannot estimate variation
-    if (aNb>10)
+    int aNb = mVER.size() ;
+    // too many test
+    if (aNb>mNbIterMax)
        return true;
 
-    if (aNb<2) 
+    // not enough error
+    if (aNb<mNbIterMin)
        return false;
     
-    if (GainRel(0,1)<1e-4) // if err increase or almosr stable
+    if (GainRel(0,1)<mErrRelStop) // if error  almost stable (Ok)   or  increase (dangerous ...)
        return true;
 
     return false;
@@ -174,20 +210,20 @@ bool cParamCtrNLsq::StabilityAfterNextError(double anErr)
 /* *************************************** */
 
 
-cParamCtrlOpt::cParamCtrlOpt(const cParamRansac & aPRS,const cParamCtrNLsq & aPLS) :
+cParamCtrlOpt::cParamCtrlOpt(const cParamRansac & aPRS,const cParamCtrWeightedLSq & aPLS) :
     mParamRS  (aPRS),
     mParamLSQ (aPLS)
 {
 }
 const cParamRansac  & cParamCtrlOpt::ParamRS()  const {return mParamRS;}
-const cParamCtrNLsq & cParamCtrlOpt::ParamLSQ() const {return mParamLSQ;}
+const cParamCtrWeightedLSq & cParamCtrlOpt::ParamLSQ() const {return mParamLSQ;}
 
 cParamCtrlOpt  cParamCtrlOpt::Default()
 {
    return cParamCtrlOpt
           (
               cParamRansac(0.5,1e-6),
-              cParamCtrNLsq()
+              cParamCtrWeightedLSq()
           );
 }
 
@@ -243,6 +279,18 @@ template <class Type> Type  cComputeStdDev<Type>::StdDev(const Type&  Epsilon) c
      cComputeStdDev<Type> aRes = Normalize(Epsilon);
      return aRes.mStdDev;
 }
+
+template <class Type> Type  cComputeStdDev<Type>::UB_Variance(const Type&  Epsilon) const
+{
+   cComputeStdDev<Type> aRes = Normalize(Epsilon);
+   return aRes.mSomWV2 * mSomWV / (mSomWV-1.0);
+}
+
+template <class Type> Type  cComputeStdDev<Type>::UB_StdDev(const Type&  Epsilon) const
+{
+    return std::sqrt(UB_Variance(Epsilon)); 
+}
+
 
 
 /* ============================================= */
@@ -367,6 +415,32 @@ template <class Type> cMatIner2Var<double> StatFromImageDist(const cDataIm2D<Typ
     return aRes;
 }
 
+
+/*  y = a x +B
+ *
+ *  Sum W(ax+b-y)^2 =
+ *                          (Wx2   Wx) (a)      ( Wxy)             ( W1  -Wx )
+ *  Sum W(ax+b-y)^2 = (a b) (Wx    W1) (b)  - 2 ( Wy )   => Inv =  (-Wx   Wx2)
+ *                                                                 -----------
+ *                                                                 (Wx2 W1 -WxXx) 
+ *
+ *
+ *     ( W1  -Wx )    (Wxy)     ( W1 Wxy -Wx Wy)
+ *     (-Wx   Wx2)    (Wy )  =  (-Wx Wxy+ Wx2 Wy)
+ *
+ */
+
+template <class Type> std::pair<Type,Type> cMatIner2Var<Type>::FitLineDirect() const
+{
+    Type aDelta = mS11 * mS0 - Square(mS1);
+
+    Type A = (mS12*mS0 - mS1*mS2) / aDelta;
+    Type B = (-mS1*mS12 + mS11 * mS2) / aDelta;
+
+    return std::pair<Type,Type>(A,B);
+}
+
+
 /* *********************************************** */
 /*                                                 */
 /*          cWeightAv<Type>                        */
@@ -396,14 +470,56 @@ template<> cPt3dLR NullVal<cPt3dLR>() {return cPt3dLR::PCste(0);}
 template <class TypeWeight,class TypeVal> cWeightAv<TypeWeight,TypeVal>::cWeightAv() :
    mSW(0),
    // mSVW(NullVal<TypeVal>())
-   mSVW(cNV<TypeVal>::V0())
+   mSVW(cNV<TypeVal>::V0()),
+   mNb()
 {
 }
+
+template <class TypeWeight,class TypeVal> void cWeightAv<TypeWeight,TypeVal>::AddData(const cAuxAr2007 & anAux)
+{
+    MMVII::AddData(cAuxAr2007("SumW",anAux),mSW);
+    MMVII::AddData(cAuxAr2007("SumVW",anAux),mSVW);
+    MMVII::AddData(cAuxAr2007("Nb",anAux),mNb);
+}
+
+template <class TypeWeight,class TypeVal>  void AddData(const cAuxAr2007 & anAux,cWeightAv<TypeWeight,TypeVal>& aWAvg)
+{
+   aWAvg.AddData(anAux);
+}
+
+template <class TypeWeight,class TypeVal> void cWeightAv<TypeWeight,TypeVal>::Reset()
+{
+   mSW = 0;
+   mSVW =cNV<TypeVal>::V0();
+   mNb = 0;
+}
+
+template <class TypeWeight,class TypeVal> cWeightAv<TypeWeight,TypeVal>::cWeightAv(const std::vector<TypeVal> & aVect) :
+   cWeightAv()
+{
+    for (const auto & aVal : aVect)
+        Add(1.0,aVal);
+}
+
+template <class TypeWeight,class TypeVal> TypeVal cWeightAv<TypeWeight,TypeVal>::AvgCst(const std::vector<TypeVal> & aVect) 
+{
+    cWeightAv<TypeWeight,TypeVal> aWA(aVect);
+    return aWA.Average();
+}
+
 
 template <class TypeWeight,class TypeVal> void cWeightAv<TypeWeight,TypeVal>::Add(const TypeWeight & aWeight,const TypeVal & aVal)
 {
    mSW += aWeight;
    mSVW += aVal * aWeight;
+   mNb++;
+}
+
+template <class TypeWeight,class TypeVal> void cWeightAv<TypeWeight,TypeVal>::Add(const cWeightAv<TypeWeight,TypeVal> & aWA2)
+{
+    mSW  += aWA2.mSW;
+    mSVW += aWA2.mSVW;
+    mNb  += aWA2.mNb;
 }
 
 template <class TypeWeight,class TypeVal> TypeVal cWeightAv<TypeWeight,TypeVal>::Average() const
@@ -412,7 +528,37 @@ template <class TypeWeight,class TypeVal> TypeVal cWeightAv<TypeWeight,TypeVal>:
     return mSVW / mSW;
 }
 
+template <class TypeWeight,class TypeVal> TypeVal cWeightAv<TypeWeight,TypeVal>::Average(const TypeVal  & aDef) const
+{
+    if (! ValidInvertibleFloatValue(mSW))
+        return aDef;
+    return Average();
+}
+
 template <class TypeWeight,class TypeVal> const TypeVal & cWeightAv<TypeWeight,TypeVal>::SVW () const {return mSVW;}
+template <class TypeWeight,class TypeVal> const TypeWeight & cWeightAv<TypeWeight,TypeVal>::SW () const {return mSW;}
+template <class TypeWeight,class TypeVal> long cWeightAv<TypeWeight,TypeVal>::Nb() const {return mNb;}
+
+template <class Type> Type Average(const Type * aTab,size_t aNb)
+{
+   cWeightAv<Type,Type>  aWA;
+
+   for (size_t aK=0; aK<aNb; aK++)
+       aWA.Add(1.0,aTab[aK]);
+
+   return aWA.Average();
+}
+
+
+template <class Type> Type Average(const std::vector<Type> & aVec)
+{
+   return Average(aVec.data(),aVec.size());
+}
+
+
+
+
+
 
 /* *************************************** */
 /*                                         */
@@ -477,6 +623,14 @@ cStdStatRes::cStdStatRes() :
 {
 }
 
+cStdStatRes::cStdStatRes(const std::vector<tREAL8> & aVecR) :
+    cStdStatRes()
+{
+    for (const auto & aVal : aVecR)
+       Add(aVal);
+}
+
+
 void cStdStatRes::Add(tREAL8 aVal)
 {
      mVRes.push_back(aVal);
@@ -494,6 +648,64 @@ tREAL8  cStdStatRes::ErrAtProp(tREAL8 aProp) const {return NC_KthVal(mVRes,aProp
 tREAL8  cStdStatRes::Min() const {return mBounds.VMin();}
 tREAL8  cStdStatRes::Max() const {return mBounds.VMax();}
 int     cStdStatRes::NbMeasures() const {return mVRes.size();}
+const std::vector<tREAL8>  & cStdStatRes::VRes() const {return mVRes;}
+
+
+tREAL8  cStdStatRes::ErrAtKth(int aK) const {return IKthVal(mVRes,aK) ;}
+tREAL8  cStdStatRes::ErrAtKthLast(int aK) const
+{
+   return ErrAtKth(mVRes.size() - (aK+1));
+}
+
+
+int cStdStatRes::IndVal(tREAL8 aV,bool SVP) const
+{
+    for (size_t aK=0 ; aK<mVRes.size() ; aK++)
+        if (mVRes.at(aK) == aV)
+            return aK;
+    MMVII_INTERNAL_ASSERT_strong(SVP,"Cannot find value in  cStdStatRes::IndVal");
+    return -1;
+}
+int cStdStatRes::IndMax() const
+{
+    return IndVal(Max());
+}
+
+
+tREAL8  cStdStatRes::UBDevStd(tREAL8 aDef) const
+{
+    int aNbM = NbMeasures();
+    if (aNbM<2) return aDef;
+
+    return (aNbM*DevStd()) / (aNbM-1);
+}
+
+
+std::string cStdStatRes::Show(const std::string & aPrefix,const std::vector<int> & aVecPerc) const
+{
+     PushPrecTxtSerial(7);
+
+     std::string aRes = aPrefix + " ,";
+     if (NbMeasures()== 0)
+        aRes += " EMPTY";
+
+     else if (NbMeasures()== 1)
+        aRes += " 1 Meas=" + ToStr(Avg());
+
+     else
+     {
+         aRes +=   " Nb="  + ToStr(NbMeasures())
+	         + " Avg=" + ToStr(Avg())
+	         + " Interv=[" + ToStr(Min()) + "," + ToStr(Max()) + "]"
+         ;
+
+         for (const auto & aPerc : aVecPerc)
+             aRes += " " + ToStr(aPerc) + "%->" + ToStr(ErrAtProp(aPerc/100.0)) ;
+     }
+     PopPrecTxtSerial();
+
+     return aRes;
+}
 
 
 
@@ -742,7 +954,11 @@ template class cSymMeasure<TYPE>;\
 template class cMatIner2Var<TYPE>;\
 template  class cComputeStdDev<TYPE>;\
 template class cWeightAv<TYPE,TYPE>;\
-template  cMatIner2Var<double> StatFromImageDist(const cDataIm2D<TYPE> & aIm);
+template   void AddData(const cAuxAr2007 & anAux,cWeightAv<TYPE,TYPE>& aWAvg);\
+template  cMatIner2Var<double> StatFromImageDist(const cDataIm2D<TYPE> & aIm);\
+template TYPE Average(const std::vector<TYPE> & aVec);\
+template TYPE Average(const TYPE * aTab,size_t aNb);
+
 
 
 INSTANTIATE_MAT_INER(tREAL4)

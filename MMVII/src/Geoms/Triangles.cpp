@@ -112,7 +112,7 @@ template <class Type,const int Dim>
 {
     cWhichMax<int,typename tPt::tBigNum> aWMax(0,SqN2(KVect(0)));
     for (int aK=1 ; aK<3 ; aK++)
-        aWMax.Add(aK,SqN2(KVect(1)));
+        aWMax.Add(aK,SqN2(KVect(aK)));  // MPD => KVect(1) , why ???
 
     return aWMax.IndexExtre();
 }
@@ -184,6 +184,15 @@ template <class Type,const int Dim> Type cTriangle<Type,Dim>::MinDist() const
 
 
 
+/*
+template <class Type,const int Dim> Type cTriangle<Type,4>::Area() const 
+{
+    MMVII_INTERNAL_ERROR("cTriangle:Area for dim 4");
+   return 0.0;
+}
+*/
+
+
 
 
 template <class Type,const int Dim> Type cTriangle<Type,Dim>::Area() const
@@ -210,14 +219,14 @@ template <class Type,const int Dim>  cPtxd<Type,Dim> GlobCenterInscribedCircle(c
        cPtxd<Type,Dim> aMil = (aP0+aP1)/Type(2.0);
        cPtxd<Type,Dim> aV01 = aP1-aP0;
 
-       aSys.AddObservation(Type(1.0),aV01.ToVect(),Scal(aMil,aV01));
+       aSys.PublicAddObservation(Type(1.0),aV01.ToVect(),Scal(aMil,aV01));
    }
 
    // For Dim=3 we have computed inter of 3 plane mediator that co-intersect in a line
    // we need to add also a equation inside the plane
    MMVII_INTERNAL_ASSERT_tiny(Dim==2,"CenterInscribedCircle to Finish for DIm!=2");
 
-   return cPtxd<Type,Dim>::FromVect(aSys.Solve());
+   return cPtxd<Type,Dim>::FromVect(aSys.PublicSolve());
 }
 template <const int Dim>  cPtxd<int,Dim> GlobCenterInscribedCircle(const cPtxd<int,Dim> *)
 {
@@ -238,7 +247,7 @@ template <class Type,const int Dim>  cPtxd<Type,Dim> cTriangle<Type,Dim>::Center
        tPt aMil = (aP0+aP1)/Type(2.0);
        tPt aV01 = aP1-aP0;
 
-       aSys.AddObservation(Type(1.0),aV01.ToVect(),Scal(aMil,aV01));
+       aSys.PublicAddObservation(Type(1.0),aV01.ToVect(),Scal(aMil,aV01));
    }
 
    // For Dim=3 we have computed inter of 3 plane mediator that co-intersect in a line
@@ -270,7 +279,10 @@ template<class Type> cPtxd<Type,3> Normal(const cTriangle<Type,3> & aTri)
 template <class Type,const int Dim>  
          cTriangle<Type,Dim>  cTriangle<Type,Dim>::RandomTri(const Type & aSz,const Type & aRegulMin )
 {
-	cTriangle<Type,Dim> aRes(tPt::PRandC()*aSz,tPt::PRandC()*aSz,tPt::PRandC()*aSz);
+        auto v1 = tPt::PRandC()*aSz;
+        auto v2 = tPt::PRandC()*aSz;
+        auto v3 = tPt::PRandC()*aSz;
+	cTriangle<Type,Dim> aRes(v1,v2,v3);
 
 	if (aRes.Regularity() > aRegulMin) return aRes;
 
@@ -481,7 +493,6 @@ template <class Type,const int Dim> cPtxd<Type,Dim> & cTriangulation<Type,Dim>::
 {
    return mVPts.at(aK);
 }
-
 
 template <class Type,const int Dim> const std::vector<cPtxd<Type,Dim> > & cTriangulation<Type,Dim>::VPts() const
 {
@@ -760,6 +771,10 @@ INSTANTIATE_TRI_DIM(TYPE,3)\
 INSTANTIATE_TRI(tREAL4)
 INSTANTIATE_TRI(tREAL8)
 INSTANTIATE_TRI(tREAL16)
+
+template class cTriangle<tREAL8,1>;
+template class cTriangle<tREAL8,4>;
+template class cTriangle<tREAL8,5>;
 
 /*
 template class cTriangulation<tREAL8,2>;

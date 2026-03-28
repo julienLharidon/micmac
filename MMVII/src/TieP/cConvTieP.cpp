@@ -1,5 +1,4 @@
 #include "MMVII_PCSens.h"
-#include "MMVII_MMV1Compat.h"
 #include "MMVII_DeclareCste.h"
 #include "MMVII_BundleAdj.h"
 #include "MMVII_DeclareAllCmd.h"
@@ -38,6 +37,7 @@ class cAppli_TiePConvert : public cMMVII_Appli
 	cPhotogrammetricProject  mPhProj;
 	std::string              mExtV1;
 	double                   mDownScale;
+        std::string              mNameDSByIm;  ///< Name of File, for computing downscale by image
 	bool                     mTimingTest;
 	std::string              mPatNameDebug;
 	std::string              mPostV1;
@@ -71,6 +71,7 @@ cCollecSpecArg2007 & cAppli_TiePConvert::ArgOpt(cCollecSpecArg2007 & anArgObl)
 	     << AOpt2007(mExtV1,"V1Ext","Extension of V1 input file if !) Homol/")
 	     << AOpt2007(mPostV1,"Post","V1 postifx like txt or dat",{eTA2007::HDV})
 	     << AOpt2007(mDownScale,"DS","Downscale, if want to adapt to smaller images",{eTA2007::HDV})
+	     << AOpt2007(mNameDSByIm,"UpSByIm","",{eTA2007::HDV})
 	     << AOpt2007(mPatNameDebug,"PND","Pattern names for debuging",{eTA2007::Tuning})
 	     << AOpt2007(mGenerateMTP,"GenMTP","Generate multiple tie point after conversion",{eTA2007::HDV})
            ;
@@ -95,6 +96,9 @@ int cAppli_TiePConvert::Exe()
 
    tNameSelector  aRegDebug =  AllocRegex(mPatNameDebug);
 
+   cComputeAssociation aCompUpS;
+   if (IsInit(& mNameDSByIm))
+      aCompUpS = cComputeAssociation::FromFile(mNameDSByIm);
 
    int aNbExist = 0;
    // parse all pair, in only one sense, as we will merge "AB" with "BA" when both exist
@@ -107,7 +111,7 @@ int cAppli_TiePConvert::Exe()
       {
            std::string aN1 = aVName[aK1];
            std::string aN2 = aVName[aK2];
-	   OrderMinMax(aN1,aN2);  //  prefer to fix arbitrary order
+           OrderMinMax(aN1,aN2);  //  prefer to fix arbitrary order
 
            bool aDebug = aRegDebug.Match(aN1) && aRegDebug.Match(aN2);
 
@@ -129,12 +133,20 @@ int cAppli_TiePConvert::Exe()
 	       }
 	       else if (aSetP.size()==1)  // some coherent pair
 	       {
+                   tREAL8 aDS1 = mDownScale;
+                   tREAL8 aDS2 = mDownScale;
+                   if (IsInit(& mNameDSByIm))
+                   {
+                      aDS1 = 1.0 / cStrIO<double>::FromStr(aCompUpS.Translate(aN1));
+                      aDS2 = 1.0 / cStrIO<double>::FromStr(aCompUpS.Translate(aN2));
+   // cComputeAssociation aCompUpS;
+                   }
                    const auto & aVP = aSetP.begin()->second.mVPIm;
                    cSetHomogCpleIm  aSetH;
 		   // point ar stored "A1 A2 B1 B2 C1 C2 ..."
 		   for (size_t  aKP=0 ; aKP<aVP.size() ; aKP+=2)
 		   {
-                       aSetH.Add(cHomogCpleIm(aVP.at(aKP)/mDownScale,aVP.at(aKP+1)/mDownScale));
+                       aSetH.Add(cHomogCpleIm(aVP.at(aKP)/aDS1,aVP.at(aKP+1)/aDS2));
 		   }
 
 		   mPhProj.SaveHomol(aSetH,aN1,aN2);

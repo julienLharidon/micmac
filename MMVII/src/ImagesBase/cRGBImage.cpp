@@ -14,6 +14,7 @@ const cPt3di cRGBImage::Magenta(255,0,255);
 const cPt3di cRGBImage::Cyan(0,255,255);
 const cPt3di cRGBImage::Orange(255,128,0);
 const cPt3di cRGBImage::White(255,255,255);
+const cPt3di cRGBImage::Black(0,0,0);
 const cPt3di cRGBImage::Gray128(128,128,128);
 // const cPt3di cRGBImage::Black(0,0,0);
 
@@ -144,6 +145,8 @@ bool cRGBImage::InsideBL(const cPt2dr & aPix) const
 
 void cRGBImage::SetRGBPixWithAlpha(const cPt2di & aPix,const cPt3di &aCoul,const cPt3dr & aAlpha)
 {
+    if (!mImR.DIm().Inside(aPix))
+       return;
     AssertZ1();
       cPt3di aCurC = GetRGBPix(aPix); 
 
@@ -163,21 +166,32 @@ void cRGBImage::SetRGBrectWithAlpha(const cPt2di & aC,int aSzW,const cPt3di & aC
         SetRGBPixWithAlpha(aPix,aCoul,cPt3dr(aAlpha,aAlpha,aAlpha));
 }
 
+void cRGBImage::SetRGBBorderRectWithAlpha(const cPt2di & aC,int aSzW,int aBorder,const cPt3di & aCoul,const double & aAlpha)
+{
+    AssertZ1();
+    cRect2 aR = cRect2::BoxWindow(aC,aSzW);
+    cBorderPixBox aRectBorder(aR,aBorder);
+
+    for (const auto & aPix  :  aRectBorder)
+        SetRGBPixWithAlpha(aPix,aCoul,cPt3dr(aAlpha,aAlpha,aAlpha));
+}
+
+
     ///  ===========  Manipulation from gray images ========================
 
-template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cPt2di & aPix,const cDataIm2D<Type> & aGrayIm,const double & aMul)
+template <class Type> void SetGrayPix(cRGBImage& aRGBIm, const cPt2di & aPix, const cDataIm2D<Type> & aGrayIm, double aMul)
 {
     aRGBIm.SetGrayPix(aPix,round_ni(aMul*aGrayIm.GetV(aPix)));
 }
 
-template <class Type> void SetGrayPix(cRGBImage& aRGBIm,const cDataIm2D<Type> & aGrayIm,const double & aMul)
+template <class Type> void SetGrayPix(cRGBImage& aRGBIm, const cDataIm2D<Type> & aGrayIm, double aMul)
 {
     for (const auto & aPix : aRGBIm.BoxZ1())
         SetGrayPix(aRGBIm,aPix,aGrayIm,aMul);
 }
 
 
-template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,const double & aMul,int aZoom)
+template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm, double aMul,int aZoom)
 {
    cRGBImage aRes(aGrayIm.Sz(),aZoom);
 
@@ -186,6 +200,19 @@ template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,c
    return aRes;
 }
 
+template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,const cBox2di & aBox0, double aMul,int aZoom)
+{
+   cBox2di aBoxC = aBox0.Inter(aGrayIm);
+   cRGBImage aRes(aBoxC.Sz(),aZoom);
+
+   for (const auto & aPix : cRect2(aBoxC))
+       aRes.SetGrayPix(aPix-aBoxC.P0(),round_ni(aMul*aGrayIm.GetV(aPix)));
+       
+   return aRes;
+}
+
+
+
     // ==================   FILE  EXPORT/EXPORT ====================
     
                //  Creation/Read from file
@@ -193,14 +220,14 @@ template <class Type> cRGBImage  RGBImFromGray(const cDataIm2D<Type> & aGrayIm,c
 cRGBImage cRGBImage::FromFile(const std::string& aName,const cBox2di & aBox,int aZoom)
 {
      cRGBImage aRes(aBox.Sz(),aZoom);
-     aRes.Read(cDataFileIm2D::Create(aName,false),aBox.P0());
+     aRes.Read(cDataFileIm2D::Create(aName,eForceGray::No),aBox.P0());
 
      return aRes;
 }
 
 cRGBImage cRGBImage::FromFile(const std::string& aName,int aZoom)
 {
-     cRect2 aRect = cDataFileIm2D::Create(aName,false);
+     cRect2 aRect = cDataFileIm2D::Create(aName,eForceGray::No);
      return FromFile(aName,aRect,aZoom);
 }
 
@@ -217,7 +244,9 @@ void cRGBImage::Read(const cDataFileIm2D & aDFI,const cPt2di & aP0File,double aD
     // In a first step we transfere data at the good origine (P0Z) but not
     // taking into account the zoom
     if (aDFI.NbChannel()==3)
+    {
         mImR.DIm().Read(aDFI,mImG.DIm(),mImB.DIm(),aP0File,aDyn,aRect1Z);
+    }
     else
     {
         mImR.DIm().Read(aDFI,aP0File,aDyn,aRect1Z);
@@ -228,6 +257,18 @@ void cRGBImage::Read(const cDataFileIm2D & aDFI,const cPt2di & aP0File,double aD
 
      ReplicateForZoom(aRect1Z);
 }
+
+void cRGBImage::ResetGray()
+{
+     for (const auto & aPix : mImR.DIm())
+     {
+         tU_INT1 aV = (mImR.DIm().GetV(aPix) + mImG.DIm().GetV(aPix) + mImB.DIm().GetV(aPix)) / 3;
+	 mImR.DIm().SetV(aPix,aV);
+	 mImG.DIm().SetV(aPix,aV);
+	 mImB.DIm().SetV(aPix,aV);
+     }
+}
+
 
 
 void cRGBImage::ReplicateForZoom(const cRect2 & aRect1Z)
@@ -255,34 +296,39 @@ void cRGBImage::ReplicateForZoom(const cRect2 & aRect1Z)
 
 void cRGBImage::Read(const std::string & aName,const cPt2di & aP0,double aDyn,const cRect2& aRect) 
 {
-     Read(cDataFileIm2D::Create(aName,false),aP0,aDyn,aRect);
+     Read(cDataFileIm2D::Create(aName,eForceGray::No),aP0,aDyn,aRect);
 }
 
                //  file  create/write
 
-void cRGBImage::ToFile(const std::string & aName)
+void cRGBImage::ToFile(const std::string & aName, const tFileOptions& aOptions)
 {
-    mImR.DIm().ToFile(aName,mImG.DIm(),mImB.DIm());
+    mImR.DIm().ToFile(aName,mImG.DIm(),mImB.DIm(),aOptions);
 }
 
-void cRGBImage::ToFileDeZoom(const std::string & aName,int aDeZoom)
+void cRGBImage::ToFileDeZoom(const std::string & aName,int aDeZoom, const tFileOptions& aOptions)
 {
   if (aDeZoom==1)
   {
-      ToFile(aName);
+      ToFile(aName,aOptions);
       return;
   }
   tIm1C  aImR = mImR.GaussDeZoom(aDeZoom);
   tIm1C  aImG = mImG.GaussDeZoom(aDeZoom);
   tIm1C  aImB = mImB.GaussDeZoom(aDeZoom);
 
-  aImR.DIm().ToFile(aName,aImG.DIm(),aImB.DIm());
+  aImR.DIm().ToFile(aName,aImG.DIm(),aImB.DIm(),aOptions);
 }
 
-void cRGBImage::ToJpgFileDeZoom(const std::string & aName,int aDeZoom)
+void cRGBImage::ToJpgFileDeZoom(const std::string & aName,int aDeZoom, const tFileOptions& aOptions)
 {
-    ToFileDeZoom(aName,aDeZoom);
-    Convert_JPG(aName,true,90,"jpg");
+    auto aNameJPG = LastPrefix(aName) + ".jpg";
+    auto options = aOptions;
+    if (options.empty())
+    {
+        options.push_back("QUALITY=90"); // WARNING! even QUALITY=100 will be insufficient for brutal variations, do to fixed jpeg chroma sampling-factor in GDAL?
+    }
+    ToFileDeZoom(aNameJPG,aDeZoom,options);
 }
 
 
@@ -295,15 +341,15 @@ void cRGBImage::Write(const cDataFileIm2D & aDFI,const cPt2di & aP0,double aDyn,
 void cRGBImage::Write(const std::string & aName,const cPt2di & aP0,double aDyn,const cRect2& aRect) const
 {
     AssertZ1();
-     Write(cDataFileIm2D::Create(aName,false),aP0,aDyn,aRect);
+     Write(cDataFileIm2D::Create(aName,eForceGray::No),aP0,aDyn,aRect);
 }
 
-void cRGBImage::DrawEllipse(const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8 aGA,tREAL8 aSA,tREAL8 aTeta,tREAL8 aWitdh)
+void cRGBImage::DrawEllipse(const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8 aGA,tREAL8 aSA,tREAL8 aTeta)
 {
     cPt2dr aCenterLoc = PointToRPix(aCenter);
 
     std::vector<cPt2di> aVPts;
-    GetPts_Ellipse(aVPts,aCenterLoc,aGA*mRZoom,aSA*mRZoom,aTeta,true,aWitdh);
+    GetPts_Ellipse(aVPts,aCenterLoc,aGA*mRZoom,aSA*mRZoom,aTeta,true);
     for (const auto & aPix : aVPts)
     {
          RawSetPoint(aPix,aCoul);
@@ -352,7 +398,7 @@ void cRGBImage::DrawCircle(const cPt3di& aCoul,const cPt2dr & aCenter,tREAL8  aR
 	DrawEllipse(aCoul,aCenter,aRay,aRay,0.0);
 }
 
-void cRGBImage:: DrawLine(const cPt2dr & aP1,const cPt2dr & aP2,const cPt3di & aCoul,tREAL8 aWidth)
+void cRGBImage::DrawLine(const cPt2dr & aP1,const cPt2dr & aP2,const cPt3di & aCoul,tREAL8 aWidth)
 {
     std::vector<cPt2di> aVPts;
     GetPts_Line(aVPts,PointToRPix(aP1),PointToRPix(aP2),aWidth);
@@ -386,8 +432,10 @@ std::vector<cPt3di>  cRGBImage::LutVisuLabRand(int aNbLab)
 
 
 #endif
-template  void SetGrayPix(cRGBImage&,const cPt2di & aPix,const cDataIm2D<tREAL4> & aIm,const double &);
-template  void SetGrayPix(cRGBImage&,const cDataIm2D<tREAL4> & aIm,const double & aMul);
-template  cRGBImage  RGBImFromGray(const cDataIm2D<tREAL4> & aGrayIm,const double & aMul,int aZoom);
-template  cRGBImage  RGBImFromGray(const cDataIm2D<tU_INT1> & aGrayIm,const double & aMul,int aZoom);
+template  void SetGrayPix(cRGBImage&,const cPt2di & aPix,const cDataIm2D<tREAL4> & aIm, double );
+template  void SetGrayPix(cRGBImage&,const cDataIm2D<tREAL4> & aIm, double aMul);
+template  cRGBImage  RGBImFromGray(const cDataIm2D<tREAL4> & aGrayIm, double aMul,int aZoom);
+template  cRGBImage  RGBImFromGray(const cDataIm2D<tU_INT1> & aGrayIm, double aMul,int aZoom);
+template  cRGBImage  RGBImFromGray(const cDataIm2D<tREAL4> & aGrayIm,const cBox2di&, double aMul,int aZoom);
+template  cRGBImage  RGBImFromGray(const cDataIm2D<tU_INT1> & aGrayIm,const cBox2di&, double aMul,int aZoom);
 };

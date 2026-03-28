@@ -16,22 +16,6 @@
 namespace MMVII
 {
 
-	/*
-struct A 
-{
-};
-struct B
-{
-	A mA;
-};
-
-void f ()
-{
-	B aB;
-	A aA = aB;
-}
-*/
-
 
 /*  *********************************************************** */
 /*                                                              */
@@ -62,7 +46,7 @@ class cAppliCompletUncodedTarget : public cMMVII_Appli
 
 
 	void CompleteAll();
-	void CompleteOneGCP(const cMes1GCP & aGCP);
+	void CompleteOneGCP(const cMes1Gnd3D & aGCP);
 
         cCollecSpecArg2007 & ArgObl(cCollecSpecArg2007 & anArgObl) override ;
         cCollecSpecArg2007 & ArgOpt(cCollecSpecArg2007 & anArgOpt) override ;
@@ -81,7 +65,7 @@ class cAppliCompletUncodedTarget : public cMMVII_Appli
         std::string                    mNameIm;
         cSensorImage *                 mSensor;
         cSensorCamPC *                 mCamPC;
-        cSetMesImGCP                   mMesImGCP;
+        cSetMesGndPt                   mMesImGCP;
         cSetMesPtOf1Im                 mImageM;
         std::vector<cSaveExtrEllipe>   mVSEE;
 	std::string                    mNameReportEllipse;
@@ -107,6 +91,9 @@ cCollecSpecArg2007 & cAppliCompletUncodedTarget::ArgObl(cCollecSpecArg2007 & anA
          << Arg2007(mSpecImIn,"Pattern/file for images",{{eTA2007::MPatFile,"0"},{eTA2007::FileDirProj}})
 	 << mPhProj.DPOrient().ArgDirInMand()
          << Arg2007(mThresholdDist,"Threshold on distance for in pixel")
+	 <<   mPhProj.DPGndPt3D().ArgDirInMand()
+	 <<   mPhProj.DPGndPt2D().ArgDirInMand()
+	 <<   mPhProj.DPGndPt2D().ArgDirOutMand()
 
    ;
 }
@@ -115,14 +102,12 @@ cCollecSpecArg2007 & cAppliCompletUncodedTarget::ArgOpt(cCollecSpecArg2007 & anA
 {
    return 
                   anArgOpt
-	     <<   mPhProj.DPPointsMeasures().ArgDirInputOptWithDef("Std")
-	     <<   mPhProj.DPPointsMeasures().ArgDirOutOptWithDef("Completed")
              <<   AOpt2007(mThreshRay,"ThRay","Threshold for ray [RatioMax,RMin,RMax]",{{eTA2007::ISizeV,"[3,3]"}})
              <<   AOpt2007(mPatternNormal,"PatNorm","If estimate normal, pattern for point involved")
           ;
 }
 
-void cAppliCompletUncodedTarget::CompleteOneGCP(const cMes1GCP & aGCP)
+void cAppliCompletUncodedTarget::CompleteOneGCP(const cMes1Gnd3D & aGCP)
 {
     // if has already been selected, nothing to do
     if (mImageM.NameHasMeasure(aGCP.mNamePt))
@@ -150,34 +135,39 @@ void cAppliCompletUncodedTarget::CompleteOneGCP(const cMes1GCP & aGCP)
     }
 
     // Now test shape of ellispe compared to theoreticall ground pose
+
+    // StdOut() <<  "NNNNNoOOrmal " << mNormal  << " NAME=" << aGCP.mNamePt << std::endl;
  
-    cPlane3D aPlaneT  = cPlane3D::FromPtAndNormal(aGCP.mPt,mNormal);     // 3D plane of the ellispe
-    cEllipse aEl = mSensor->EllipseIm2Plane(aPlaneT,anIt_SEE->mEllipse,50);  // ellipse in ground coordinate
 
-    tREAL8 aL1 = aEl.LSa();   // gread axe
-    tREAL8 aL2 = aEl.LGa();   // small axe
+    if (IsInit(&mThreshRay) )
+    {
+       cPlane3D aPlaneT  = cPlane3D::FromPtAndNormal(aGCP.mPt,mNormal);     // 3D plane of the ellispe
+       cEllipse aEl = mSensor->EllipseIm2Plane(aPlaneT,anIt_SEE->mEllipse,50);  // ellipse in ground coordinate
+
+       tREAL8 aL1 = aEl.LSa();   // gread axe
+       tREAL8 aL2 = aEl.LGa();   // small axe
 			      
-    tREAL8 aRatio = aL2/aL1;  // ratio (should be  equal to 1)
-    tREAL8 aRMoy = std::sqrt(aL1*aL2);  // ray, to compare to theoretical (for ex 5 mm for3D AICON)
+       tREAL8 aRatio = aL2/aL1;  // ratio (should be  equal to 1)
+       tREAL8 aRMoy = std::sqrt(aL1*aL2);  // ray, to compare to theoretical (for ex 5 mm for3D AICON)
 
-   AddOneReportCSV(mNameReportEllipse,{mNameIm,aGCP.mNamePt,ToStr(aRMoy),ToStr(aRatio)});
+       AddOneReportCSV(mNameReportEllipse,{mNameIm,aGCP.mNamePt,ToStr(aRMoy),ToStr(aRatio)});
+       if (false && (LevelCall()==0))  // print info if was done whith only one image
+       {
+            StdOut() << "NNN=" << aGCP.mNamePt  << " DistReproj: " << Norm2(aProjIm-aMes->mPt) 
+	             <<  " Excentricity*1000=" << (1-aL2/aL1) *1000 << " Ray=" << std::sqrt(aL1*aL2) << "\n";
+       }
 
-    if (  IsInit(&mThreshRay) &&
-	  (
+       if (
                  (aRatio > mThreshRay[0])
              ||  (aRMoy  < mThreshRay[1])
              ||  (aRMoy  > mThreshRay[2])
 	  )
-       )
-    {
-       return;
+       {
+           return;
+       }
     }
+    // StdOut() <<  "CoooOmmpl  " << __LINE__ << "\n";
 
-    if (false && (LevelCall()==0))  // print info if was done whith only one image
-    {
-        StdOut() << "NNN=" << aGCP.mNamePt  << " DistReproj: " << Norm2(aProjIm-aMes->mPt) 
-	         <<  " Excentricity*1000=" << (1-aL2/aL1) *1000 << " Ray=" << std::sqrt(aL1*aL2) << "\n";
-    }
     aMes->mNamePt = aGCP.mNamePt; // match suceed, give the right name
     anIt_SEE->mNameCode = aGCP.mNamePt;
 }
@@ -197,12 +187,12 @@ int  cAppliCompletUncodedTarget::Exe()
    mPhProj.FinishInit();
 
    mNameReportEllipse = "EllipsesDim";
-   InitReport(mNameReportEllipse,"csv",true);
+   InitReportCSV(mNameReportEllipse,"csv",true);
 
 
+   AddHeaderReportCSV(mNameReportEllipse,{"Image","Pt","Ray","Ratio"});
    if (RunMultiSet(0,0))  // If a pattern was used, run in // by a recall to itself  0->Param 0->Set
    {
-       AddOneReportCSV(mNameReportEllipse,{"Image","Pt","Ray","Ratio"});
       int aRes =  ResultMultiSet();
       if (aRes!=EXIT_SUCCESS) return aRes;
 
@@ -212,11 +202,11 @@ int  cAppliCompletUncodedTarget::Exe()
    }
 
    mNameIm = FileOfPath(mSpecImIn);
-   mPhProj.LoadSensor(mNameIm,mSensor,mCamPC,false);
+   mPhProj.ReadSensor(mNameIm,mSensor,mCamPC,true,false);
 
    //   load CGP
-   mPhProj.LoadGCP(mMesImGCP);
-   mPhProj.LoadIm(mMesImGCP,*mSensor);
+   mPhProj.LoadGCP3D(mMesImGCP);
+   mPhProj.LoadIm(mMesImGCP,nullptr,*mSensor);
    mImageM = mPhProj.LoadMeasureIm(mNameIm);
 
 
@@ -249,12 +239,6 @@ int  cAppliCompletUncodedTarget::Exe()
 
 
    mPhProj.SaveMeasureIm(mImageM);
-   // Save GCP because they will probaly be re-used, but do it only once at first call, else risk of simultaneaous writting
-   if (KthCall()==0)
-   {
-       //mPhProj.SaveGCP(mMesImGCP,"");
-       mPhProj.CpGCP();
-   }
 
    aNameE = cSaveExtrEllipe::NameFile(mPhProj,mMesImGCP.MesImInitOfName(mNameIm),false);
    SaveInFile(mVSEE,aNameE);

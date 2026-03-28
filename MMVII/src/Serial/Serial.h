@@ -42,6 +42,18 @@ class cJsonSerialTokenParser ; // instantiation of cSerialFileParser to json fil
 class cSerialTree;             //  class for representing in a tree the "grammatical" parsing of a token generator
 
 
+// From boost:: ...
+/*
+template <class T>
+static inline void hash_combine(std::size_t& seed, T const& v)
+{
+   std::hash<T> hasher;
+   seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+*/
+
+// template <class T> void HashCombine(std::size_t& seed, T const& v);
+
 
 
 ///  Use to handle End Of File using exception
@@ -89,7 +101,7 @@ class cSerialGenerator
 	  virtual void CheckOnClose(const cSerialTree &,const std::string & aTagClose) const;
 
           cResLex GetNextLexSizeCont() ; /// Get a token that "must" be a size of container
-          cResLex GetNextLexNotSizeCont() ; /// Get a token, "skeeping" all size of container
+          cResLex GetNextLexNotSizeCont() ; /// Get a token, "skipping" all size of container
 };
 
 class cTokenGeneByList : public cSerialGenerator
@@ -133,16 +145,16 @@ class cSerialFileParser : public cSerialGenerator,
           int GetNotEOF();
           /// error specific handler
           void Error(const std::string & aMes);
-           /// Skeep all series of space and comment
-           int  SkeepWhite();
+           /// Skip all series of space and comment
+           int  SkipWhite();
 
-           /// Skeep one <!-- --> or <? ?>
-           bool SkeepOneKindOfCom(const char * aBeg,const char * anEnd);
-           /// Skeep a comment
-           bool SkeepCom();
+           /// Skip one <!-- --> or <? ?>
+           bool SkipOneKindOfCom(const char * aBeg,const char * anEnd);
+           /// Skip a comment
+           bool SkipCom();
 
-          /// If found Skeep one extpected string, and indicate if it was found,
-          bool SkeepOneString(const char * aString);
+          /// If found Skip one extpected string, and indicate if it was found,
+          bool SkipOneString(const char * aString);
           std::string  GetQuotedString();  /// extract "ddgg \\  kk "
 
           cMMVII_Ifs                        mMMIs; ///< secured istream
@@ -207,12 +219,17 @@ class cSerialTree : public cMemCheck
 
 
 	  /// Compute firt occurence of tree difference return as res diff 
-	  cResDifST AnalyseDiffTree(const cSerialTree &,const std::string &aSkeep) const;
+	  cResDifST AnalyseDiffTree(const cSerialTree &,const std::string &aSkip) const;
 	        // "pretty printing" functions
 	  void  Xml_PrettyPrint(cMMVII_Ofs& anOfs) const;  /// xml-pretty print
 	  void  Json_PrettyPrint(cMMVII_Ofs& anOfs) const; /// json-pretty print
 	  void  Raw_PrettyPrint(cMMVII_Ofs& anOfs) const;  /// Tagt-pretty print
 	  void  CSV_PrettyPrint(std::vector<std::string>& aRes,bool IsSpecif) const;  /// print 
+
+      /// Extract a descendant from its name
+      std::vector<const cSerialTree *> GetAllDescFromName(const std::string &) const;
+      /// Test if there is a one and only one descendant, if not and SVP return nullptr
+      const cSerialTree * GetUniqueDescFromName(const std::string &,bool SVP=false) const;
 
 
 	  /// Assert that there is only 1 son and return it
@@ -224,12 +241,22 @@ class cSerialTree : public cMemCheck
 	  void Unfold(std::list<cResLex> &,eTypeSerial) const;
 
 	  const std::vector<cSerialTree>&  Sons() const; /// acessor
-          const std::string & Value() const ;            /// accessor
+          const std::string & Value() const ;            /// accessor !! it is the tag
+          const std::string * ValueInside(bool SVP=false) const ;   /// if tree has struct <A>"B" </A> => B , else null
+          const std::string * GetUniqueValFromName(const std::string &Tag,bool SVP=false) const;  /// if tree contain  <Tag>"B" </Tag> => B
+
+	  /// return true if there is a unique terminal tree we tag "Tag" containin "Val"
+          bool HasValAtUniqueTag(const std::string &Tag,const std::string &aVal) const; 
+						
      private :
-          void RecursSetFather(cSerialTree *);
+	  // cSerialTree (const cSerialTree &) = delete;
+
+      void RecGetAllDescFromName(std::vector<const cSerialTree *>&,const std::string &) const;
+
+      void RecursSetFather(cSerialTree *);
 	  // cSerialTree(const cSerialTree &) ;
 	  /// Implement using exception
-	  void Rec_AnalyseDiffTree(const cSerialTree &,const std::string & aSkeep) const;
+	  void Rec_AnalyseDiffTree(const cSerialTree &,const std::string & aSkip) const;
 
 	  bool IsTerminalNode() const;     ///< is it a node w/o son and not tagged
 	  bool IsTabulable() const;        ///< can it be printed as a tab == is it a non tagged node with all son terminal

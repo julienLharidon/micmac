@@ -34,7 +34,7 @@ template <class TypeEnum> class cE2Str
          typename tMapE2Str::iterator anIt = mE2S.find(anE);
          // Enum to string is not user error (user do not create enum)
          if (anIt == mE2S.end())
-            MMVII_INTERNAL_ASSERT_always(false,"E2Str for enum : " + ToStr(int(anE)));
+            MMVII_INTERNAL_ASSERT_always(false,"E2Str for enum : " + ToStr(int(anE)) + ", for type: " + cStrIO<TypeEnum>::msNameType);
          return anIt->second;
      }
 
@@ -55,7 +55,7 @@ template <class TypeEnum> class cE2Str
          {
             if (WithDef) 
                 return TypeEnum::eNbVals;
-            MMVII_UsersErrror(eTyUEr::eBadEnum,"Str2E for : "+aStr+" ; valids are : "+ StrAllVal() );
+            MMVII_UserError(eTyUEr::eBadEnum,"Str2E for : "+aStr+" ; valids are : "+ StrAllVal() );
          }
          return anIt->second;
      }
@@ -84,7 +84,7 @@ template <class TypeEnum> class cE2Str
           }
           if ((!AcceptEmpy) && aRes.empty())
           {
-             MMVII_UsersErrror
+             MMVII_UserError
              (
                 eTyUEr::eEmptyPattern,
                 "No value for enum, allowed are :"+StrAllVall<TypeEnum>()
@@ -94,6 +94,8 @@ template <class TypeEnum> class cE2Str
 
           return aRes;
      }
+
+     static std::vector<TypeEnum> AllVals() { return VecOfPat(".*",true); }
 
      static std::vector<bool> VecBoolOfPat(const std::string & aPat,bool AcceptEmpy)
      {
@@ -131,6 +133,10 @@ template <> std::vector<TypeEnum> SubOfPat<TypeEnum>(const std::string & aPat,bo
 {\
    return cE2Str<TypeEnum>::VecOfPat(aPat,AcceptEmpty);\
 }\
+template <> std::vector<TypeEnum> AllEnumValues<TypeEnum>()\
+{\
+   return cE2Str<TypeEnum>::AllVals();\
+}\
 template <> tSemA2007  AC_ListVal<TypeEnum>()\
 {\
    return {eTA2007::AllowedValues,StrAllVall<TypeEnum>()};\
@@ -159,14 +165,46 @@ template<> cE2Str<eProjPC>::tMapE2Str cE2Str<eProjPC>::mE2S
                {eProjPC::eFE_EquiSolid,"FE_EquiSolid"},
                {eProjPC::eStereroGraphik,"StereroGraphik"},
                {eProjPC::eOrthoGraphik,"OrthoGraphik"},
-               {eProjPC::eEquiRect,"eEquiRect"}
+               {eProjPC::eEquiRect,"EquiRect"}
            };
 
-template<> cE2Str<eSysCoGeo>::tMapE2Str cE2Str<eSysCoGeo>::mE2S
+
+template<> cE2Str<eSysCo>::tMapE2Str cE2Str<eSysCo>::mE2S
            {
-               {eSysCoGeo::eLambert93,"Lambert93"},
-               {eSysCoGeo::eRTL,"RTL"},
-               {eSysCoGeo::eGeoC,"GeoC"}
+               {eSysCo::eProj,"Proj"},
+               {eSysCo::eLEuc,"LEuc"},
+               {eSysCo::eRTL,"RTL"},
+               {eSysCo::eGeoC,"GeoC"},
+               {eSysCo::eLocalSys,"Local"}
+           };
+
+
+
+template<> cE2Str<eTopoObsSetType>::tMapE2Str cE2Str<eTopoObsSetType>::mE2S
+           {
+                {eTopoObsSetType::eSimple,"Simple"},
+                {eTopoObsSetType::eStation,"Station"},
+                //{eTopoObsSetType::eDistParam,"DistParam"},
+           };
+
+template<> cE2Str<eTopoObsType>::tMapE2Str cE2Str<eTopoObsType>::mE2S
+           {
+                {eTopoObsType::eHz,"Hz"},
+                {eTopoObsType::eZen,"Zen"},
+                {eTopoObsType::eDist,"Dist"},
+                {eTopoObsType::eDX,"DX"},
+                {eTopoObsType::eDY,"DY"},
+                {eTopoObsType::eDZ,"DZ"},
+                {eTopoObsType::eDH,"DH"},
+                //{eTopoObsType::eDistParam,"DistParam"},
+           };
+
+template<> cE2Str<eTopoStOriStat>::tMapE2Str cE2Str<eTopoStOriStat>::mE2S
+           {
+                {eTopoStOriStat::eTopoStOriContinue,"#NEW"},
+                {eTopoStOriStat::eTopoStOriFixed,"#FIX"},
+                {eTopoStOriStat::eTopoStOriVert,"#VERT"},
+                {eTopoStOriStat::eTopoStOriBasc,"#BASC"},
            };
 
 
@@ -183,18 +221,33 @@ template<> cE2Str<eTA2007>::tMapE2Str cE2Str<eTA2007>::mE2S
                 {eTA2007::FileDirProj,"FDP"},
                 {eTA2007::FileImage,"Im"},
                 {eTA2007::FileCloud,"Cloud"},
+                {eTA2007::FileDmp,"Dmp"},
                 {eTA2007::File3DRegion,"3DReg"},
+                {eTA2007::FileTagged,"FileTagged"},
+                {eTA2007::FileTxt,"FileText"},
+                {eTA2007::FileAny,"FileAny"},
+                {eTA2007::FolderAny,"FolderAny"},
+
                 {eTA2007::MPatFile,"MPF"},
                 {eTA2007::Orient,"Ori"},
+                {eTA2007::OriTriplet,"OriTriplet"},
                 {eTA2007::RadiomData,"RadData"},
                 {eTA2007::RadiomModel,"RadModel"},
                 {eTA2007::MeshDev,"MeshDev"},
                 {eTA2007::Mask,"Mask"},
                 {eTA2007::MetaData,"MetaData"},
-                {eTA2007::PointsMeasure,"PointsMeasure"},
+                {eTA2007::ObjMesInstr,"ObjMesInstr"},
+                {eTA2007::ObjCoordWorld,"ObjCoordWorld"},
                 {eTA2007::TieP,"TieP"},
                 {eTA2007::MulTieP,"MulTieP"},
+                {eTA2007::InstrBlock,"InstrBlock"},
                 {eTA2007::RigBlock,"RigBlock"},
+                {eTA2007::Clino,"Clino"},
+                {eTA2007::TypeInstr,"Instrum"},
+                {eTA2007::MeasureClino,"MeasureClino"},
+                {eTA2007::StaticLidar,"StaticLidar"},
+                {eTA2007::OriRel,"OriRel"},
+                {eTA2007::Topo,"Topo"},
                 {eTA2007::SysCo,"SysCo"},
                 {eTA2007::Input,"In"},
                 {eTA2007::Output,"Out"},
@@ -221,14 +274,18 @@ template<> cE2Str<eApF>::tMapE2Str cE2Str<eApF>::mE2S
                 {eApF::ImProc,"ImProc"},
                 {eApF::Radiometry,"Radiometry"},
                 {eApF::Ori,"Ori"},
+                {eApF::Clino,"Clino"},
                 {eApF::SysCo,"SysCo"},
+                {eApF::BlockInstr,"BlockInstr"},
                 {eApF::Match,"Match"},
                 {eApF::GCP,"GCP"},
+                {eApF::Lines,"Lines"},
                 {eApF::TieP,"TieP"},
                 {eApF::TiePLearn,"TiePLearn"},
                 {eApF::Cloud,"Cloud"},
                 {eApF::CodedTarget,"CodedTarget"},
                 {eApF::Topo,"Topo"},
+                {eApF::Simul,"Simul"},
                 {eApF::NoGui,"NoGui"},
                 {eApF::Perso,"Perso"}
            };
@@ -237,14 +294,21 @@ template<> cE2Str<eApF>::tMapE2Str cE2Str<eApF>::mE2S
 template<> cE2Str<eApDT>::tMapE2Str cE2Str<eApDT>::mE2S
            {
                 {eApDT::Ori,"Ori"},
+                {eApDT::Clino,"Clino"},
                 {eApDT::PCar,"PCar"},
                 {eApDT::TieP,"TieP"},
-                {eApDT::GCP,"GCP"},
+                {eApDT::BlockInstr,"BlockInstr"},
+                {eApDT::ObjMesInstr,"ObjMesInstr"},
+                {eApDT::ObjCoordWorld,"ObjCoordWorld"},
+                {eApDT::Lines,"Lines"},
                 {eApDT::Image,"Image"},
                 {eApDT::Orient,"Orient"},
                 {eApDT::SysCo,"SysCo"},
                 {eApDT::Radiom,"Radiom"},
                 {eApDT::Ply,"Ply"},
+                {eApDT::MMVIICloud,"MMVIICloud"},
+                {eApDT::StaticScan,"StaticScan"},
+                {eApDT::Topo,"Topo"},
                 {eApDT::None,"None"},
                 {eApDT::ToDef,"ToDef"},
                 {eApDT::Console,"Console"},
@@ -276,6 +340,7 @@ template<> cE2Str<eTyUEr>::tMapE2Str cE2Str<eTyUEr>::mE2S
                 {eTyUEr::eCreateDir,"MkDir"},
                 {eTyUEr::eRemoveFile,"RmFile"},
                 {eTyUEr::eEmptyPattern,"EmptyPattern"},
+                {eTyUEr::eBadPattern,"BadPattern"},
                 {eTyUEr::eBadXmlTopTag,"XmlTopTag"},
                 {eTyUEr::eParseBadClose,"ParseBadClose"},
                 {eTyUEr::eJSonBadPunct,"JSonBadPunct"},
@@ -305,7 +370,11 @@ template<> cE2Str<eTyUEr>::tMapE2Str cE2Str<eTyUEr>::mE2S
                 {eTyUEr::eNoAperture,"NoAperture"},
                 {eTyUEr::eNoFocale,"NoFocale"},
                 {eTyUEr::eNoFocaleEqui35,"NoFocaleEqui35"},
+                {eTyUEr::eNoNumberPixel,"NoNumberPixel"},
                 {eTyUEr::eNoCameraName,"NoCameraName"},
+                {eTyUEr::eMultipleTargetInOneImage,"MultipleTargetInOneImage,"},
+                {eTyUEr::eSysCo,"SysCo"},
+                {eTyUEr::eConstraintsError,"ConstraintsError"},
                 {eTyUEr::eUnClassedError,"UnClassedError"}
            };
 
@@ -337,7 +406,32 @@ template<> cE2Str<eTyUnitAngle>::tMapE2Str cE2Str<eTyUnitAngle>::mE2S
            {
                 {eTyUnitAngle::eUA_radian,"radian"},
                 {eTyUnitAngle::eUA_degree,"degree"},
-                {eTyUnitAngle::eUA_gon,"gon"}
+                {eTyUnitAngle::eUA_gon,"gon"},
+                {eTyUnitAngle::eUA_DMgon,"DMgon"}
+           };
+
+template<> cE2Str<eTyClino>::tMapE2Str cE2Str<eTyClino>::mE2S
+           {
+                {eTyClino::ePendulum,"Pendulum"},
+                {eTyClino::eSpring,"Spring"}
+           };
+
+template<> cE2Str<eModeFusionData>::tMapE2Str cE2Str<eModeFusionData>::mE2S
+           {
+                {eModeFusionData::eMerge,"Merge"},
+                {eModeFusionData::eOverWrite,"OverWrite"},
+                {eModeFusionData::eDoNothing,"DoNothing"},
+                {eModeFusionData::eError,"Error"}
+           };
+
+
+template<> cE2Str<eTyInstr>::tMapE2Str cE2Str<eTyInstr>::mE2S
+           {
+                {eTyInstr::eCamera,"Camera"},
+                {eTyInstr::eClino,"Clino"},
+                {eTyInstr::eGNSS,"GNSS"},
+                {eTyInstr::eIMU,"IMU"},
+                {eTyInstr::eTarget,"Target"},
            };
 
 template<> cE2Str<eModeTestPropCov>::tMapE2Str cE2Str<eModeTestPropCov>::mE2S
@@ -375,11 +469,33 @@ template<> cE2Str<eTyCodeTarget>::tMapE2Str cE2Str<eTyCodeTarget>::mE2S
                 {eTyCodeTarget::eCERN,"CERN"}
            };
 
+template<> cE2Str<eModResBund>::tMapE2Str cE2Str<eModResBund>::mE2S
+           {
+                {eModResBund::eAngle,"Angle"},
+                {eModResBund::eProduct,"Product"},
+                {eModResBund::eDist12,"Dist12"},
+                {eModResBund::eAng12,"Ang12"},
+                {eModResBund::eDet12,"Det12"},
+                {eModResBund::eLinDet12,"LinDet12"}
+           };
+bool ModResBund_IsMode12(eModResBund aMode)
+{
+    return  ((int) aMode >= (int) eModResBund::eDist12) && ((int) aMode <= (int) eModResBund::eDet12) ;
+}
+bool ModResBund_IsModeGen(eModResBund aMode)
+{
+    return  ((int) aMode <= (int) eModResBund::eProduct) ;
+}
+
+
 template<> cE2Str<eMTDIm>::tMapE2Str cE2Str<eMTDIm>::mE2S
            {
                 {eMTDIm::eFocalmm,"Focalmm"},
+                {eMTDIm::eFocalPix,"FocalPix"},
+                {eMTDIm::ePPPix,"PPPix"},
                 {eMTDIm::eAperture,"Aperture"},
                 {eMTDIm::eModelCam,"ModelCam"},
+                {eMTDIm::eNbPixel,"NbPix"},
                 {eMTDIm::eAdditionalName,"AdditionalName"}
            };
 
@@ -387,8 +503,37 @@ template<> cE2Str<eFormatExtern>::tMapE2Str cE2Str<eFormatExtern>::mE2S
            {
                 {eFormatExtern::eMMV1,"MMV1"},
                 {eFormatExtern::eMeshRoom,"MeshRoom"},
-                {eFormatExtern::eColMap,"ColMap"}
+                {eFormatExtern::eColmap,"Colmap"}
            };
+
+
+template<> cE2Str<eTypeSensor>::tMapE2Str cE2Str<eTypeSensor>::mE2S
+           {
+                {eTypeSensor::eCenP,"CenP"},
+                {eTypeSensor::eRPC,"RPC"}
+           };
+
+template<> cE2Str<eFormatSensor>::tMapE2Str cE2Str<eFormatSensor>::mE2S
+           {
+                {eFormatSensor::eMMVII_CenP,"MMVII_CenP"},
+                {eFormatSensor::eDimap_RPC,"Dimap_RPC"}
+	   };
+
+template<> cE2Str<eModeSSR>::tMapE2Str cE2Str<eModeSSR>::mE2S
+           {
+                {eModeSSR::eSSR_LsqDense      , "LsqDense"},
+                {eModeSSR::eSSR_LsqNormSparse , "LsqNormSparse"},
+                {eModeSSR::eSSR_LsqSparseGC   , "LsqSparseGC"},
+                {eModeSSR::eSSR_L1Barrodale   , "L1Barrodale"}
+	   };
+
+template<> cE2Str<eImatchCrit>::tMapE2Str cE2Str<eImatchCrit>::mE2S
+           {
+                {eImatchCrit::eDifRad, "DifRad"},
+                {eImatchCrit::eCensus, "Census"},
+                {eImatchCrit::eCorrel, "Correl"}
+	   };
+
 
 
 template<> cE2Str<eTypeSerial>::tMapE2Str cE2Str<eTypeSerial>::mE2S
@@ -534,7 +679,10 @@ void BenchEnum(cParamExeBench & aParam)
     if (! aParam.NewBench("Enum")) return;
 
     TplBenchEnum<eProjPC>();
-    TplBenchEnum<eSysCoGeo>();
+    TplBenchEnum<eSysCo>();
+    TplBenchEnum<eTopoObsSetType>();
+    TplBenchEnum<eTopoObsType>();
+    TplBenchEnum<eTopoStOriStat>();
     TplBenchEnum<eOpAff>();
     TplBenchEnum<eTySC>();
     TplBenchEnum<eTA2007>();
@@ -548,8 +696,18 @@ void BenchEnum(cParamExeBench & aParam)
     TplBenchEnum<eModeCaracMatch>();
     TplBenchEnum<eDCTFilters>();
     TplBenchEnum<eTyCodeTarget>();
+    TplBenchEnum<eModResBund>();
     TplBenchEnum<eTypeSerial>();
     TplBenchEnum<eTAAr>();
+    TplBenchEnum<eMTDIm>();
+    TplBenchEnum<eTypeSensor>();
+    TplBenchEnum<eFormatSensor>();
+    TplBenchEnum<eModeSSR>();
+    TplBenchEnum<eImatchCrit>();
+    TplBenchEnum<eTyClino>();
+    TplBenchEnum<eTyInstr>();
+    TplBenchEnum<eTyCodeTarget>();
+
 
     aParam.EndBench();
 }
@@ -782,7 +940,7 @@ template <class Type> void  GlobCheckSize(const std::vector<Type> & aVal,const s
     cPt2di aSz = cStrIO<cPt2di>::FromStr(anArg);
     if ((int(aVal.size()) < aSz.x()) || ((int(aVal.size()) > aSz.y()))) 
     {
-       MMVII_UsersErrror(eTyUEr::eBadSize4Vect,"IntervalOk=" + anArg + " Got=" + ToStr(int(aVal.size())));
+       MMVII_UserError(eTyUEr::eBadSize4Vect,"IntervalOk=" + anArg + " Got=" + ToStr(int(aVal.size())));
     }
 }
 
@@ -848,8 +1006,10 @@ MACRO_INSTANTIATE_ARG2007(double)
 MACRO_INSTANTIATE_ARG2007(bool)
 MACRO_INSTANTIATE_ARG2007(std::string)
 MACRO_INSTANTIATE_ARG2007(std::vector<std::string>)
+MACRO_INSTANTIATE_ARG2007(std::vector<std::vector<std::string>>)
 MACRO_INSTANTIATE_ARG2007(std::vector<int>)
 MACRO_INSTANTIATE_ARG2007(std::vector<double>)
+MACRO_INSTANTIATE_ARG2007(std::vector<cPt2di>)
 MACRO_INSTANTIATE_ARG2007(cPt2di)
 MACRO_INSTANTIATE_ARG2007(cPt2dr)
 MACRO_INSTANTIATE_ARG2007(cPt3di)
@@ -873,7 +1033,7 @@ MACRO_INSTANTIATE_ARG2007(cBox3dr)
 /*                                      */
 /* ==================================== */
 
-static char BufStrIO[1000];
+thread_local static char BufStrIO[1000];
 
 //  vector<int>  => [1,2,3]
 
@@ -890,6 +1050,70 @@ template <class Type>  std::string Vect2Str(const std::vector<Type>  & aV)
    return aRes;
 }
 
+//  4/12/2023 : "Big" modif by MPD to be abble to parse nested stuff like "[1,[2,3],4]" correctly
+
+template <class Type>  std::vector<Type> Str2Vec(const std::string & aStrGlob)
+{
+// StdOut() <<  "aStrGlobaStrGlobaStrGlob =" << aStrGlob << "\n";
+   std::vector<Type> aRes;
+   const char * aC=aStrGlob.c_str();
+   if (*aC!='[')
+       MMVII_UserError(eTyUEr::eParseError,"expected [ at beging of vect");
+   aC++;
+   int aLevel = 1;  // level in the parenthesis language, if Lev>1 we dont consider [,] as poncutation
+   std::string aStrV;
+   while((*aC) && (aLevel!=0))
+   {
+       if (*aC==0)
+       {
+          MMVII_UserError(eTyUEr::eParseError,"unexpected end of string while parsing " + aStrGlob);
+       }
+       // only level 1 "," are considered as separators
+       else if ((*aC==',') && (aLevel==1))
+       {
+           aRes.push_back(cStrIO<Type>::FromStr(aStrV)); 
+	   aStrV="";
+       }
+       //  a "[" is an ordinary carater, just increase the level
+       else if (*aC=='[')
+       {
+	    aStrV.push_back(*aC);
+	    aLevel++;
+       }
+       //  a "]" may be or not an ordinary carater
+       else if (*aC==']')
+       {
+	    aLevel--; // always decrease the leve
+	    if (aLevel!=0) // if we are not closing the tab, its an ordinary car
+	        aStrV.push_back(*aC);
+	    else
+	    {
+                // else it's the final ponctuation
+		if (aStrV!="")
+                    aRes.push_back(cStrIO<Type>::FromStr(aStrV)); 
+		else
+		{
+                    // if last string  is "", we dont add it
+		    // this allow [] -> {} instead of {""}
+		    // [,] => {""}  ... see examples in Bench 
+		}
+	    }
+       }
+       else
+       {
+	  aStrV.push_back(*aC);
+       }
+	       
+       aC++;
+   }
+
+   if (aLevel!=0)
+      MMVII_UserError(eTyUEr::eParseError,"unexpected end of string , bad match in []");
+
+   return  aRes;
+}
+
+/*
 template <class Type>  std::vector<Type> Str2Vec(const std::string & aStrGlob)
 {
    std::vector<Type> aRes;
@@ -914,6 +1138,10 @@ template <class Type>  std::vector<Type> Str2Vec(const std::string & aStrGlob)
 
    return  aRes;
 }
+*/
+
+
+
 
                           //   - - std::vector<Type>  - -
 
@@ -928,9 +1156,17 @@ template <>  std::vector<TYPE> cStrIO<std::vector<TYPE> >::FromStr(const std::st
 }\
 template <>  const std::string cStrIO<std::vector<TYPE>>::msNameType = "std::vector<"  #TYPE  ">";\
 
+MACRO_INSTANTITATE_STRIO_VECT_TYPE(std::vector<std::string>)
 MACRO_INSTANTITATE_STRIO_VECT_TYPE(std::string)
 MACRO_INSTANTITATE_STRIO_VECT_TYPE(int)
 MACRO_INSTANTITATE_STRIO_VECT_TYPE(double)
+MACRO_INSTANTITATE_STRIO_VECT_TYPE(cPt2di)
+
+
+std::vector<std::string> Str2VStr(const std::string & aS)
+{
+   return cStrIO<std::vector<std::string>>::FromStr(aS);
+}
 
 /* ==================================== */
 /*                                      */
@@ -957,7 +1193,7 @@ template <>  cPtxd<TYPE,DIM> cStrIO<cPtxd<TYPE,DIM> >::FromStr(const std::string
 {\
     std::vector<TYPE> aV = cStrIO<std::vector<TYPE>>::FromStr(aStr);\
     if (aV.size()!=DIM)\
-       MMVII_UsersErrror(eTyUEr::eBadDimForPt,"Expect="+ MMVII::ToStr(DIM) + " Got=" + MMVII::ToStr(int(aV.size())) );\
+       MMVII_UserError(eTyUEr::eBadDimForPt,"Expect="+ MMVII::ToStr(DIM) + " Got=" + MMVII::ToStr(int(aV.size())) );\
     cPtxd<TYPE,DIM> aRes;\
     for (int aK=0 ; aK<DIM ; aK++)\
         aRes[aK] = aV[aK];\
@@ -967,7 +1203,7 @@ template <>  cTplBox<TYPE,DIM> cStrIO<cTplBox<TYPE,DIM> >::FromStr(const std::st
 {\
     std::vector<TYPE> aV = cStrIO<std::vector<TYPE>>::FromStr(aStr);\
     if (aV.size()!=2*DIM)\
-       MMVII_UsersErrror(eTyUEr::eBadDimForBox,"Expect="+ MMVII::ToStr(2*DIM) + " Got=" + MMVII::ToStr(int(aV.size())) );\
+       MMVII_UserError(eTyUEr::eBadDimForBox,"Expect="+ MMVII::ToStr(2*DIM) + " Got=" + MMVII::ToStr(int(aV.size())) );\
     cPtxd<TYPE,DIM> aP0,aP1;\
     for (int aK=0 ; aK<DIM ; aK++){\
         aP0[aK] = aV[aK];\
@@ -984,6 +1220,10 @@ MACRO_INSTANTITATE_STRIO_CPTXD(int,3)
 MACRO_INSTANTITATE_STRIO_CPTXD(double,3)
 
 
+MACRO_INSTANTITATE_STRIO_CPTXD(int,4)
+MACRO_INSTANTITATE_STRIO_CPTXD(double,4)
+MACRO_INSTANTITATE_STRIO_CPTXD(int,5)
+MACRO_INSTANTITATE_STRIO_CPTXD(double,5)
 
 
 
@@ -1008,6 +1248,12 @@ void OneBenchStrIO(std::string aStr,const  std::vector<std::string> & aV)
 void BenchStrIO(cParamExeBench & aParam)
 {
    if (! aParam.NewBench("StrIO")) return;
+   OneBenchStrIO("[1,[2],3]",{"1","[2]","3"});
+   OneBenchStrIO("[1,[2,4],3]",{"1","[2,4]","3"});
+   OneBenchStrIO("[1,[2,4],[]]",{"1","[2,4]","[]"});
+
+   OneBenchStrIO("[[[1]],[[2],4],[]]",{"[[1]]","[[2],4]","[]"});
+
    OneBenchStrIO("[1,2,3]",{"1","2","3"});
    OneBenchStrIO("[1]",{"1"});
    OneBenchStrIO("[]",{});
@@ -1047,13 +1293,17 @@ MACRO_INSTANTITATE_STRIO_ENUM(eTyUEr,"TyUEr")
 MACRO_INSTANTITATE_STRIO_ENUM(eTyInvRad,"TyInvRad")
 MACRO_INSTANTITATE_STRIO_ENUM(eTyPyrTieP,"TyPyrTieP")
 MACRO_INSTANTITATE_STRIO_ENUM(eProjPC,"ProjPC")
-MACRO_INSTANTITATE_STRIO_ENUM(eSysCoGeo,"SysCoGeo")
+MACRO_INSTANTITATE_STRIO_ENUM(eSysCo,"SysCo")
+MACRO_INSTANTITATE_STRIO_ENUM(eTopoObsSetType,"TopoObsSetType")
+MACRO_INSTANTITATE_STRIO_ENUM(eTopoObsType,"TopoObsType")
+MACRO_INSTANTITATE_STRIO_ENUM(eTopoStOriStat,"TopoStOriStat")
 MACRO_INSTANTITATE_STRIO_ENUM(eOpAff,"OpAff")
 MACRO_INSTANTITATE_STRIO_ENUM(eModeEpipMatch,"ModeEpiMatch")
 MACRO_INSTANTITATE_STRIO_ENUM(eModePaddingEpip,"ModePadEpip")
 MACRO_INSTANTITATE_STRIO_ENUM(eModeCaracMatch,"ModeCaracMatch")
 MACRO_INSTANTITATE_STRIO_ENUM(eDCTFilters,"DCTFilters")
 MACRO_INSTANTITATE_STRIO_ENUM(eTyCodeTarget,"TypeCodedTarget")
+MACRO_INSTANTITATE_STRIO_ENUM(eModResBund,"ModeResidualBundle")
 MACRO_INSTANTITATE_STRIO_ENUM(eModeTestPropCov,"TestPropCov")
 MACRO_INSTANTITATE_STRIO_ENUM(eMTDIm,"TypeMTDIm")
 MACRO_INSTANTITATE_STRIO_ENUM(eFormatExtern,"ExternalFormat")
@@ -1062,7 +1312,15 @@ MACRO_INSTANTITATE_STRIO_ENUM(eTAAr,"TypeAAr")
 MACRO_INSTANTITATE_STRIO_ENUM(eTA2007,"TA2007")
 MACRO_INSTANTITATE_STRIO_ENUM(eTySC,"TySC")
 MACRO_INSTANTITATE_STRIO_ENUM(eTyUnitAngle,"AngleUnit")
+MACRO_INSTANTITATE_STRIO_ENUM(eModeFusionData,"ModeFusionData")
+MACRO_INSTANTITATE_STRIO_ENUM(eTyClino,"TypeClino")
+MACRO_INSTANTITATE_STRIO_ENUM(eTyInstr,"TypeInstr")
 
+
+MACRO_INSTANTITATE_STRIO_ENUM(eTypeSensor,"TypeSensor")
+MACRO_INSTANTITATE_STRIO_ENUM(eFormatSensor,"FormatSensor")
+MACRO_INSTANTITATE_STRIO_ENUM(eModeSSR,"ModeSRR")
+MACRO_INSTANTITATE_STRIO_ENUM(eImatchCrit,"ImatchCrit")
 
 /* ==================================== */
 /*                                      */
@@ -1082,7 +1340,7 @@ template <>  bool cStrIO<bool>::FromStr(const std::string & aStr)
     if ((aStr=="1") || UCaseEqual(aStr,"true")) return true;
     if ((aStr=="0") || UCaseEqual(aStr,"false")) return false;
 
-    MMVII_UsersErrror(eTyUEr::eBadBool,"Bad value for boolean :["+aStr+"]");
+    MMVII_UserError(eTyUEr::eBadBool,"Bad value for boolean :["+aStr+"]");
 
     return false;
 }
@@ -1109,9 +1367,6 @@ template <>  const std::string cStrIO<char>::msNameType = "char";
 
 
 
-
-
-
    // ================  size_t ==============================================
 
 template <>  std::string cStrIO<size_t>::ToStr(const size_t & aSz)
@@ -1135,6 +1390,14 @@ template <>  const std::string cStrIO<size_t>::msNameType = "size_t";
 
    // ================  int ==============================================
 
+bool  StringIsIntOk(const std::string & aStr)
+{
+    int anI;
+    int aNb= sscanf(aStr.c_str(),"%d",&anI);
+
+    return aNb!=0;
+}
+
 template <>  std::string cStrIO<int>::ToStr(const int & anI)
 {
    sprintf(BufStrIO,"%d",anI);
@@ -1155,6 +1418,11 @@ template <>  int cStrIO<int>::FromStr(const std::string & aStr)
     return anI;
 }
 template <>  const std::string cStrIO<int>::msNameType = "int";
+template <>  const std::string cStrIO<tINT2>::msNameType = "int2";
+template <>  const std::string cStrIO<tU_INT1>::msNameType = "u_int1";
+template <>  const std::string cStrIO<tREAL4>::msNameType = "float";
+
+
 
 std::string ToStr(int aVal,int aSzMin)
 {
@@ -1225,7 +1493,11 @@ template <>  std::string cStrIO<double>::ToStr(const double & aD)
 template <>  double cStrIO<double>::FromStr(const std::string & aStr)
 {
     double anI;
-    sscanf(aStr.c_str(),"%lf",&anI);
+    int aNb = sscanf(aStr.c_str(),"%lf",&anI);
+    if (aNb==0)
+    {
+        MMVII_INTERNAL_ASSERT_User((aNb!=0),eTyUEr::eBadInt,"String=["+ aStr +"] is not a valid double")
+    }
     return anI;
 }
 template <>  const std::string cStrIO<double>::msNameType = "double";
@@ -1246,6 +1518,17 @@ std::string FixDigToStr(double aSignedVal,int aNbBef,int aNbAfter)
    return aBuf;
 }
 
+   // ================  double ==============================================
+
+template <>  std::string cStrIO<tREAL16>::ToStr(const tREAL16 & aD)
+{
+    return cStrIO<tREAL8>::ToStr((tREAL8) (aD));
+}
+
+template <>  std::string cStrIO<tREAL4>::ToStr(const tREAL4 & aD)
+{
+    return cStrIO<tREAL8>::ToStr((tREAL8) (aD));
+}
 
 
    // ================  std::string ==============================================
@@ -1260,5 +1543,7 @@ template <>  std::string cStrIO<std::string>::FromStr(const std::string & aStr)
 }
 
 template <>  const std::string cStrIO<std::string>::msNameType = "string";
+
+
 
 };

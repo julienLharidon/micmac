@@ -1,5 +1,6 @@
-#include "MMVII_Matrix.h"
+#include "MMVII_SysSurR.h"
 #include "MMVII_Geom3D.h"
+#include "MMVII_Geom2D.h"
 
 namespace MMVII
 {
@@ -24,6 +25,7 @@ namespace MMVII
 
 cPt3dr  BundleInters(cPt3dr & aABC,const tSeg3dr & aSeg1,const tSeg3dr & aSeg2,tREAL8 aW12)
 {
+  // StdOut() << "BundleIntersBundleIntersBundleIntersBundleIntersBundleInters\n";
    cPt3dr  aV1   = aSeg1.V12();
    cPt3dr  aV2   = aSeg2.V12();
    cPt3dr  aNorm = aV1 ^ aV2;
@@ -31,6 +33,8 @@ cPt3dr  BundleInters(cPt3dr & aABC,const tSeg3dr & aSeg1,const tSeg3dr & aSeg2,t
    cDenseMatrix<tREAL8> aMat =  M3x3FromCol(aV1,-aV2,aNorm);
    aABC = SolveCol(aMat,aSeg2.P1()-aSeg1.P1());
 
+   // We need a draw, but the formula is correct also it does not use ABC.y()
+   // P2 - P1 = x V1 - V2
    return aSeg1.P1() + aV1 * aABC.x() + aNorm * (aABC.z() * (1.0-aW12));
 }
 
@@ -65,6 +69,17 @@ cPt3dr  BundleInters(const tSeg3dr & aSeg1,const tSeg3dr & aSeg2,tREAL8 aW12)
  *
  *
  */
+
+
+cPt3dr Cart2Cyl(const cPt3dr & aPtCart)
+{
+    return   TP3z(ToPolar(Proj(aPtCart),0.0),aPtCart.z());
+}
+
+cPt3dr Cyl2Cart(const cPt3dr & aPtspher)
+{
+    return   TP3z(FromPolar(Proj(aPtspher)),aPtspher.z());
+}
 
 
 
@@ -127,8 +142,16 @@ cPt3dr  BundleInters(const std::vector<tSeg3dr> & aVSeg,const std::vector<tREAL8
      return SolveCol(aDM,aRHS);
 }
 
+cPt3dr  L1_BundleInters(const std::vector<tSeg3dr> & aVSeg,int NbSegCompl,const std::vector<tREAL8> * aVWeight)
+{
+    return cPt3dr::Dummy(); // TODO
+}
+
+
+
+
 cPt3dr  RobustBundleInters(const std::vector<tSeg3dr> & aVSeg)
-{		     
+{
      if (aVSeg.size() == 2)
         return BundleInters(aVSeg[0],aVSeg[1],0.5);
 
@@ -146,19 +169,53 @@ cPt3dr  RobustBundleInters(const std::vector<tSeg3dr> & aVSeg)
          {
              cPt3dr aInt = BundleInters(aVSeg[aKSeg1],aVSeg[aKSeg2],0.5);
 
-	     tREAL8 aSum =0;
+             tREAL8 aSum =0;
              for (size_t  aKSeg3=0 ;  aKSeg3<aVSeg.size() ; aKSeg3++)
              {
                  if ((aKSeg3!=aKSeg1) && (aKSeg3!=aKSeg2))
-		 {
+                 {
                     aSum += aVSC[aKSeg3].Dist(aInt);
-		 }
+                 }
              }
-	     aWMin.Add(aInt,aSum);
+             aWMin.Add(aInt,aSum);
          }
      }
 
      return aWMin.IndexExtre();
+}
+
+cPt3dr  BundleFixZ(const tSeg3dr & aSeg,const tREAL8 & aZ)
+{
+    const cPt3dr & aP1 = aSeg.P1();
+    cPt3dr aV12 = aSeg.V12();
+    return  aP1 +  aV12 *  ((aZ - aP1.z()) /aV12.z());
+}
+
+
+tPoseR RobustIsometry(const std::vector<cPt3dr> & aPtsA, const std::vector<cPt3dr> & aPtsB)
+{
+    MMVII_INTERNAL_ASSERT_strong(aPtsA.size()>2, "Isometry initialization needs at least 3 points")
+    MMVII_INTERNAL_ASSERT_strong(aPtsA.size()==aPtsB.size(), "Isometry initialization needs two sets with same number of points")
+    if (aPtsA.size() == 3)
+        return tPoseR::FromTriInAndOut(0, {aPtsA[0], aPtsA[1], aPtsA[2]}, 0, {aPtsB[0], aPtsB[1], aPtsB[2]});
+
+    // find the best 3 points
+    cWhichMin<tPoseR,tREAL8>  aIsoWMin(tPoseR(), INFINITY);
+    for (unsigned int i = 0; i < aPtsA.size()-2; ++i)
+        for (unsigned int j = i+1; j < aPtsA.size()-1; ++j)
+            for (unsigned int k = j+1; k < aPtsA.size(); ++k)
+            {
+                tTri3dr aTriA = cTriangle(aPtsA[i], aPtsA[j], aPtsA[k]);
+                tTri3dr aTriB = cTriangle(aPtsB[i], aPtsB[j], aPtsB[k]);
+                auto anIso = tPoseR::FromTriInAndOut(0, aTriA, 0, aTriB);
+                tREAL8 score = 0.;
+                for (unsigned int l = 0; l < aPtsA.size(); ++l)
+                {
+                    score += SqN2(anIso.Value(aPtsA[l])-aPtsB[l]);
+                }
+                aIsoWMin.Add(anIso, score);
+            }
+    return aIsoWMin.IndexExtre();
 }
 
 /*  *********************************************************** */
@@ -217,6 +274,8 @@ static const cPt3di NoTriplet(-1,-1,-1);
 
 std::pair<cPt3di,tREAL8> cPlane3D::IndexRansacEstimate(const std::vector<cPt3dr> & aVPts,bool AvgOrMax,int aNbTest,tREAL8 aRegulMinTri)
 {
+    //StdOut() << "cPlane3D::IndexRansacEstimatcPlane3D::IndexRansacEstimat\n";getchar();
+
      cWhichMin<cPt3di,tREAL8> aWM(NoTriplet,1e30);
 
      std::vector<cSetIExtension>  aSet3I; // Set of triple of indexes
@@ -257,6 +316,22 @@ std::pair<cPlane3D,tREAL8> cPlane3D::RansacEstimate(const std::vector<cPt3dr> & 
 }
 
 
+std::pair<cPlane3D,tREAL8> cPlane3D::LSQEstimate(const std::vector<cPt3dr> & aVPt,const std::vector<tREAL8>* aVW)
+{
+    cAffineSpace<3> aSp =  cAffineSpace<3>::LstSqEstimate(aVPt,2,aVW);
+
+    cPlane3D aPl = cPlane3D::FromP0And2V(aSp.P0(),aSp.VecSp().at(0),aSp.VecSp().at(1));
+    cWeightAv<tREAL8,tREAL8> aWS;
+    for (size_t aKPt=0 ; aKPt<aVPt.size() ; aKPt++)
+    {
+        tREAL8 aW = aVW ? aVW->at(aKPt) : 1.0;
+        aWS.Add(aW,aPl.Dist(aVPt.at(aKPt)));
+    }
+
+    return std::pair<cPlane3D,tREAL8>(aPl,aWS.Average());
+}
+
+
 
 // void GenRanQsubCardKAmongN(std::vector<cSetIExtension> & aRes,int aQ,int aK,int aN)
 
@@ -273,6 +348,7 @@ cPlane3D cPlane3D::FromPtAndNormal(const cPt3dr & aP0,const cPt3dr& aNormal)
 const cPt3dr& cPlane3D::AxeI() const {return mAxeI;}
 const cPt3dr& cPlane3D::AxeJ() const {return mAxeJ;}
 const cPt3dr& cPlane3D::AxeK() const {return mAxeK;}
+const cPt3dr& cPlane3D::P0()   const {return mP0;  }
 
 cPt3dr  cPlane3D::ToLocCoord(const cPt3dr & aPGlob) const
 {
@@ -306,11 +382,170 @@ std::vector<cPt3dr>  cPlane3D::RandParam()
     cPt3dr  aI =  cPt3dr::PRandUnit() ;
     cPt3dr  aJ =  cPt3dr::PRandUnitDiff(aI) ;
 
-    return std::vector<cPt3dr>{aP0,aI*RandInInterval(0.1,2.0),aJ*RandInInterval(0.1,2.0)};
+    auto v1 = aI*RandInInterval(0.1,2.0);
+    auto v2 = aJ*RandInInterval(0.1,2.0);
+    return std::vector<cPt3dr>{aP0,v1,v2};
 }
+
+/**  Compute the direction of intersection, algorithm :
+ *
+ *      - compute the quadratic form  E(Pt) =  Sum(D^2(Plk,Pt))
+ *      - search the minimum on unity sphere
+ *      - the minimum is reached for the eigen vector corresponding to the lowest eigen-value
+ */
+
+
+cPt3dr cPlane3D::DirInterPlane(const std::vector<const cPlane3D*>& aVPlanes,int aSzMin)
+{
+    MMVII_INTERNAL_ASSERT_tiny((int)aVPlanes.size()>=aSzMin,"DirInterPlane not enough planes");
+
+    // compute the quadratic form
+    cStrStat2<tREAL8>  aCov(3);
+    for (const auto & aPlanePtr : aVPlanes)
+    {
+        aCov.Add(aPlanePtr->AxeK().ToVect());
+    }
+
+    // extract the diagonalisation
+    const cResulSymEigenValue<tREAL8> & aResE = aCov.DoEigen();
+
+    // extract the eigen-vector corresponding to lowest eigen value (they are in growing order)
+    cPt3dr aRes;
+    GetCol(aRes,aResE.EigenVectors(),0);
+
+    return aRes;
+}
+
+cPt3dr cPlane3D::DirInterPlane(const std::vector<cPlane3D>& aVPlanes,int aSzMin)
+{
+    return DirInterPlane(VecObj2VecPtr(aVPlanes),aSzMin);
+}
+/**  Compute the line of intersection of N Plane , Method :
+ *
+ *    - 1 compute the direction "DIR"
+ *    - 2 compute "the" point
+ *
+ *    The problem arrise when the direction of intersection is almost perfect, in this
+ *    case the position is undetermined.  This is obviously the case when N=2.  This here
+ *    where the stabilizer is used, it fix with some weight, the position on  "DIR" to be
+ *    closed to average of P0() of all plane.
+ */
+
+tSeg3dr  cPlane3D::InterPlane(const std::vector<const cPlane3D*>& aVPlanes,int aSzMin,tREAL8 aWeightStabRel)
+{
+   cPt3dr aDir = DirInterPlane(aVPlanes,aSzMin);
+   int aNbPl = aVPlanes.size();
+
+   if (aNbPl<=1)
+   {
+       cPt3dr aP0 = aVPlanes.empty() ? cPt3dr::PRandC() : aVPlanes.at(0)->P0();
+       return tSeg3dr(aP0,aP0+aDir);
+   }
+
+   cLeasSqtAA<tREAL8> aSys(3);
+
+   cPt3dr aAvgP0(0,0,0);
+   tREAL8 aSomDPl = 0;
+   for (const auto & aPlanePtr : aVPlanes)
+   {
+       const cPt3dr & aK = aPlanePtr->AxeK();
+       aSys.PublicAddObservation(1.0,aK.ToVect(),Scal(aPlanePtr->P0(),aK));
+       aAvgP0 += aPlanePtr->P0();
+       aSomDPl +=  std::abs(Scal(aK,aDir));
+   }
+
+   if (aWeightStabRel != 0)
+   {
+       aAvgP0 = aAvgP0 / tREAL8(aNbPl);
+       aSomDPl /=  aNbPl;
+
+       tREAL8 aWeightStab = aWeightStabRel / (aSomDPl+aWeightStabRel);
+       aSys.PublicAddObservation(aWeightStab,aDir.ToVect(),Scal(aDir,aAvgP0));
+   }
+
+   cPt3dr aP0 = cPt3dr::FromVect(aSys.PublicSolve());
+   return tSeg3dr(aP0,aP0+aDir);
+}
+
+tSeg3dr  cPlane3D::InterPlane(const std::vector<cPlane3D>& aVPlanes,int aSzMin,tREAL8 aWeightStabRel)
+{
+    return InterPlane(VecObj2VecPtr(aVPlanes),aSzMin,aWeightStabRel);
+}
+
+
+void BenchPlaneInter()
+{
+    for (int aKPlane=0 ; aKPlane<100 ; aKPlane++)
+    {
+        cPt3dr aAxeSym  =  cPt3dr::PRandUnit();
+        tRotR aR = tRotR::CompleteRON(aAxeSym );
+        int aNbTeta = 0 + (aKPlane%7);
+        tREAL8 aTeta0 = RandUnif_C() *10.0;
+        std::vector<cPlane3D> aVPlanes;
+
+        cPt3dr aP0 = cPt3dr::PRandC();
+
+        tREAL8 aEps = 0.1 * RandUnif_C_NotNull(0.1);
+       // force a perfect intersec to test stabilization
+        if ( (aNbTeta>2) && (aKPlane%3==0))
+            aEps = 0;
+
+        for (int aKTeta=0 ; aKTeta<aNbTeta ; aKTeta++)
+        {
+            tREAL8 aTeta = aTeta0 + (2*M_PI*aKTeta) / aNbTeta;
+            cPt3dr aPNorm = aR.Value(cPt3dr(aEps,std::cos(aTeta),std::sin(aTeta)));
+
+            aVPlanes.push_back(cPlane3D::FromPtAndNormal(aP0,aPNorm));
+        }
+        cPt3dr  aDirInter = cPlane3D::DirInterPlane(aVPlanes,0);
+        tSeg3dr aLineInter = cPlane3D::InterPlane(aVPlanes,0);
+
+        // Juste check that dir are identic
+        tREAL8 aDifDir = Norm2(aDirInter- aLineInter.V12());
+        MMVII_INTERNAL_ASSERT_bench(aDifDir<1e-10,"Diff of direction in interplane");
+
+        if (Cos(aDirInter,aAxeSym)<0)
+           aAxeSym = - aAxeSym;
+
+        for (const auto & aPl : aVPlanes)
+        {
+               tREAL8 aVCos = std::abs(Cos(aDirInter,aPl.AxeK()));
+               tREAL8 aZ1 = std::abs(aPl.ToLocCoord(aLineInter.P1()).z());
+               tREAL8 aZ2 = std::abs(aPl.ToLocCoord(aLineInter.P2()).z());
+               if (aNbTeta<=2)
+               {
+                  // if NbPlane is 2, then the intersection is perfect => Test that the intersection is orthog to normal
+                  MMVII_INTERNAL_ASSERT_bench(aVCos<1e-5,"Dir Inter Plane, Case 2");
+		  // Test point P1 and P2  belongs to all plane
+                  MMVII_INTERNAL_ASSERT_bench((aZ1<1e-5) && (aZ2<1e-5),"Z-Inter Plane, Case <= 2");
+               }
+               else
+               {
+                  // just test that inter is not  perfect
+                  // StdOut() << "CCCc" << aVCos << " " << aDirInter << aPl.AxeK() << "\n";
+
+                  if (aEps>0)
+                  {
+                      MMVII_INTERNAL_ASSERT_bench(aVCos>std::abs(aEps/2.0),"Dir Inter Plane, Case > 2");
+                  }
+		  // Test point P1 belongs to all plane
+                  MMVII_INTERNAL_ASSERT_bench((aZ1<1e-5) ,"Z-Inter Plane, Case 2");
+               }
+        }
+        if (aNbTeta>2)
+        {
+            tREAL8 aDist =  Norm2(aDirInter - aAxeSym);
+            MMVII_INTERNAL_ASSERT_bench(aDist<1e-5,"Dir Inter Plane, Case > 2");
+        }
+
+    }
+}
+
 
 void BenchPlane3D()
 {
+    BenchPlaneInter();
+
     for  (int aK=0 ;aK<100 ;aK++)
     {
          std::vector<cPt3dr>  aVP = cPlane3D::RandParam();
@@ -320,7 +555,10 @@ void BenchPlane3D()
 	 MMVII_INTERNAL_ASSERT_bench(std::abs(aPlane.ToLocCoord(aVP[0]+aVP[2]).z())<1e-5,"BenchPlane3D");
 
          cPt3dr aP0 = cPt3dr::PRandC() * 100.0;
-         cPt3dr aP1 = aP0 +  aPlane.AxeI() * RandUnif_C() + aPlane.AxeJ() * RandUnif_C() +  aPlane.AxeK()  * RandUnif_C_NotNull(0.1);
+         auto v1 = RandUnif_C();
+         auto v2 = RandUnif_C();
+         auto v3 = RandUnif_C_NotNull(0.1);
+         cPt3dr aP1 = aP0 +  aPlane.AxeI() * v1 + aPlane.AxeJ() * v2 +  aPlane.AxeK()  * v3;
 
 	 cPt3dr aPI = aPlane.Inter(aP0,aP1);
 	 cPt3dr aPI2 = aPlane.Inter(tSeg3dr(aP0,aP1));
@@ -362,6 +600,14 @@ void BenchPlane3D()
        //  StdOut() << "NnnNnn " <<  Norm2(aPI - aPIVec) << std::endl;
        MMVII_INTERNAL_ASSERT_bench(Norm2(aPI - aPIVec) <1e-5,"BundleInters");
     }
+
+    for (int aK=0 ; aK< 10 ; aK++)
+    {
+        cPt3dr aPCart =  cPt3dr::PRandC();
+        cPt3dr aPCyl  = Cart2Cyl(aPCart);
+        MMVII_INTERNAL_ASSERT_bench(Norm2(Cyl2Cart(aPCyl) - aPCart )<1e-7,"Cylindriq coordinates");
+        MMVII_INTERNAL_ASSERT_bench(std::abs(aPCyl.z()-aPCart.z() )<1e-7,"Cylindriq coordinates");
+    }
     
 }
 
@@ -376,8 +622,9 @@ tREAL8 L2_DegenerateIndex(const std::vector<cPt3dr> & aVPt,size_t aNumEigV)
             aStat.Add(aP3.ToVect());
     aStat.Normalise();
     const cDenseVect<tREAL8> anEV = aStat.DoEigen().EigenValues() ;
-
-    if (anEV(2)==0)  return 0.0;
+    // theoretically eigenvalues can't be negavive => treat <0 as =0
+    if (anEV(2)<=0)  return 0.0;
+    if (anEV(aNumEigV)<0)  return 0.0;
 
     return Sqrt(SafeDiv(anEV(aNumEigV),anEV(2)));
 }
@@ -494,7 +741,10 @@ template <class T>  T  Determinant (const cPtxd<T,3> & aP1,const cPtxd<T,3> & aP
 
 template<class Type>  cTriangle<Type,3> RandomTriang(Type aAmpl)
 {
-      return cTriangle<Type,3>(cPtxd<Type,3>::PRandC()*aAmpl,cPtxd<Type,3>::PRandC()*aAmpl,cPtxd<Type,3>::PRandC()*aAmpl);
+      auto v1 = cPtxd<Type,3>::PRandC()*aAmpl;
+      auto v2 = cPtxd<Type,3>::PRandC()*aAmpl;
+      auto v3 = cPtxd<Type,3>::PRandC()*aAmpl;
+      return cTriangle<Type,3>(v1,v2,v3);
 }
 
 template<class Type>  cTriangle<Type,3> RandomTriangRegul(Type aRegulMin,Type aAmpl)

@@ -7,11 +7,18 @@
 #include "Formulas_Radiom.h"
 #include "Formulas_Geom3D.h"
 #include "Formulas_BlockRigid.h"
+#include "Formulas_GenSensor.h"
+#include "Formulas_RPC.h"
+#include "Formulas_Topo.h"
 #include "MMVII_Sys.h"
 #include "MMVII_Geom2D.h"
+#include "Formulas_ClinoBloc.h"
+#include "Formulas_ClinoRot.h"
+#include "Formulas_CalibBundles.h"
 
 #include "MMVII_PCSens.h"
 #include "MMVII_2Include_Serial_Tpl.h"
+#include "Formulas_Lidar.h"
 
 
       //  cPt3di  Deg.x=Rad  Deg.y=Dec  Deg.z=Gen
@@ -42,12 +49,20 @@ namespace MMVII
 
 extern const std::vector<cPt3di>  TheVectDegree;
 
-std::vector<cDescOneFuncDist>   DescDist(const cPt3di & aDeg)
+std::vector<cDescOneFuncDist>   DescDist(const cPt3di & aDeg,bool isFraserMode)
 {
-   cMMVIIUnivDist  aDist(aDeg.x(),aDeg.y(),aDeg.z(),false);
+   cMMVIIUnivDist  aDist(aDeg.x(),aDeg.y(),aDeg.z(),false,isFraserMode);
 
    return aDist.VDescParams();
 }
+
+     //   PUSHB
+std::vector<cDescOneFuncDist>   Polyn2DDescDist(int aDegree)
+{
+   cDistPolyn2D aDist(aDegree,false,true) ;
+   return aDist.mVDesc;
+}
+
 
 std::string NameFormulaOfStr(const std::string & aName,bool WithDerive)
 {
@@ -61,34 +76,35 @@ template <typename TypeFormula> std::string NameFormula(const TypeFormula & anEq
 
 
 // EqBaseFuncDist
-std::string  NameEqDist(const cPt3di & aDeg,bool WithDerive,bool ForBase )
+std::string  NameEqDist(const cPt3di & aDeg,bool WithDerive,bool ForBase,bool isFraserMode)
 {
-   cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),ForBase);
+   cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),ForBase,isFraserMode);
    cEqDist<cMMVIIUnivDist> anEq(aDist); 
 
    return NameFormula(anEq,WithDerive);
 }
 
-template <typename tProj> std::string Tpl_NameEqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive)
+template <typename tProj> std::string 
+       Tpl_NameEqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive,bool isFraserMode,eTypeEqCol aTypeEqCol)
 {
    MMVII_INTERNAL_ASSERT_tiny(tProj::TypeProj()==aType,"incoherence in Tpl_NameEqProjCam");
 
-   cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),false);
-   cEqColinearityCamPPC<cMMVIIUnivDist,tProj>  anEq(aDist);
+   cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),false,isFraserMode);
+   cEqColinearityCamPPC<cMMVIIUnivDist,tProj>  anEq(aDist,aTypeEqCol);
 
    return NameFormula(anEq,WithDerive);
 }
 
-std::string NameEqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive)
+std::string NameEqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive,bool isFraserMode,eTypeEqCol aTypeEqCol)
 {
     switch (aType)
     {
-        case eProjPC::eStenope        :   return Tpl_NameEqColinearityCamPPC<cProjStenope>       (aType,aDeg,WithDerive);
-        case eProjPC::eFE_EquiDist    :   return Tpl_NameEqColinearityCamPPC<cProjFE_EquiDist>   (aType,aDeg,WithDerive);
-        case eProjPC::eFE_EquiSolid   :   return Tpl_NameEqColinearityCamPPC<cProjFE_EquiSolid>  (aType,aDeg,WithDerive);
-        case eProjPC::eStereroGraphik :   return Tpl_NameEqColinearityCamPPC<cProjStereroGraphik>(aType,aDeg,WithDerive);
-        case eProjPC::eOrthoGraphik   :   return Tpl_NameEqColinearityCamPPC<cProjOrthoGraphic>  (aType,aDeg,WithDerive);
-        case eProjPC::eEquiRect       :   return Tpl_NameEqColinearityCamPPC<cProj_EquiRect>     (aType,aDeg,WithDerive);
+        case eProjPC::eStenope        :   return Tpl_NameEqColinearityCamPPC<cProjStenope>       (aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
+        case eProjPC::eFE_EquiDist    :   return Tpl_NameEqColinearityCamPPC<cProjFE_EquiDist>   (aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
+        case eProjPC::eFE_EquiSolid   :   return Tpl_NameEqColinearityCamPPC<cProjFE_EquiSolid>  (aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
+        case eProjPC::eStereroGraphik :   return Tpl_NameEqColinearityCamPPC<cProjStereroGraphik>(aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
+        case eProjPC::eOrthoGraphik   :   return Tpl_NameEqColinearityCamPPC<cProjOrthoGraphic>  (aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
+        case eProjPC::eEquiRect       :   return Tpl_NameEqColinearityCamPPC<cProj_EquiRect>     (aType,aDeg,WithDerive,isFraserMode,aTypeEqCol);
 
         default :;
 
@@ -131,7 +147,7 @@ void TestResDegree(cCalculator<double> * aCalc,const cPt3di & aDeg,const std::st
      if (aCalc==nullptr)
      {
          StdOut() << " *  Generated Degree Are " <<   TheVectDegree << std::endl;
-	 MMVII_UsersErrror
+	 MMVII_UserError
          (
 	      eTyUEr::eBadDegreeDist,
 	      "Required degree " + ToStr(aDeg) + " for distorsion  in "+aFonc+" has not been generated"
@@ -139,16 +155,37 @@ void TestResDegree(cCalculator<double> * aCalc,const cPt3di & aDeg,const std::st
      }
 }
 
+     //   PUSHB
+NS_SymbolicDerivative::cCalculator<double> * EqColinearityCamGen(int  aDeg,bool WithDerive,int aSzBuf,bool ReUse)
+{
+     bool SVP =  false; // we generate an error if dont exist
+     return StdAllocCalc(NameFormula(cEqColinSensGenPolyn2D(aDeg,false),WithDerive),aSzBuf,SVP,ReUse);
+}
+
+NS_SymbolicDerivative::cCalculator<double> * EqDistPol2D(int  aDeg,bool WithDerive,int aSzBuf,bool ReUse) // PUSHB
+{
+     bool SVP =  false; // we generate an error if dont exist
+     return StdAllocCalc(NameFormula(cEqDistPolyn2D(aDeg,false),WithDerive),aSzBuf,SVP,ReUse);
+}
+
+NS_SymbolicDerivative::cCalculator<double> * RPC_Proj(bool WithDerive,int aSzBuf,bool ReUse) // PUSHB
+{
+     bool SVP =  false; // we generate an error if dont exist
+     return StdAllocCalc(NameFormula(cFormula_RPC_RatioPolyn(),WithDerive),aSzBuf,SVP,ReUse);
+}
+											     
+
+
      //  distorion
-cCalculator<double> * EqDist(const cPt3di & aDeg,bool WithDerive,int aSzBuf)
+cCalculator<double> * EqDist(const cPt3di & aDeg,bool WithDerive,int aSzBuf,bool isFraserMode)
 { 
-    cCalculator<double> * aRes =  StdAllocCalc(NameEqDist(aDeg,WithDerive,false),aSzBuf,true);
+    cCalculator<double> * aRes =  StdAllocCalc(NameEqDist(aDeg,WithDerive,false,isFraserMode),aSzBuf,true);
     TestResDegree(aRes,aDeg,"EqDist");
     return aRes;
 }
-cCalculator<double> * EqBaseFuncDist(const cPt3di & aDeg,int aSzBuf)
+cCalculator<double> * EqBaseFuncDist(const cPt3di & aDeg,int aSzBuf,bool isFraserMode)
 { 
-    return StdAllocCalc(NameEqDist(aDeg,false,true),aSzBuf);
+    return StdAllocCalc(NameEqDist(aDeg,false,true,isFraserMode),aSzBuf);
 }
 
      //  Projection
@@ -164,25 +201,26 @@ cCalculator<double> * EqCPProjInv(eProjPC  aType,bool WithDerive,int aSzBuf)
 
      //  Projection+distorsion+ Foc/PP
 
-cCalculator<double> * EqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive,int aSzBuf,bool ReUse)
+cCalculator<double> * EqColinearityCamPPC(eProjPC  aType,const cPt3di & aDeg,bool WithDerive,int aSzBuf,bool ReUse,bool isFraserMode,eTypeEqCol aTypeEqCol)
 {
 	//  true->  SVP
-     cCalculator<double> * aRes = StdAllocCalc(NameEqColinearityCamPPC(aType,aDeg,WithDerive),aSzBuf,true,ReUse);
+    cCalculator<double> * aRes = StdAllocCalc(NameEqColinearityCamPPC(aType,aDeg,WithDerive,isFraserMode,aTypeEqCol),aSzBuf,true,ReUse);
 
     TestResDegree(aRes,aDeg,"EqColinearityCamPPC");
-    /*
-     if (aRes==nullptr)
-     {
-         StdOut() << " *  Generated Degree Are " <<   TheVectDegree << std::endl;
-	 MMVII_UsersErrror
-         (
-	      eTyUEr::eBadDegreeDist,
-	      "Required degree for distorsion  EqColinearityCamPPC has not been generated"
-         );
-     }
-     */
 
      return aRes;
+}
+
+     //    Projection (operates on bundles)
+cCalculator<double> * EqColinearityCamProj(bool WithDerive,int aSzBuf,bool ReUse)
+{
+    return StdAllocCalc(NameFormula(cFormula_EqColinearityCamProj(),WithDerive),aSzBuf,true,ReUse);
+}
+
+//    Projection (operates on bundles and generic camera)
+cCalculator<double> * EqColinearityOnBundle(bool WithDerive,int aSzBuf,bool ReUse)
+{
+    return StdAllocCalc(NameFormula(cFormula_EqColinearityOnBundle(),WithDerive),aSzBuf,true,ReUse);
 }
 
      //    Radiometry
@@ -239,6 +277,7 @@ cCalculator<double> * EqConsDist(bool WithDerive,int aSzBuf)
     return TplEqConsDist<double>(WithDerive,aSzBuf);
 }
 
+
      //  cons ratio dist
 cCalculator<double> * EqConsRatioDist(bool WithDerive,int aSzBuf)
 { 
@@ -264,6 +303,11 @@ cCalculator<double> * EqNetworkConsDistFixPoints(bool WithDerive,int aSzBuf,int 
 cCalculator<double> * EqDeformImHomotethy(bool WithDerive,int aSzBuf)
 {
      return StdAllocCalc(NameFormula(cDeformImHomotethy(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqDeformImLinearGradHomotethy(bool WithDerive,int aSzBuf)
+{
+     return StdAllocCalc(NameFormula(cDeformImHomotethy(true),WithDerive),aSzBuf);
 }
 
 cCalculator<double> * EqDeformImAffinity(bool WithDerive,int aSzBuf)
@@ -300,6 +344,60 @@ cCalculator<double> * EqBlocRig(bool WithDerive,int aSzBuf,bool ReUse)  // RIGID
     return StdAllocCalc(NameFormula(cFormulaBlocRigid(),WithDerive),aSzBuf,false,ReUse);
 }
 
+cCalculator<double> * EqBlocRig_RatE(bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return StdAllocCalc(NameFormula(cFormulaRattBRExist(),WithDerive),aSzBuf,false,ReUse);
+}
+
+cCalculator<double> * EqBlocRig_Clino(bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return StdAllocCalc(NameFormula(cFormulaClino(0,3),WithDerive),aSzBuf,false,ReUse);
+}
+
+cCalculator<double> * EqBlocRig_Orthog(bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return StdAllocCalc(NameFormula(cFormulaVNormOrthog(),WithDerive),aSzBuf,false,ReUse);
+}
+
+cCalculator<double> * Old_EqClinoBloc(bool WithDerive,int aSzBuf,bool ReUse)  // CLINOBLOC
+{
+    return StdAllocCalc(NameFormula(cFormulaClinoBloc(),WithDerive),aSzBuf,false,ReUse);
+}
+
+cCalculator<double> * Old_EqClinoRot(bool WithDerive,int aSzBuf,bool ReUse)  // CLINOBLOC
+{
+    return StdAllocCalc(NameFormula(cFormulaClinoRot(),WithDerive),aSzBuf,false,ReUse);
+}
+
+
+cCalculator<double> * EqBundleElem_Cam1(eModResBund aMode,bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return  ModResBund_IsModeGen(aMode) ?
+               StdAllocCalc(NameFormula(cFormulaBundleElem_Cam1(aMode),WithDerive),aSzBuf,false,ReUse) :
+               nullptr;
+}
+cCalculator<double> * EqBundleElem_Cam2(eModResBund aMode,bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return   ModResBund_IsModeGen(aMode) ?
+                StdAllocCalc(NameFormula(cFormulaBundleElem_Cam2(aMode),WithDerive),aSzBuf,false,ReUse) :
+                nullptr;
+}
+
+cCalculator<double> * EqBundleElem_Cam12(eModResBund aMode,bool WithDerive,int aSzBuf,bool ReUse)  // RIGIDBLOC
+{
+    return   ModResBund_IsMode12(aMode) ?
+                 StdAllocCalc(NameFormula(cFormulaBundleElem_CamDet12(aMode),WithDerive),aSzBuf,false,ReUse):
+                 nullptr ;
+}
+
+cCalculator<double> * EqBundleElem_CamN(eModResBund aMode,bool WithDerive,int aSzBuf,bool ReUse)
+{
+    return   ModResBund_IsModeGen(aMode) ?
+                 StdAllocCalc(NameFormula(cFormulaBundleElem_Cam3(aMode),WithDerive),aSzBuf,false,ReUse):
+                 nullptr ;
+}
+
+// cFormulaBundleElem_Cam1
 // topo subframe with dist parameter
 template <class Type> cCalculator<Type> * TplEqTopoSubFrame(bool WithDerive,int aSzBuf)
 {
@@ -310,6 +408,114 @@ cCalculator<double> * EqTopoSubFrame(bool WithDerive,int aSzBuf)
 {
     return TplEqTopoSubFrame<double>(WithDerive,aSzBuf);
 }
+
+// topo az
+template <class Type> cCalculator<Type> * TplEqTopoAz(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoHz(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoHz(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoAz<double>(WithDerive,aSzBuf);
+}
+
+// topo zen
+template <class Type> cCalculator<Type> * TplEqTopoZen(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoZen(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoZen(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoZen<double>(WithDerive,aSzBuf);
+}
+
+// topo dist
+template <class Type> cCalculator<Type> * TplEqTopoDist(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoDist(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoDist(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoDist<double>(WithDerive,aSzBuf);
+}
+
+// topo dX
+template <class Type> cCalculator<Type> * TplEqTopoDX(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoDX(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoDX(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoDX<double>(WithDerive,aSzBuf);
+}
+
+// topo dY
+template <class Type> cCalculator<Type> * TplEqTopoDY(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoDY(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoDY(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoDY<double>(WithDerive,aSzBuf);
+}
+
+// topo dZ
+template <class Type> cCalculator<Type> * TplEqTopoDZ(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoDZ(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoDZ(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoDZ<double>(WithDerive,aSzBuf);
+}
+
+// topo dH
+template <class Type> cCalculator<Type> * TplEqTopoDH(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cFormulaTopoDH(),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqTopoDH(bool WithDerive,int aSzBuf)
+{
+    return TplEqTopoDH<double>(WithDerive,aSzBuf);
+}
+
+
+
+cCalculator<double> * EqSumSquare(int aNb,bool WithDerive,int aSzBuf,bool ReUse)
+{
+    return StdAllocCalc(NameFormula(cFormulaSumSquares(8),WithDerive),aSzBuf,false,ReUse);
+}
+
+
+  // Projection image lidar
+
+cCalculator<double> * EqEqLidarImPonct(bool WithDerive,int aSzBuf, bool aScanPoseUk)
+{
+    return StdAllocCalc(NameFormula(cEqLidarImPonct(aScanPoseUk),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqEqLidarImCensus(bool WithDerive,int aSzBuf, bool aScanPoseUk)
+{
+    return StdAllocCalc(NameFormula(cEqLidarImCensus(aScanPoseUk),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqEqLidarImCorrel(bool WithDerive,int aSzBuf, bool aScanPoseUk)
+{
+    return StdAllocCalc(NameFormula(cEqLidarImCorrel(aScanPoseUk),WithDerive),aSzBuf);
+}
+
+cCalculator<double> * EqEqLidarLidar(bool WithDerive,int aSzBuf)
+{
+    return StdAllocCalc(NameFormula(cEqLidarLidar(),WithDerive),aSzBuf);
+}
+
 
 /* **************************** */
 /*      BENCH  PART             */
@@ -351,6 +557,7 @@ template<class TyProj> void OneBenchProjToDirBundle(cParamExeBench & aParam)
 
        aPropPt.ToDirBundle(aP);
        aPropPt.Proj(aPropPt.ToDirBundle(aP));
+ 
    }
    // Generate random point aPt0, project aVIm0, inverse aPt1, and check collinearity between Pt1 and Pt0
    cPt3dr AxeK(0,0,1);
@@ -365,7 +572,7 @@ template<class TyProj> void OneBenchProjToDirBundle(cParamExeBench & aParam)
    
           MMVII_INTERNAL_ASSERT_bench(Norm2(aP23.second-aRay3d)<1e-8,"Inversion Proj/ToDirBundle");
 
-	  if ( aDefProf->HasRadialSym()) // 2- test radiality  => to skeep for non physical proj like 360 synthetic image
+	  if ( aDefProf->HasRadialSym()) // 2- test radiality  => to skip for non physical proj like 360 synthetic image
 	  {
           // 2.1  , conservation of angles :  aRay2, aRay3d, AxeK  must be coplanar
               cPt3dr aRay2(aProj2.x(),aProj2.y(),1.0);
@@ -388,7 +595,7 @@ template<class TyProj> void OneBenchProjToDirBundle(cParamExeBench & aParam)
    cPt3dr aPtZ = cPt3dr::FromStdVector(TyProj::ToDirBundle(aV00));
    MMVII_INTERNAL_ASSERT_bench(Norm2(aPtZ-AxeK)<1e-8,"Proj/ToDirBundle");
 
-   if  (1)  // to skeep if code not generated ...
+   if  (1)  // to skip if code not generated ...
    {
 	cDataMapCalcSymbDer<tREAL8,3,2> aProjDir
         (
@@ -432,7 +639,7 @@ template<class TyProj> void OneBenchProjToDirBundle(cParamExeBench & aParam)
    if (aParam.Show())
    {
       StdOut() << "NAME=" << E2Str(TyProj::TypeProj()) 
-	       << " formula(test) =" << NameEqColinearityCamPPC(TyProj::TypeProj(),cPt3di(3,1,1),false)
+	       << " formula(test) =" << NameEqColinearityCamPPC(TyProj::TypeProj(),cPt3di(3,1,1),false,true,eTypeEqCol::ePt)
 	       << "\n";
      
    // std::string NameEqProjCam(eProjPC  aType,const cPt3di & aDeg,bool WithDerive)
@@ -486,9 +693,10 @@ class cAppliGenCode : public cMMVII_Appli
        // =========== Data ========
             // Mandatory args
         std::string mDirGenCode;
-        void GenerateOneDist(const cPt3di & aDeg) ;
+        void GenerateOneDist(const cPt3di & aDeg,bool isFraserMode) ;
         template <typename tProj> void GenerateCodeProjCentralPersp();
-        template <typename tProj> void GenerateCodeCamPerpCentrale(const cPt3di &);
+        template <typename tProj> void GenerateCodeCamPerpCentrale(const cPt3di &,bool IsFraserMode,eTypeEqCol aTypeEq);
+
 
 	eProjPC  mTypeProj;
 };
@@ -548,11 +756,10 @@ template <typename tFormula,typename tCompute> void cAppliGenCode::GenCodesFormu
    cGenNameAlloc::Add(aClassName,aFileName);
 };
 
-void cAppliGenCode::GenerateOneDist(const cPt3di & aDeg) 
+void cAppliGenCode::GenerateOneDist(const cPt3di & aDeg,bool isFraserMode) 
 {
-   cMMVIIUnivDist           aDist(aDeg.x(),aDeg.y(),aDeg.z(),false);
+   cMMVIIUnivDist           aDist(aDeg.x(),aDeg.y(),aDeg.z(),false,isFraserMode);
    cEqDist<cMMVIIUnivDist>  anEqDist(aDist);  // Distorsion function 2D->2D
-   //cEqIntr<cMMVIIUnivDist>  anEqIntr(aDist);  // Projection 3D->2D
 
 
    GenCodesFormula((tREAL8*)nullptr,anEqDist,false);  //  Dist without derivative
@@ -561,7 +768,7 @@ void cAppliGenCode::GenerateOneDist(const cPt3di & aDeg)
    // GenCodesFormula((tREAL8*)nullptr,anEqIntr,true);   //  Proj with derivative
 
    // Generate the base of all functions
-   cMMVIIUnivDist           aDistBase(aDeg.x(),aDeg.y(),aDeg.z(),true);
+   cMMVIIUnivDist           aDistBase(aDeg.x(),aDeg.y(),aDeg.z(),true,isFraserMode);
    cEqDist<cMMVIIUnivDist>  anEqBase(aDistBase);
    GenCodesFormula((tREAL8*)nullptr,anEqBase,false);
 }
@@ -575,12 +782,12 @@ template <typename tProj> void cAppliGenCode::GenerateCodeProjCentralPersp()
    }
 }
 
-template <typename tProj> void cAppliGenCode::GenerateCodeCamPerpCentrale(const cPt3di & aDeg)
+template <typename tProj> void cAppliGenCode::GenerateCodeCamPerpCentrale(const cPt3di & aDeg,bool isFraserMode,eTypeEqCol aTypeEq)
 {
    for (const auto WithDer : {true,false})
    {
-       cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),false);  // Distorsion function 2D->2D
-       cEqColinearityCamPPC<cMMVIIUnivDist,tProj>  anEq(aDist);
+       cMMVIIUnivDist aDist(aDeg.x(),aDeg.y(),aDeg.z(),false,isFraserMode);  // Distorsion function 2D->2D
+       cEqColinearityCamPPC<cMMVIIUnivDist,tProj>  anEq(aDist,aTypeEq);
        GenCodesFormula((tREAL8*)nullptr,anEq,WithDer);
    }
 }
@@ -604,12 +811,28 @@ const std::vector<cPt3di>
 			   {0,0,1},  // pure linear as used in 11 Param
 			   {2,0,0},
 			   {3,0,0},
+			   {3,1,0},
 			   {3,1,1},
 			   {5,1,1},
 			   {5,1,2},
 			   {5,2,2},
 			   {7,2,5}
       };
+
+const std::vector<cPt3di>  
+      TheVectDegreeNoFraser
+      {
+			   {0,0,1},  // pure linear as used in 11 Param
+			   {3,1,1},
+			   {5,1,1},
+			   {2,0,0}
+      };
+
+const std::vector<cPt3di>
+    TheVectDegreeEquiRect
+    {
+        {0,0,0},
+    };
 
 int cAppliGenCode::Exe()
 {
@@ -621,33 +844,93 @@ int cAppliGenCode::Exe()
    cGenNameAlloc::Reset();
    mDirGenCode = TopDirMMVII() + "src/GeneratedCodes/";
 
+   // ================  CODE FOR PHOTOGRAMMETRY =====================
+
+        // ---   Colinearity for stantard camera -----------------
    for (const auto & aDeg :  TheVectDegree)
    {
-       GenerateOneDist(aDeg);
-       GenerateCodeCamPerpCentrale<cProjStenope>(aDeg);
-       /*
-       GenerateOneDist(cPt3di(0,0,0));
-       GenerateOneDist(cPt3di(3,0,0));
-       GenerateOneDist(cPt3di(0,0,1));
-       GenerateOneDist(cPt3di(3,1,1));
-       GenerateOneDist(cPt3di(2,0,0));
-       GenerateOneDist(cPt3di(5,1,1));
-       GenerateOneDist(cPt3di(5,2,2));
-       GenerateOneDist(cPt3di(7,2,5));
-       */
+       GenerateOneDist(aDeg,true);
+       GenerateCodeCamPerpCentrale<cProjStenope>(aDeg,true,eTypeEqCol::ePt);
+       GenerateCodeCamPerpCentrale<cProjStenope>(aDeg,true,eTypeEqCol::eLine);
    }
-   /*
-   GenerateCodeCamPerpCentrale<cProjStenope>(cPt3di(0,0,0));
-   GenerateCodeCamPerpCentrale<cProjStenope>(cPt3di(0,0,1));
-   GenerateCodeCamPerpCentrale<cProjStenope>(cPt3di(3,1,1));
-   GenerateCodeCamPerpCentrale<cProjStenope>(cPt3di(3,0,0));
-   GenerateCodeCamPerpCentrale<cProjStenope>(cPt3di(5,2,2));
-   */
-   GenerateCodeCamPerpCentrale<cProjFE_EquiDist>(cPt3di(3,1,1));
+        // ---   Colinearity for normalised camera (operates on bundles) -----------------
+   for (const auto WithDer : {true,false})
+   {
+       // to be removed ultimately
+       GenCodesFormula((tREAL8*)nullptr,cFormula_EqColinearityCamProj(),WithDer);
+
+       GenCodesFormula((tREAL8*)nullptr,cFormula_EqColinearityOnBundle(),WithDer);
+   }
+
+       //  ---  Here we generate the degree for SIA-cylindric systematisms -----------------
+   
+   for (const auto & aDegSIA :  TheVectDegreeNoFraser)
+   {
+       GenerateOneDist(aDegSIA,false);
+       GenerateCodeCamPerpCentrale<cProjStenope>(aDegSIA,false,eTypeEqCol::ePt);
+   }
+
+    // ---   Colinearity for equi-rect sensors (static lidar) -----------------
+   for (const auto & aDeg :  TheVectDegreeEquiRect)
+   {
+       GenerateCodeCamPerpCentrale<cProj_EquiRect>(aDeg,true,eTypeEqCol::ePt);
+   }
+
+
+   GenerateCodeCamPerpCentrale<cProjFE_EquiDist>(cPt3di(3,1,1),true,eTypeEqCol::ePt);
 
    for (const auto WithDer : {true,false})
    {
+           GenCodesFormula((tREAL8*)nullptr,cFormula_RPC_RatioPolyn(),WithDer);  
+   }
+
+
+   for (const auto WithDer : {true,false})
+   {
+       // PUSHB
+       std::vector<int>  aVDegEqCol   {0,1,2,3};
+       for (const auto & aDegree : aVDegEqCol)
+       {
+           GenCodesFormula((tREAL8*)nullptr,cEqColinSensGenPolyn2D(aDegree),WithDer);  
+           GenCodesFormula((tREAL8*)nullptr,cEqDistPolyn2D(aDegree),WithDer);  
+           // StdOut() << "FffffffFFFF " << cEqDistPolyn2D(aDegree).FormulaName() << "\n";
+       }
+   }
+
+   //=======================   Other code radiom/rigid ....
+
+   for (const auto WithDer : {true,false})
+   {
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImPonct(false),WithDer); // Lidar tri
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImCensus(false),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImCorrel(false),WithDer);
+
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImPonct(true),WithDer); // Lidar static with pose
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImCensus(true),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarImCorrel(true),WithDer);
+
+       GenCodesFormula((tREAL8*)nullptr,cEqLidarLidar(),WithDer); // lidar/lidar
+
+       GenCodesFormula((tREAL8*)nullptr,cFormulaSumSquares(8),WithDer); // example for contraint
+
        GenCodesFormula((tREAL8*)nullptr,cFormulaBlocRigid(),WithDer); // RIGIDBLOC
+       GenCodesFormula((tREAL8*)nullptr,cFormulaRattBRExist(),WithDer); // RIGIDBLOC
+       GenCodesFormula((tREAL8*)nullptr,cFormulaClino(0,3),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaVNormOrthog(),WithDer);
+
+       for (const auto aMode : {eModResBund::eAngle,eModResBund::eProduct})
+       {
+            GenCodesFormula((tREAL8*)nullptr,cFormulaBundleElem_Cam1(aMode),WithDer);
+            GenCodesFormula((tREAL8*)nullptr,cFormulaBundleElem_Cam2(aMode),WithDer);
+            GenCodesFormula((tREAL8*)nullptr,cFormulaBundleElem_Cam3(aMode),WithDer);
+       }
+       for (const auto aMode : {eModResBund::eDet12,eModResBund::eDist12,eModResBund::eAng12})
+       {
+           GenCodesFormula((tREAL8*)nullptr,cFormulaBundleElem_CamDet12(aMode),WithDer);
+       }
+
+       GenCodesFormula((tREAL8*)nullptr,cFormulaClinoBloc(),WithDer); // CLINOBLOC
+       GenCodesFormula((tREAL8*)nullptr,cFormulaClinoRot(),WithDer); // CLINOBLOC
 
        // cDist2DConservation aD2C;
        GenCodesFormula((tREAL8*)nullptr,cDist2DConservation(),WithDer);
@@ -661,7 +944,19 @@ int cAppliGenCode::Exe()
        GenCodesFormula((tREAL8*)nullptr,cDist3DParam(),WithDer);
        GenCodesFormula((tREAL8*)nullptr,cTopoSubFrame(),WithDer);
 
-       GenCodesFormula((tREAL8*)nullptr,cDeformImHomotethy()       ,WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoHz(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoZen(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoDist(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoDX(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoDY(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoDZ(),WithDer);
+       GenCodesFormula((tREAL8*)nullptr,cFormulaTopoDH(),WithDer);
+
+       for (const auto IsLinearGrad : {true,false})
+           GenCodesFormula((tREAL8*)nullptr,cDeformImHomotethy(IsLinearGrad)     ,WithDer);
+
+
+       //  ===============   CODE FOR RADIOMETRY =========================================
 
        GenCodesFormula((tREAL8*)nullptr,cRadiomVignettageLinear(5)       ,WithDer);
        std::vector<int>  aVDegSens {5};
@@ -716,6 +1011,7 @@ int cAppliGenCode::Exe()
    GenerateCodeProjCentralPersp<cProj_EquiRect>(); //  ->  asin
 
 
+
 /*
    {
    }
@@ -752,6 +1048,7 @@ int  cAppliGenCode::ExecuteBench(cParamExeBench & aParam)
 {
    BenchProjToDirBundle(aParam);
    return EXIT_SUCCESS;
+
 }
 
 tMMVII_UnikPApli Alloc_GenCode(const std::vector<std::string> &  aVArgs,const cSpecMMVII_Appli & aSpec)

@@ -29,20 +29,34 @@ enum class eTA2007
                 DirProject,    ///< Exact Dir of Proj
                 FileDirProj,   ///< File that define the  Dir Proj
                 FileImage,     ///< File containing an image
+                FileDmp,       ///< File ending by ".dmp"
                 FileCloud,     ///< File containing a cloud file (ply ?)
                 File3DRegion,  ///< File containing a 3D region
+                FileTagged,    ///< File containing a "xml"  or "json" extension
+                FileTxt,       ///< Text file, no extension specified
+                FileAny,       ///< Any file, no more specificiation can be given
+                FolderAny,     ///< Any folder, no more specificiation can be given
                 MPatFile,      ///< Major PaternIm => "" or "0" in sem for set1, "1" or other for set2
                 FFI,           ///< File Filter Interval
                 Orient,        ///< Orientation
+                OriTriplet,    ///< Relative oreintations between triplets of images
+                OriRel,        ///< Data for relative orientation pair (triplet here or in OriTriplet, to see?)
                 RadiomData,    ///< Data for Radiometry
                 RadiomModel,   ///< Model for Radiometry
                 MeshDev,       ///< Mesh Devlopment
                 Mask,          ///< Mask of image
                 MetaData,      ///< Meta data images
-                PointsMeasure, ///< Measure of point , 2D or 3D
+                ObjCoordWorld,       ///< 3D Measure/coords of ground points
+                ObjMesInstr,       ///< 2D Measure/coords of ground points
                 TieP,          ///< Tie Points
                 MulTieP,       ///< Multiple Tie Points
-                RigBlock,      ///< Rigid bloc    // RIGIDBLOC
+                InstrBlock,    ///< Block of instrument, will replace RigBlock, Clino ...
+                RigBlock,      ///< Rigid bloc    // RIGIDBLOC  => soon deprecated
+                Clino,         ///< Clinometer
+                MeasureClino,  ///< Clinometer
+                TypeInstr,     ///< Type of instrument, like cam, clino ...
+                StaticLidar,   ///< Static Lidar
+                Topo,          ///< Topo
                 SysCo,         ///< System coord
                 Input,         ///< Is this parameter used as input/read
                 Output,        ///< Is this parameter used as output/write
@@ -73,14 +87,18 @@ enum class eApF
                ImProc,     ///< Image processing
                Radiometry, ///< Radiometric modelization
                SysCo,        ///< Coordinate system
+               BlockInstr, ///< Edit, Calib, block of instrument
                Ori,        ///< Orientation
+               Clino,
                Match,      ///< Dense Matching
-               GCP,       ///< Tie-Point processing
+               GCP,        ///< Ground point processing
                TieP,       ///< Tie-Point processing
+               Lines,       ///< Lines processing
                TiePLearn,    ///< Tie-Point processing  - Learning step
                Cloud,       ///< Cloud processing
                CodedTarget,  ///< Coded target (generate, match )
-               Topo,        ///< Topometry
+               Topo,        ///< Topo survey
+               Simul,       ///< Simulation of datas
                NoGui,        ///< Will not have a GUI frontend
                Perso,      ///< Personnal
                eNbVals     ///< Tag for number of value
@@ -120,28 +138,34 @@ enum class eTAAr
 };
 
 
-
 /// Type of external format that are potentially imported/exported in MicMac
 enum class eFormatExtern
            {
               eMMV1,      ///< MicMac-V1 format, can import Orient/Calib/
               eMeshRoom,  ///< For example, not suppoted for now
-              eColMap,    ///< For example, not suppoted for now
+              eColmap,    ///< For example, not suppoted for now
               eNbVals     ///< Tag for number of value
 	   };
 /// Appli Data Type
 enum class eApDT
            {
               Ori,    ///< Orientation
+              Clino,
               PCar,   ///< Tie Points
               TieP,   ///< Tie Points
-              GCP,   ///< Tie Points
+              BlockInstr,   ///< Tie Points
+              ObjMesInstr,  ///< Ground Points image coords
+              ObjCoordWorld,  ///< Ground Points ground coords
+              Lines,   ///< Tie Points
               Image,   ///< Image
               Orient,   ///< Orientations files
               SysCo,   ///< Coordinate system
               Radiom,   ///< Orientations files
-              Ply,    ///< Ply file
-              None,     ///< Nothing 
+              Ply,           ///< Ply file
+              MMVIICloud,    ///< MMVII-dmp internal format
+              StaticScan,    ///< Static scan internal format
+              Topo,    ///< Topo files
+              None,     ///< Nothing
               ToDef,     ///< still unclassed
               Console,  ///< Console , (i.e printed message have values)
               Xml,      ///< Xml-files
@@ -167,6 +191,16 @@ enum class eLevelCheck
               NoCheck,
               Warning,
               Error
+           };
+
+/// Possible behaviour when two datas exist
+enum class eModeFusionData
+           {
+              eMerge,     // (try to) merge
+              eOverWrite, // over write new data
+              eDoNothing, // do nothing, maintain old data
+              eError,     // refuse existing
+              eNbVals     // required for automatized serialization
            };
 
 /// Type of set creation
@@ -202,6 +236,7 @@ enum class eTyUEr
               eCreateDir,
               eRemoveFile,
               eEmptyPattern,
+              eBadPattern,
               eBadXmlTopTag,
               eParseBadClose,
               eJSonBadPunct,
@@ -231,7 +266,11 @@ enum class eTyUEr
               eNoAperture,
               eNoFocale,
               eNoFocaleEqui35,
+              eNoNumberPixel,
               eNoCameraName,
+              eMultipleTargetInOneImage,
+              eSysCo,
+              eConstraintsError,
               eUnClassedError,
               eNbVals
            };
@@ -251,8 +290,27 @@ enum class eTyUnitAngle
               eUA_radian,
               eUA_degree,
               eUA_gon,
+              eUA_DMgon,
               eNbVals
 	   };
+
+
+enum class eTyClino
+           {
+              ePendulum,
+              eSpring,
+              eNbVals    ///< Tag for number of value
+           };
+
+enum class eTyInstr
+           {
+              eCamera,
+              eClino,
+              eGNSS,
+              eIMU,
+              eTarget,
+              eNbVals    ///< Tag for number of value
+           };
 
 enum class eTyNums
            {
@@ -373,7 +431,8 @@ enum class eModeSSR
       eSSR_LsqDense,        ///< Least square, normal equation, with dense implementation
       eSSR_LsqNormSparse,   ///< Least square, normal equation, with sparse implementation
       eSSR_LsqSparseGC,     ///< Least square, NO normal equation (Conjugate Gradient) , with sparse implementation
-      eSSR_L1Barrodale      ///< L1 minimization using Barrodale-Method
+      eSSR_L1Barrodale,     ///< L1 minimization using Barrodale-Method
+      eNbVals
 };
 
 
@@ -385,6 +444,16 @@ enum class eModePaddingEpip
    eMPE_PxPos,  // Padding force positive paralax
    eMPE_PxNeg,  // Padding force negative paralax
    eMPE_SzEq,  //  Centerd padding, size equal
+   eNbVals
+};
+
+/** Mode  for image matching criteria */
+
+enum class eImatchCrit
+{
+   eDifRad,    // Difference of radiom
+   eCensus,  // Census coefficient
+   eCorrel,  // Correlation
    eNbVals
 };
 
@@ -499,6 +568,23 @@ enum class eDCTFilters
    eNbVals
 };
 
+enum class eTypeSensor
+{
+      eCenP,   // Central Perpsective
+      eRPC,    // Rational  Polynomial Coeff
+      eNbVals
+};
+
+enum class eFormatSensor
+{
+      eMMVII_CenP,   // Central Perpsective in MMVII Format
+      eDimap_RPC,   // Rational  Polynomial Coeff in DIMAP Format
+      eNbVals
+};
+
+
+
+
 enum class eProjPC
 {
      eStenope,
@@ -510,12 +596,46 @@ enum class eProjPC
      eNbVals
 };
 
-enum class eSysCoGeo
+enum class eSysCo
 {
-     eLambert93,
+     eProj,
+     eLEuc,
      eRTL,
      eGeoC,
+     eLocalSys,
      eNbVals
+};
+
+// topo observation sets types
+enum class eTopoObsSetType
+{
+    eSimple,
+    eStation,
+    //eDistParam,
+    eNbVals        ///< Tag for number of value
+};
+
+// topo observations types
+enum class eTopoObsType
+{
+        eDist,
+        eHz,
+        eZen,
+        eDX,
+        eDY,
+        eDZ,
+        eDH,
+        eNbVals        ///< Tag for number of value
+};
+
+// cTopoObsSetStation orientation freedom status
+enum class eTopoStOriStat
+{
+        eTopoStOriContinue, ///< special case,  used only on obs reading: same as previous ori constraint, just a marker to split stations
+        eTopoStOriFixed,    ///< no rotation
+        eTopoStOriVert,     ///< z rotation
+        eTopoStOriBasc,     ///< 3d rotation
+        eNbVals             ///< Tag for number of value
 };
 
 
@@ -527,25 +647,52 @@ enum class eTyCodeTarget
     eCERN,          ///<  central circle, coding invariant (AICON, METASHAPE ...)
     eNbVals
 };
+bool IsCircularTarge(eTyCodeTarget);
 
 enum class eMTDIm
            {
-              eFocalmm,
-              eAperture,
-              eModelCam,
-              eAdditionalName,
+              eFocalmm,   //< if we fix the focal in mm
+              eFocalPix,  //< if we fix directly the focal in pixel
+              ePPPix,     //< if we fix firectly the principal point in pixel
+              eAperture,  //< aperture, used for radiometric model
+              eModelCam,  //< model of camera like "Nikon D600"
+              eNbPixel,      //< put  in MTD for case where no image &&  camera data base cannot be used (downscale ?)
+              eAdditionalName,  //< addition to separate camera != but with same model & focal
               eNbVals
            };
 
+/// Mode of residual of bundle (in Elem Bundle)
+enum class eModResBund
+{
+        eAngle,
+        eProduct,
+        eDist12,
+        eAng12,
+        eDet12,   // Case where
+        eLinDet12,   // Case where
+        eNbVals
+};
+bool ModResBund_IsMode12(eModResBund);
+bool ModResBund_IsModeGen(eModResBund);
+
+const std::string & E2Str(const eModeFusionData &);
+const std::string & E2Str(const eTyClino &);
+const std::string & E2Str(const eTyInstr &);
+
+const std::string & E2Str(const eFormatSensor &);
+const std::string & E2Str(const eTypeSensor &);
 
 const std::string & E2Str(const eTyUnitAngle &);
 const std::string & E2Str(const eMTDIm &);
 const std::string & E2Str(const eFormatExtern &);
 const std::string & E2Str(const eTypeSerial &);
 const std::string & E2Str(const eTAAr &);
-const std::string & E2Str(const eProjPC &);         
-const std::string & E2Str(const eSysCoGeo &);         
-const std::string & E2Str(const eDCTFilters &);         
+const std::string & E2Str(const eProjPC &);
+const std::string & E2Str(const eSysCo &);
+const std::string & E2Str(const eTopoObsSetType &);
+const std::string & E2Str(const eTopoObsType &);
+const std::string & E2Str(const eTopoStOriStat &);
+const std::string & E2Str(const eDCTFilters &);
 const std::string & E2Str(const eTyCodeTarget &);         
 const std::string & E2Str(const eTySC &);         
 const std::string & E2Str(const eOpAff &);         
@@ -560,11 +707,16 @@ const std::string & E2Str(const eModeEpipMatch &);
 const std::string & E2Str(const eModeTestPropCov &);         
 const std::string & E2Str(const eModePaddingEpip &);         
 const std::string & E2Str(const eModeCaracMatch &);         
+const std::string & E2Str(const eModeSSR &);
+const std::string & E2Str(const eModResBund &);
+
 
 template <class Type> Type  Str2E(const std::string &,bool WithDef=false); 
 template <class Type> std::string   StrAllVall();
 /// return a vector with list all label corresponding to aPat
 template <class Type> std::vector<Type> SubOfPat(const std::string & aPat,bool AcceptEmpty=false);
+/// return all values
+template <class Type> std::vector<Type> AllEnumValues();
 /// logically ~ SubOfPat, but returned as a vec of bool, indexable by (int)Label for direct access
 template <class Type> std::vector<bool> VBoolOfPat(const std::string & aPat,bool AcceptEmpty=false);
 
@@ -580,6 +732,34 @@ Serial/uti_e2string.cpp: ..::tMapE2Str cE2Str<eModeEpipMatch>::mE2S
 Serial/uti_e2string.cpp:TPL_ENUM_2_STRING
 =>  for creating the 2 dictionnaries enum <=> strings
 */
+
+// class used to make more explicit names of boolean parameters => To Replace by enum later which will be
+// safer (would detect swap) , but require more re-engenerin
+
+class DelAuto
+{
+   public :
+      static constexpr bool Yes = true;
+      static constexpr bool No  = false;
+};
+class SVP
+{
+   public :
+      static constexpr bool Yes = true;
+      static constexpr bool No  = false;
+};
+class eAllowEmpty
+{
+   public :
+      static constexpr bool Yes = true;
+      static constexpr bool No  = false;
+};
+class IO
+{
+   public :
+      static constexpr bool In = true;
+      static constexpr bool Out  = false;
+};
 
 
 };

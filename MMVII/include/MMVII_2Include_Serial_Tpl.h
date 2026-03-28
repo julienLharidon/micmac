@@ -42,7 +42,9 @@ template <class Type> void EnumAddData(const cAuxAr2007 & anAux,Type & anEnum,co
    if (anAux.Tagged())
    {
        // modif MPD , if input enum is not init
-       std::string aName = anAux.Input() ? std::string("") :E2Str(anEnum);
+       std::string aName =   (anAux.Ar().IsSpecif())  ?
+	                       ("enum_"+ cStrIO<Type>::msNameType)                   :  // Not sure what to put in case of specification file
+	                       (anAux.Input() ? std::string("") :E2Str(anEnum) ) ;
        AddData(cAuxAr2007(aTag,anAux),aName);
        if (anAux.Input())
           anEnum = Str2E<Type>(aName);
@@ -68,14 +70,14 @@ template <class Type> void EnumAddData(const cAuxAr2007 & anAux,Type & anEnum,co
 
 template <class Type> void AddOptData(const cAuxAr2007 & anAux,const std::string & aTag0,std::optional<Type> & aL)
 {
-    // put the tag as <Opt::Tag0>,
+    // put the tag as <__Opt__Tag0>,
     //  Not mandatory, but optionality being an important feature I thought usefull to see it in XML file
     //  put it
     std::string aTagOpt;
     const std::string * anAdrTag = & aTag0;
     if (anAux.Tagged())
     {
-        aTagOpt = "Opt:" + aTag0;
+        aTagOpt = "__Opt__" + aTag0;
         anAdrTag = & aTagOpt;
     }
 
@@ -111,7 +113,10 @@ template <class Type> void AddOptData(const cAuxAr2007 & anAux,const std::string
        AddData(anAux,aNb);  
        anAux.Ar().Separator();
        if (aNb)
+       {
           AddData(anAux,*aL);
+          anAux.Ar().Separator();
+       }
     }
 }
 
@@ -149,6 +154,46 @@ template <class Type> void OnePtrAddData(const cAuxAr2007 & anAux,Type * & aL)
      AddData(anAux,*aL);
 }
 
+// general AddData where a default value is given if value not found at reading
+template <class Type> void AddData(const cAuxAr2007 & anAux,const std::string & aTag0,Type & aL, const Type & aDefValIfAbsentAtRead)
+{
+    const std::string * anAdrTag = & aTag0;
+
+   // In input mode, we must decide if the value is present
+    if (anAux.Input())
+    {
+        // The archive knows if the object is present
+        if (anAux.NbNextOptionnal(*anAdrTag))
+        {
+           // If yes read it and initialize optional value
+           Type  aV;
+           AddData(cAuxAr2007(*anAdrTag,anAux),aV);
+           aL = aV;
+        }
+        else
+           aL = aDefValIfAbsentAtRead;
+        return;
+    }
+
+    // Now in writing mode
+    int aNb = 1; // value always present for output
+    // Tagged format (xml) is a special case
+    if (anAux.Tagged())
+    {
+       // always write value in writing mode
+       AddData(cAuxAr2007(*anAdrTag,anAux),aL);
+    }
+    else
+    {
+        // Indicate that the value is present and put it
+        AddData(anAux,aNb);
+        anAux.Ar().Separator();
+        AddData(anAux,aL);
+        anAux.Ar().Separator();
+    }
+}
+
+
 // need general inteface for things like std::vector<Type *>
 template <class Type> void AddData(const cAuxAr2007 & anAux,Type * & aL)
 {
@@ -172,6 +217,7 @@ extern void AddDataSizeCont(int & aNb,const cAuxAr2007 & anAux);
 extern const std::string  StrElCont;
 extern const std::string  StrElMap;
 
+// template <class TypeCont> void RawVector_AddData(const cAuxAr2007 & anAux,TypeCont & aL);
 
 template <class TypeCont> void StdContAddData(const cAuxAr2007 & anAux,TypeCont & aL)
 {
@@ -190,21 +236,63 @@ template <class TypeCont> void StdContAddData(const cAuxAr2007 & anAux,TypeCont 
        aL = TypeCont(aNb);
     }
     // now read the elements
+    int aKEl=0;
     for (auto & el : aL)
     {    
          AddData(cAuxAr2007(StrElCont,anAux,eTAAr::eElemCont),el);
+         anAux.Ar().AddComment("Kth="+ToStr(aKEl++));
     }
 }
 
+template <class TypeCont> void RawVector_AddData(const cAuxAr2007 & anAux,TypeCont & aV)
+{
+   // if xml, json, ...  no requirement to optimize, prefer readiibility
+   if (! anAux.Ar().Binary())
+   {
+       StdContAddData(anAux,aV); 
+       return;
+   }
+   // read-write the size
+   size_t aSz = aV.size();
+   AddData(anAux,aSz);
+   // in input mode adapt size of vector
+   if (anAux.Ar().Input())
+      aV.resize(aSz);
+
+   TplAddRawData(anAux,aV.data(),aSz);
+
+   // StdOut() << "RawVector_AddDataxxx " << aV << "\n";
+   // StdContAddData(anAux,aV); 
+   // template <class Type> void TplAddRawData(const cAuxAr2007 & anAux,Type * anAdr,int aNbElem,const std::string & aTag="RawData")
+}
+inline void AddData(const cAuxAr2007 & anAux,std::vector<cPt3dr> &  aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<cPt3df> &  aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<tREAL4> &  aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<tREAL8> &  aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<int> &     aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<tU_INT1> & aV) { RawVector_AddData(anAux,aV); }
+inline void AddData(const cAuxAr2007 & anAux,std::vector<tU_INT2> & aV) { RawVector_AddData(anAux,aV); }
+
+
+
+
 /// std::list interface  AddData -> StdContAddData
-template <class Type> void AddData(const cAuxAr2007 & anAux,std::list<Type>   & aL) { StdContAddData(anAux,aL); }
+template <class Type> void AddData(const cAuxAr2007 & anAux,std::list<Type>   & aL) 
+{ 
+    StdContAddData(anAux,aL); 
+}
 /// std::vector interface  AddData -> StdContAddData
-template <class Type> void AddData(const cAuxAr2007 & anAux,std::vector<Type> & aL) { StdContAddData(anAux,aL); }
+template <class Type> void AddData(const cAuxAr2007 & anAux,std::vector<Type> & aV) 
+{ 
+    StdContAddData(anAux,aV); 
+}
+/// cArray interface  AddData -> StdContAddData
+template <class Type,size_t aSz> void AddData(const cAuxAr2007 & anAux,  cArray<Type,aSz> & aL) { AddTabData(anAux, aL.data(), aSz); }
 
 
 /** Serialization for map (will be) used for cSetMultipleTiePoints, and more ? */
 
-template <class TypeKey,class TypeVal> void AddData(const cAuxAr2007 & anAux,std::map<TypeKey,TypeVal> & aMap)
+template <class TypeKey,class TypeVal> void StdMapAddData(const cAuxAr2007 & anAux,std::map<TypeKey,TypeVal> & aMap)
 {
     anAux.SetType(eTAAr::eMap);
     int aNb=aMap.size();
@@ -231,7 +319,8 @@ template <class TypeKey,class TypeVal> void AddData(const cAuxAr2007 & anAux,std
         if (anAux.Ar().IsSpecif())
         {
             aMap.clear();
-            aMap[TypeKey{}] = TypeVal{};
+            // aMap[TypeKey{}] = TypeVal{};
+            aMap.try_emplace(TypeKey{}); // TypeVal{};
         }
        // when write parse the map,
         for (auto & aPair : aMap)
@@ -244,6 +333,14 @@ template <class TypeKey,class TypeVal> void AddData(const cAuxAr2007 & anAux,std
     }
 }
 
+template <class TypeKey,class TypeVal> void AddData(const cAuxAr2007 & anAux,std::map<TypeKey,TypeVal> & aMap)
+{
+    StdMapAddData(anAux,aMap);
+}
+
+
+template <class Type,const int Dim>  void  AddData(const  cAuxAr2007 & anAux,cTplBox<Type,Dim> & aBox) { aBox.AddData(anAux); }
+template <class Type,const int Dim>  void  AddData(const  cAuxAr2007 & anAux,cTplBoxOfPts<Type,Dim> & aBox) { aBox.AddData(anAux); }
 
 
 template <class Type,const int Dim> void AddData(const cAuxAr2007 & anAux,cDataTypedIm<Type,Dim> & aIm)
@@ -266,6 +363,24 @@ template <class Type> void AddData(const cAuxAr2007 & anAux, cDenseVect<Type>& a
 {
     AddData(anAux,aVect.DIm());
 }
+
+/// if we want a human readable vector for small vect ..
+template <class Type> void AddDataAsStdVect(const cAuxAr2007 & anAux0,cDenseVect<Type>& aDenseV)
+{
+     cAuxAr2007 anAuxVect("StdVect",anAux0);
+     std::vector<Type> aStdV;
+     if (anAux0.Input())
+     {
+        MMVII::AddData(anAuxVect,aStdV);
+        aDenseV = cDenseVect<Type>(aStdV);
+     }
+     else
+     {
+        aStdV = aDenseV.ToStdVect();
+        MMVII::AddData(anAuxVect,aStdV);
+     }
+}
+
 
 // template <class Type,const int Dim> void AddData(const cAuxAr2007 & anAux,cDataTypedIm<Type,Dim> & aIm)
 
@@ -402,6 +517,14 @@ template<class Type> size_t  HashValue(const Type & aVal,bool ordered)
     return HashValue(anAr.get(),aVal,ordered);
 }
 
+// From boost:: ...
+template <class T>
+static inline void hash_combine(std::size_t& seed, T const& v)
+{
+   std::hash<T> hasher;
+   seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+
 
 
 
@@ -414,6 +537,7 @@ template<class Type> void  ReadFromFile_Std(Type & aVal,const std::string & aNam
 
 template<class Type> void  ReadFromFile(std::vector<Type> & aVec,const std::string & aName)
 {
+
     if (LastPostfix(aName) == E2Str(eTypeSerial::ecsv))
     {
         FromCSV(aVec,aName,true);
@@ -441,17 +565,38 @@ template<class Type> void  ReadFromFileWithDef(Type & aVal,const std::string & a
 }
 
 ///  Save in file if it's the first times it occurs inside the process
-template<class Type> void  ToFileIfFirstime(const Type & anObj,const std::string & aNameFile)
+template<class Type> void  ToFileIfFirstime(const Type * anObj,const std::string & aNameFile,bool ForReset=false)
 {
+   ASSERT_NO_MUTI_THREAD();
+
    static std::set<std::string> aSetFilesAlreadySaved;
+   if (ForReset)
+   {
+       aSetFilesAlreadySaved.clear();
+       return;
+   }
+
    if (!BoolFind(aSetFilesAlreadySaved,aNameFile))
    {
         aSetFilesAlreadySaved.insert(aNameFile);
-        anObj.ToFile(aNameFile);
+        anObj->ToFile(aNameFile);
    }
 }
+template<class Type> void  ResetToFileIfFirstime()
+{
+    ToFileIfFirstime((Type*)nullptr,"",true);
+}
 
-template<class Type,class TypeTmp> Type * ObjectFromFile(const std::string & aName)
+///  Most basic creation, create an object from file, object must be copiable and has default constructor
+template<class Type> Type  SimpleCopyObjectFromFile(const std::string & aName)
+{
+    Type aRes;
+    ReadFromFile(aRes,aName);
+    return aRes;
+}
+
+
+template<class Type,class TypeTmp> Type * NewObjectFromFile(const std::string & aName)
 {
     TypeTmp aDataCreate;
     ReadFromFile(aDataCreate,aName);
@@ -461,21 +606,50 @@ template<class Type,class TypeTmp> Type * ObjectFromFile(const std::string & aNa
 /**  Read in the file if first time and memorize, other times return the same object ,
  *   at end, destruction will be handled using "AddObj2DelAtEnd"  (which is required for memory checking)
  */
-template<class Type,class TypeTmp> Type * RemanentObjectFromFile(const std::string & aName)
+template<class Type,class TypeTmp> Type * RemanentNewObjectFromFile(const std::string & aName,bool * AlreadyExist=nullptr)
 {
+     ASSERT_NO_MUTI_THREAD();
+
      static std::map<std::string,Type *> TheMap;
      Type * & anExistingRes = TheMap[aName];
 
+     if (AlreadyExist)
+        *AlreadyExist= true;
      if (anExistingRes == 0)
      {
         // TypeTmp aDataCreate;
         // ReadFromFile(aDataCreate,aName);
         // anExistingRes = new Type(aDataCreate);
-        anExistingRes = ObjectFromFile<Type,TypeTmp>(aName);
+        anExistingRes = NewObjectFromFile<Type,TypeTmp>(aName);
         cMMVII_Appli::AddObj2DelAtEnd(anExistingRes);
+        if (AlreadyExist)
+           *AlreadyExist= false;
      }
      return anExistingRes;
 }
+
+/** Same than RemanentObjectFromFile, but note use the 2 time initialisation, require a default constructor */
+
+template<class Type> Type * SimpleRemanentNewObjectFromFile(const std::string & aName,bool * AlreadyExist=nullptr)
+{
+     ASSERT_NO_MUTI_THREAD();
+
+     static std::map<std::string,Type *> TheMap;
+     Type * & anExistingRes = TheMap[aName];
+
+     if (AlreadyExist)
+        *AlreadyExist= true;
+     if (anExistingRes == 0)
+     {
+        anExistingRes = new Type;
+        ReadFromFile(*anExistingRes,aName);
+        cMMVII_Appli::AddObj2DelAtEnd(anExistingRes);
+        if (AlreadyExist)
+           *AlreadyExist= false;
+     }
+     return anExistingRes;
+}
+
 
 };
 

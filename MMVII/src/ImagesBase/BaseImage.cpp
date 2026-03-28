@@ -1,5 +1,6 @@
-
 #include "MMVII_Images.h"
+#include "MMVII_Image2D.h"
+#include <algorithm>
 // #include <Eigen/Dense>
 
 namespace MMVII
@@ -12,15 +13,73 @@ namespace MMVII
 
 template <const int Dim> cDataGenUnTypedIm<Dim>::cDataGenUnTypedIm
                          (
-                             const cPtxd<int,Dim> & aP0,
-                             const cPtxd<int,Dim> & aP1
+                             const tPixI & aP0,
+                             const tPixI & aP1
                          )  :
                             cPixBox<Dim>(aP0,aP1)
 {
 }
 
+template <const int Dim> cDataGenUnTypedIm<Dim>::~cDataGenUnTypedIm()
+{
+
+}
+
+template <const int Dim> void cDataGenUnTypedIm<Dim>::VI_VPtsSetV(const  std::vector<tPixI> & aVPt, int  aV)
+{
+   for (const auto & aPix : aVPt)
+       VI_SetV(aPix,aV);
+}
+
+template <const int Dim> void cDataGenUnTypedIm<Dim>::VD_VPtsSetV(const  std::vector<tPixI> & aVPt,tREAL8  aV)
+{
+   for (const auto & aPix : aVPt)
+       VI_SetV(aPix,aV);
+}
 
 
+
+template <class Type> cDataGenUnTypedIm<2> * Tpl_ReadIm2DGen(const cDataFileIm2D &aDFI,const cBox2di & aBox)
+{
+   cDataIm2D<Type> * aDIm  = new  cDataIm2D<Type>(cPt2di(0,0),aBox.Sz());
+   aDIm->Read(aDFI,aBox.P0());
+   return aDIm;
+}
+
+cDataGenUnTypedIm<2> * ReadIm2DGen(const std::string &aName,cBox2di  aBox)
+{
+    cDataFileIm2D  aDFI = cDataFileIm2D::Create(aName,eForceGray::Yes);
+
+    if (aBox.IsEmpty())
+        aBox = cBox2di(cPt2di(0,0),aDFI.Sz());
+
+    switch (aDFI.Type()) {
+        case eTyNums::eTN_U_INT1 :   return Tpl_ReadIm2DGen<tU_INT1>(aDFI,aBox);
+        case eTyNums::eTN_U_INT2 :   return Tpl_ReadIm2DGen<tU_INT2>(aDFI,aBox);
+        case eTyNums::eTN_INT1 :     return Tpl_ReadIm2DGen<tINT1>(aDFI,aBox);
+        case eTyNums::eTN_INT2 :     return Tpl_ReadIm2DGen<tINT2>(aDFI,aBox);
+        case eTyNums::eTN_INT4 :     return Tpl_ReadIm2DGen<tINT4>(aDFI,aBox);
+        case eTyNums::eTN_REAL4 :    return Tpl_ReadIm2DGen<tREAL4>(aDFI,aBox);
+        default :
+            MMVII_INTERNAL_ERROR("Unhandled type in ReadIm2DGen");
+            return nullptr;
+    }
+
+    MMVII_INTERNAL_ERROR("Unhandled type in ReadIm2DGen");
+    return nullptr;
+}
+
+cDataGenUnTypedIm<2> * ReadIm2DGen(const std::string &aName)
+{
+    return ReadIm2DGen(aName,cBox2di::Empty());
+}
+
+template <const int Dim>
+std::pair<tREAL8,cPt2dr> cDataGenUnTypedIm<Dim>::GetValueAndGradInterpol(const cDiffInterpolator1D &,const cPt2dr & aP) const
+{
+    MMVII_INTERNAL_ERROR("Unhandled type in cDataGenUnTypedIm::GetValueAndGradInterpol");
+    return {0.,{0.,0.}};
+}
 
 
 /* ========================== */
@@ -51,6 +110,21 @@ template <class Type,const int Dim>
 {
    Init(aModeInit);
 }
+
+template <>   cDataTypedIm<tREAL8,1> * cDataTypedIm<tREAL8,1>::AllocIm(const tPix& aPix)
+{
+   return new cDataIm1D<tREAL8>(cPt1di(0),aPix);
+}
+template <>   cDataTypedIm<tREAL8,2> * cDataTypedIm<tREAL8,2>::AllocIm(const tPix& aPix)
+{
+   return new cDataIm2D<tREAL8>(cPt2di(0,0),aPix);
+}
+template <>   cDataTypedIm<tREAL8,3> * cDataTypedIm<tREAL8,3>::AllocIm(const tPix& aPix)
+{
+   return new cDataIm3D<tREAL8>(aPix);
+}
+
+
 
 template <class Type,const int Dim>
     void cDataTypedIm<Type,Dim>::Resize(const cPtxd<int,Dim> & aP0,const cPtxd<int,Dim> & aP1,eModeInitImage aModeInit) 
@@ -83,34 +157,48 @@ template <class Type,const int Dim>
 
 
 template <class Type,const int Dim>  
-        double cDataTypedIm<Type,Dim>::L1Dist(const cDataTypedIm<Type,Dim> & aI2) const
+        double cDataTypedIm<Type,Dim>::L1Dist(const cDataTypedIm<Type,Dim> & aI2,bool isAvg) const
 {
     tPB::AssertSameArea(aI2);
     double aRes = 0.0;
     for (int aK=0 ; aK<NbElem() ; aK++)
        aRes += std::fabs(mRawDataLin[aK]-aI2.mRawDataLin[aK]);
 
-   return aRes/NbElem();
+   return isAvg ? aRes/NbElem() : aRes;
 }
 
 template <class Type,const int Dim>  
-        double cDataTypedIm<Type,Dim>::SqL2Dist(const cDataTypedIm<Type,Dim> & aI2) const
+        double cDataTypedIm<Type,Dim>::SqL2Dist(const cDataTypedIm<Type,Dim> & aI2,bool isAvg) const
 {
     tPB::AssertSameArea(aI2);
     double aRes = 0.0;
     for (int aK=0 ; aK<NbElem() ; aK++)
        aRes += R8Square(mRawDataLin[aK]-aI2.mRawDataLin[aK]);
 
-   return aRes/NbElem();
+   return isAvg ? aRes/NbElem() : aRes;
 }
 
 template <class Type,const int Dim>  
-        double cDataTypedIm<Type,Dim>::L2Dist(const cDataTypedIm<Type,Dim> & aI2) const
+        double cDataTypedIm<Type,Dim>::L2Dist(const cDataTypedIm<Type,Dim> & aI2,bool isAvg) const
 {
-   return sqrt(SqL2Dist(aI2));
+   return sqrt(SqL2Dist(aI2,isAvg));
 }
 
 
+template <class Type,const int Dim>  
+        double cDataTypedIm<Type,Dim>::SafeMaxRelDif(const cDataTypedIm<Type,Dim> & aI2,tREAL8 aEps) const
+{
+    tPB::AssertSameArea(aI2);
+    double aRes = 0;
+    for (int aK=0 ; aK<NbElem() ; aK++)
+    {
+       tREAL8 aV1 = mRawDataLin[aK];
+       tREAL8 aV2 = aI2.mRawDataLin[aK];
+       UpdateMax(aRes,fabs(aV1-aV2)/std::max(aEps,std::max(std::fabs(aV1),std::fabs(aV2))));
+    }
+
+   return aRes;
+}
 
 template <class Type,const int Dim>  
         double cDataTypedIm<Type,Dim>::LInfDist(const cDataTypedIm<Type,Dim> & aI2) const
@@ -126,23 +214,30 @@ template <class Type,const int Dim>
 
 
 template <class Type,const int Dim>  
-        double cDataTypedIm<Type,Dim>::L1Norm() const
+        double cDataTypedIm<Type,Dim>::L1Norm(bool isAvg) const
 {
     double aRes = 0.0;
     for (int aK=0 ; aK<NbElem() ; aK++)
        aRes += std::fabs(mRawDataLin[aK]);
 
-   return aRes/NbElem();
+   return isAvg ? aRes/NbElem() : aRes;
 }
 template <class Type,const int Dim>  
-        double cDataTypedIm<Type,Dim>::L2Norm() const
+        double cDataTypedIm<Type,Dim>::SqL2Norm(bool isAvg) const
 {
     double aRes = 0.0;
     for (int aK=0 ; aK<NbElem() ; aK++)
        aRes += R8Square(mRawDataLin[aK]);
 
-   return sqrt(aRes/NbElem());
+   return isAvg ? aRes/NbElem() : aRes;
 }
+
+template <class Type,const int Dim>  
+        double cDataTypedIm<Type,Dim>::L2Norm(bool isAvg) const
+{
+   return sqrt(SqL2Norm(isAvg));
+}
+
 template <class Type,const int Dim>  
         double cDataTypedIm<Type,Dim>::LInfNorm() const
 {
@@ -204,6 +299,7 @@ template <class Type,const int Dim> void  cDataTypedIm<Type,Dim>::InitCste(const
    }
    else
    {
+      // StdOut() << "xxInitCsteInitCste " << NbElem() << " " << mRawDataLin << "\n";
       for (tINT8 aK=0 ; aK< NbElem() ; aK++)
            mRawDataLin[aK] = aVal;
    }
@@ -331,16 +427,50 @@ template <class Type,const int Dim> void  cDataTypedIm<Type,Dim>::VD_SetV(const 
     mRawDataLin[tPB::IndexeLinear(aP)] = tNumTrait<Type>::RoundNearestToType(aV);
 }
 
+template<class Type,const int Dim> void  cDataTypedIm<Type,Dim>::ChSignIn(cDataTypedIm<Type,Dim> & aRes) const
+{
+   this->AssertSameArea(aRes);
+   auto  aOut =  aRes.mRawDataLin;
+   auto  aIn =   mRawDataLin;
+   auto aNbElem = NbElem();
+
+// msvc++ :  disable: warning C4146: unary minus operator applied to unsigned type, result still unsigned
+#ifdef _WIN32
+# pragma warning( push )
+# pragma warning( disable : 4146 )
+#endif
+
+   for (int aX=0 ; aX<aNbElem ; aX++)
+       aOut[aX] = -aIn[aX];
+
+#ifdef _WIN32
+# pragma warning( pop )
+#endif
+}
+
+
 /*
 template class cDataTypedIm<tREAL4,1>;
 template class cDataTypedIm<tREAL4,2>;
 template class cDataTypedIm<tREAL4,3>;
 */
 
+template class cDataGenUnTypedIm<1>;
+template class cDataGenUnTypedIm<2>;
+template class cDataGenUnTypedIm<3>;
+template class cDataGenUnTypedIm<4>;
+template class cDataGenUnTypedIm<5>;
+
+
+
+
+
 #define MACRO_INSTANTIATE_cDataTypedIm(aType)\
 template class cDataTypedIm<aType,1>;\
 template class cDataTypedIm<aType,2>;\
-template class cDataTypedIm<aType,3>;
+template class cDataTypedIm<aType,3>;\
+template class cDataTypedIm<aType,4>;\
+template class cDataTypedIm<aType,5>;
 
 
 MACRO_INSTANTIATE_cDataTypedIm(tINT1)

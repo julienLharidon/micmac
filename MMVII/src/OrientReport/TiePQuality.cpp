@@ -76,7 +76,7 @@ cPt2dr  KthPt(const tPairTiePMult & aPair, int aKIm,int aKPt)
 
 void cAppli_TiePReport::MakeStatByImage()
 {
-   InitReport(mPrefixCSVIma,"csv",false);
+   InitReportCSV(mPrefixCSVIma,"csv",false);
    AddStdHeaderStatCSV(mPrefixCSVIma,"Image",mPropStat,{"AvgX","AvgY"});
 
    const auto & aVII  = mCMTP->IndexeOfImages();
@@ -93,7 +93,8 @@ void cAppli_TiePReport::MakeStatByImage()
        for (const auto& aPairKC : aLInd)
        {
            size_t aKImLoc =  aPairKC.first;
-           const auto & aConfig = aPairKC.second->first;
+           // Unused in mode release
+           [[maybe_unused]] const auto & aConfig = aPairKC.second->first;
 	   // a litle check on indexe for these complexe structures
            MMVII_INTERNAL_ASSERT_tiny(aKImGlob==(size_t)aConfig.at(aKImLoc),"Check nums in cAppli_TiePReport::MakeStatByImage");
 

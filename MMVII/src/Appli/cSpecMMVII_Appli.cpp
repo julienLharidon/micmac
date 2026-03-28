@@ -36,6 +36,7 @@ cSpecMMVII_Appli::cSpecMMVII_Appli
 
 int cSpecMMVII_Appli::AllocExecuteDestruct(const std::vector<std::string> & aVArgs) const
 {
+
    // A conserver, on le mettra dans les sauvegarde
 #if 0
    {
@@ -84,14 +85,15 @@ int cSpecMMVII_Appli::AllocExecuteDestruct(const std::vector<std::string> & aVAr
         {
             CloseRandom();
         }
+	anAppli->ToDoBeforeDestruction();
     }
     cMemManager::CheckRestoration(aMemoState);
-    MMVII_INTERNAL_ASSERT_always(cMemCheck::NbObjLive()==aNbObjLive,"Mem check obj not killed");
+    MMVII_INTERNAL_ASSERT_always(cMemCountable::NbObjLive()==aNbObjLive,"Mem check obj not killed");
     aCptCallIntern--;
     // This was the initial test, stricter, maintain it when call by main
     if (aCptCallIntern==0)
     {
-         MMVII_INTERNAL_ASSERT_always(cMemCheck::NbObjLive()==0,"Mem check obj not killed");
+         MMVII_INTERNAL_ASSERT_always(cMemCountable::NbObjLive()==0,"Mem check obj not killed");
     }
     return aRes;
 }
@@ -160,6 +162,10 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
         TheVecAll.push_back(&TheSpecEditSet);
         TheVecAll.push_back(&TheSpecEditRel);
         TheVecAll.push_back(&TheSpec_EditCalcMetaDataImage);
+        TheVecAll.push_back(&TheSpec_EditBlockInstr);
+        TheVecAll.push_back(&TheSpec_BlockInstrReport);
+        TheVecAll.push_back(&TheSpec_BlockInstrInitCam);
+        TheVecAll.push_back(&TheSpec_BlockInstrInitClino);
         TheVecAll.push_back(&TheSpecWalkman);
         TheVecAll.push_back(&TheSpecDaisy);
         TheVecAll.push_back(&TheSpecCatVideo);
@@ -168,17 +174,19 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
         TheVecAll.push_back(&TheSpec_TestEigen);
         TheVecAll.push_back(&TheSpec_ComputeParamIndexBinaire);
         TheVecAll.push_back(&TheSpecTestRecall);
-        TheVecAll.push_back(&TheSpecScaleImage);
+        TheVecAll.push_back(&TheSpecScaleImage_Basic);
+        TheVecAll.push_back(&TheSpecScaleImage_Std);
         TheVecAll.push_back(&TheSpec_StackIm);
+        TheVecAll.push_back(&TheSpec_StackDep);
         TheVecAll.push_back(&TheSpecCalcDiscIm);
         TheVecAll.push_back(&TheSpecCalcDescPCar);
         TheVecAll.push_back(&TheSpecMatchTieP);
-	TheVecAll.push_back(&TheSpec_TiePConv);
-	TheVecAll.push_back(&TheSpec_ToTiePMul);
+        TheVecAll.push_back(&TheSpec_TiePConv);
+        TheVecAll.push_back(&TheSpec_ToTiePMul);
+        TheVecAll.push_back(&TheSpec_PseudoIntersect);
         TheVecAll.push_back(&TheSpecEpipGenDenseMatch);
         TheVecAll.push_back(&TheSpecEpipDenseMatchEval);
         TheVecAll.push_back(&TheSpecGenSymbDer);
-        TheVecAll.push_back(&TheSpecKapture);
         TheVecAll.push_back(&TheSpecFormatTDEDM_WT);
         TheVecAll.push_back(&TheSpecFormatTDEDM_MDLB);
         TheVecAll.push_back(&TheSpecExtractLearnVecDM);
@@ -190,9 +198,11 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
         TheVecAll.push_back(&TheSpecDMEvalRef);
         TheVecAll.push_back(&TheSpecGenCodedTarget);
         TheVecAll.push_back(&TheSpecExtractCircTarget);
-        TheVecAll.push_back(&TheSpecExtractCodedTarget);
+        TheVecAll.push_back(&TheSpecExtractCheckBoardTarget);
+        //TheVecAll.push_back(&TheSpecExtractCodedTarget);
         TheVecAll.push_back(&TheSpecGenerateEncoding);
         TheVecAll.push_back(&TheSpecSimulCodedTarget);
+        TheVecAll.push_back(&TheSpecSimulSphere);
         TheVecAll.push_back(&TheSpecCompletUncodedTarget);
         TheVecAll.push_back(&TheSpecDensifyRefMatch);
         TheVecAll.push_back(&TheSpecCloudClip);
@@ -204,7 +214,16 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
         TheVecAll.push_back(&TheSpec_OriCalibratedSpaceResection);
         TheVecAll.push_back(&TheSpec_OriCheckGCPDist);
         TheVecAll.push_back(&TheSpec_OriBundlAdj);
+        TheVecAll.push_back(&TheSpec_TopoAdj);
+        TheVecAll.push_back(&TheSpec_GCPAbsOri);
         TheVecAll.push_back(&TheSpec_OriRel2Im);
+        TheVecAll.push_back(&TheSpec_OriRelPairsOf1m);
+        TheVecAll.push_back(&TheSpec_OriRelAllPairs);
+        TheVecAll.push_back(&TheSpec_SelectPairOriRel);
+        TheVecAll.push_back(&TheSpec_OriRel3Im);
+        TheVecAll.push_back(&TheSpec_OriRelTripletsOf1m);
+        TheVecAll.push_back(&TheSpec_OriRelAllTriplets);
+
         TheVecAll.push_back(&TheSpecMeshCheck);
         TheVecAll.push_back(&TheSpecProMeshImage);
         TheVecAll.push_back(&TheSpecMeshImageDevlp);
@@ -213,14 +232,35 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
 
         TheVecAll.push_back(&TheSpecDistCorrectCirgTarget);
         TheVecAll.push_back(&TheSpec_ImportGCP);
+        TheVecAll.push_back(&TheSpec_ImportLines);
+        TheVecAll.push_back(&TheSpec_ImportOBS);
+        TheVecAll.push_back(&TheSpec_ImportORGI);
+        TheVecAll.push_back(&TheSpec_ImportAiconCamera);
+        TheVecAll.push_back(&TheSpec_ImportStaticScan);
+        TheVecAll.push_back(&TheSpec_ImportTxtCloud);
+        TheVecAll.push_back(&TheSpec_MMVII_CloudClip);
+        TheVecAll.push_back(&TheSpec_MMVII_Cloud2Ply);
+        TheVecAll.push_back(&TheSpec_MMVII_CloudSimulSin);
+
+        TheVecAll.push_back(&TheSpecTestLidarRevEng);
+	{
+            TheVecAll.push_back(&TheSpec_MMVII_CloudColorate);
+            TheVecAll.push_back(&TheSpec_MMVII_CloudImProj);
+	}
+        TheVecAll.push_back(&TheSpec_ImportM32);
         //TheVecAll.push_back(&TheSpecTopoComp);
         TheVecAll.push_back(&TheSpecGenArgsSpec);
         TheVecAll.push_back(&TheSpec_ConvertV1V2_GCPIM);
         TheVecAll.push_back(&TheSpec_SpecSerial);
         TheVecAll.push_back(&TheSpec_PoseCmpReport);
+        TheVecAll.push_back(&TheSpec_ClinoReport);
         TheVecAll.push_back(&TheSpec_CGPReport);
+        TheVecAll.push_back(&TheSpec_MesImReport);
         TheVecAll.push_back(&TheSpec_TiePReport);
-        // TheVecAll.push_back(&TheSpec_BlockCamInit);  // RIGIDBLOC    RB_0_0
+        TheVecAll.push_back(&TheSpec_SegImReport);
+        TheVecAll.push_back(&TheSpec_BlockCamInit);  // RIGIDBLOC    RB_0_0
+        TheVecAll.push_back(&TheSpec_BlocReport);
+        TheVecAll.push_back(&TheSpec_CernInitRep);
         TheVecAll.push_back(&TheSpec_ClinoInit);
         TheVecAll.push_back(&TheSpecRename);
         TheVecAll.push_back(&TheSpec_V2ImportCalib);
@@ -228,6 +268,38 @@ std::vector<cSpecMMVII_Appli *> & cSpecMMVII_Appli::InternVecAll()
         TheVecAll.push_back(&TheSpecDicoRename);
         TheVecAll.push_back(&TheSpec_SimulDispl);
         TheVecAll.push_back(&TheSpec_CreateRTL);
+        TheVecAll.push_back(&TheSpec_CreateSysCoLoc);
+        TheVecAll.push_back(&TheSpec_TestProj);
+        TheVecAll.push_back(&TheSpec_ChSysCo);
+        TheVecAll.push_back(&TheSpec_CreateCalib);
+        TheVecAll.push_back(&TheSpec_ImportTiePMul);
+        TheVecAll.push_back(&TheSpec_ImportMesImGCP);
+        TheVecAll.push_back(&TheSpec_ImportClino);
+        TheVecAll.push_back(&TheSpecImportExtSens);
+        TheVecAll.push_back(&TheSpecTestSensor);
+        TheVecAll.push_back(&TheSpecParametrizeSensor);
+        TheVecAll.push_back(&TheSpec_ChSysCoGCP);
+        TheVecAll.push_back(&TheSpec_TutoSerial);
+        TheVecAll.push_back(&TheSpec_TutoFormalDeriv);
+        TheVecAll.push_back(&TheSpec_ExportUndistMesIm);
+        TheVecAll.push_back(&TheSpecAppliExtractLine);
+        TheVecAll.push_back(&TheSpecAppliBubbles);
+        TheVecAll.push_back(&TheSpecAppliFranges);
+        TheVecAll.push_back(&TheSpec_CERN_ImportClino);
+        TheVecAll.push_back(&TheSpec_MMV2_MesIm_2_MMV1);
+        TheVecAll.push_back(&TheSpec_MergeMesImGCP);
+        TheVecAll.push_back(&TheSpec_ExifData);
+        TheVecAll.push_back(&TheSpec_PerturbRandomOri);
+        TheVecAll.push_back(&TheSpec_ImportTriplet);
+        TheVecAll.push_back(&TheSpec_ArboTriplet);
+        
+        TheVecAll.push_back(&TheSpec_HierarchSfm);
+        TheVecAll.push_back(&TheSpec_VisuPoseStr3D);
+        TheVecAll.push_back(&TheSpec_TransformPoses);
+
+        TheVecAll.push_back(&TheSpecAppliBenchAPBI);
+        TheVecAll.push_back(&TheSpecAppliTestElemBundle);
+
 
         std::sort(TheVecAll.begin(),TheVecAll.end(),CmpCmd);
    }

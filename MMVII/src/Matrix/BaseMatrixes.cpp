@@ -1,4 +1,6 @@
 #include "MMVII_Tpl_Images.h"
+#include "MMVII_SysSurR.h"
+#include "MMVII_Tpl_Images.h"
 
 namespace MMVII
 {
@@ -29,11 +31,28 @@ template <class Type> cSparseVect<Type>::cSparseVect(int aSzReserve) :
      IV().reserve(aSzReserve);
 }
 
+template <class Type> cSparseVect<Type>::cSparseVect(const tCont &  aCont)  :
+   mIV (new tCont (aCont))
+{
+}
+
+
+
+template <class Type> cSparseVect<Type> cSparseVect<Type>::Dup() const
+{
+    tSV aRes(size());
+
+   *(aRes.mIV) = *mIV;
+ 
+   return aRes;
+}
+
 template <class Type> cSparseVect<Type>::cSparseVect(const cDenseVect<Type> & aDV) :
     cSparseVect<Type>  (aDV.Sz())
 {
     for (int aK=0 ; aK<aDV.Sz() ; aK++)
-       AddIV(aK,aDV(aK));
+       if (aDV(aK)!=0)
+           AddIV(aK,aDV(aK));
 }
 
 template <class Type>  bool cSparseVect<Type>::IsInside(int aNb) const
@@ -51,21 +70,91 @@ template <class Type> void cSparseVect<Type>::Reset()
     mIV->clear();
 }
 
+template <class Type>  void cSparseVect<Type>::AddIV(const int & anInd,const Type & aV)
+{
+   AddIV(tCplIV(anInd,aV));
+}
+template <class Type>  void cSparseVect<Type>::AddIV(const tCplIV & aCpl) 
+{ 
+   IV().push_back(aCpl); 
+}
 
-template <class Type> cSparseVect<Type>  cSparseVect<Type>::RanGenerate(int aNbVar,double aProba)
+
+
+template <class Type> void cSparseVect<Type>::CumulIV(const tCplIV & aCpl)
+{
+   tCplIV * aPairExist = Find(aCpl.mInd);
+   if (aPairExist != nullptr)
+   {
+       aPairExist->mVal += aCpl.mVal;
+   }
+   else
+   {
+        AddIV(aCpl);
+   }
+}
+
+
+template <class Type> cSparseVect<Type>  cSparseVect<Type>::RanGenerate(int aNbVar,double aProba,tREAL8 aMinVal,int aMinSize)
 {
     cSparseVect<Type>  aRes;
 
-    for (int aK=0 ; aK<aNbVar ; aK++)
+    while (aRes.size()<aMinSize)
     {
-        if(RandUnif_0_1() < aProba)
-	{
-            aRes.AddIV(aK,RandUnif_C());
-	}
+        for (int aK=0 ; aK<aNbVar ; aK++)
+        {
+            if(RandUnif_0_1() < aProba)
+	    {
+                aRes.AddIV(aK,RandUnif_C_NotNull(aMinVal));
+	    }
+        }
     }
 
     return aRes;
 }
+
+template <class Type> const typename cSparseVect<Type>::tCplIV *  cSparseVect<Type>::Find(int anInd) const
+{
+    for (const auto & aPair : *mIV)
+        if (aPair.mInd==anInd)
+           return & aPair;
+    return nullptr;
+}
+template <class Type> typename cSparseVect<Type>::tCplIV *  cSparseVect<Type>::Find(int anInd) 
+{
+    for (auto & aPair : *mIV)
+        if (aPair.mInd==anInd)
+           return & aPair;
+    return nullptr;
+}
+
+template <class Type>  int cSparseVect<Type>::MaxIndex(int aDef) const
+{
+    for (const auto & aPair : *mIV)
+        UpdateMax(aDef,aPair.mInd);
+
+    MMVII_INTERNAL_ASSERT_tiny(aDef>=-1,"No def value for empty vect in cSparseVect<Type>::MaxIndex");
+    return aDef;
+}
+
+template <class Type>  void cSparseVect<Type>::EraseIndex(int anInd)
+{
+    erase_if(*mIV,[anInd](const auto & aPair){return aPair.mInd==anInd;});
+}
+
+template <class Type> double cSparseVect<Type>::DotProduct(const cDenseVect<Type> & aV) const
+{
+   double  aRes = 0.0;
+
+   const auto & aDIm = aV.DIm();
+   for (const auto & aPair : *this)
+   {
+       aRes += aPair.mVal *  aDIm.GetV(aPair.mInd);
+   }
+
+   return aRes;
+}
+
 
 /* ========================== */
 /*          cDenseVect        */
@@ -92,8 +181,8 @@ template <class Type> cDenseVect<Type>::cDenseVect(int aSz,eModeInitImage aModeI
 {
 }
 
-template <class Type> cDenseVect<Type>::cDenseVect(int aSz,const tSpV & aSpV) :
-       cDenseVect<Type>(aSz,eModeInitImage::eMIA_Null)
+template <class Type> cDenseVect<Type>::cDenseVect(const tSpV & aSpV,int aSz) :
+       cDenseVect<Type>(std::max(aSz,1+aSpV.MaxIndex()) ,eModeInitImage::eMIA_Null)
 {
      for (const auto & aPair : aSpV)
           mIm.DIm().SetV(aPair.mInd,aPair.mVal);
@@ -157,32 +246,38 @@ template <class Type> cDenseVect<Type>::cDenseVect(int aSz,eModeInitImage aModeI
 }
 */
 
-template <class Type> double cDenseVect<Type>::L1Dist(const cDenseVect<Type> & aV) const
+template <class Type> double cDenseVect<Type>::L1Dist(const cDenseVect<Type> & aV,bool isAvg) const
 {
-   return mIm.DIm().L1Dist(aV.mIm.DIm());
+   return mIm.DIm().L1Dist(aV.mIm.DIm(),isAvg);
 }
-template <class Type> double cDenseVect<Type>::L2Dist(const cDenseVect<Type> & aV) const
+template <class Type> double cDenseVect<Type>::L2Dist(const cDenseVect<Type> & aV,bool isAvg) const
 {
-   return mIm.DIm().L2Dist(aV.mIm.DIm());
+   return mIm.DIm().L2Dist(aV.mIm.DIm(),isAvg);
 }
 
-template <class Type> double cDenseVect<Type>::L1Norm() const
+template <class Type> double cDenseVect<Type>::L1Norm(bool isAvg) const
 {
-   return mIm.DIm().L1Norm();
+   return mIm.DIm().L1Norm(isAvg);
 }
-template <class Type> double cDenseVect<Type>::L2Norm() const
+template <class Type> double cDenseVect<Type>::L2Norm(bool isAvg) const
 {
-   return mIm.DIm().L2Norm();
+   return mIm.DIm().L2Norm(isAvg);
+}
+template <class Type> double cDenseVect<Type>::SqL2Norm(bool isAvg) const
+{
+   return mIm.DIm().SqL2Norm(isAvg);
 }
 template <class Type> double cDenseVect<Type>::LInfNorm() const
 {
    return mIm.DIm().LInfNorm();
 }
 
+template <class Type> cDenseVect<Type> cDenseVect<Type>::VecUnit() const
+{
+   return  Type(SafeDiv(1.0,L2Norm()))  * (*this);
+}
 
 // double L1Norm() const;   ///< Norm som abs double L2Norm() const;   ///< Norm square double LInfNorm() const; ///< Nomr max
-
-
 
 
 
@@ -190,6 +285,9 @@ template <class Type> double cDenseVect<Type>::DotProduct(const cDenseVect<Type>
 {
    return MMVII::DotProduct(DIm(),aV.DIm());
 }
+
+
+
 // double L2Dist(const cDenseVect<Type> & aV) const;
 
 template <class Type> Type*       cDenseVect<Type>::RawData()       {return DIm().RawDataLin();}
@@ -205,6 +303,10 @@ template <class Type> void  cDenseVect<Type>::WeightedAddIn(Type aW,const tSpV &
        aD[aP.mInd] += aW * aP.mVal;
 }
 
+template <class Type> void  cDenseVect<Type>::WeightedAddIn(Type aW,const tDV & aVect)
+{
+	MMVII::WeightedAddIn(mIm.DIm(),aW,aVect.mIm.DIm());
+}
 
 template <class Type> std::ostream & operator << (std::ostream & OS,const cDenseVect<Type> &aV)
 {
@@ -248,6 +350,151 @@ template <class Type> void  cDenseVect<Type>::SetAvg(const Type & aTargAvg)
    for (int aK=0 ; aK<Sz() ; aK++)
         (*this)(aK) *= aMul;
 }
+
+template <class Type>  cDenseVect<Type> cDenseVect<Type>::GramSchmidtCompletion(const std::vector<tDV> & aVV) const
+{
+     cDenseVect<Type> aRes = *this;
+ 
+     for (const auto & aV : aVV)
+     {
+         aRes = aRes -  Type(aV.DotProduct(*this)/aV.SqL2Norm()) * aV;
+     }
+
+     return aRes;
+}
+
+template <class Type>  std::vector<cDenseVect<Type>>  cDenseVect<Type>::GramSchmidtOrthogonalization(const std::vector<tDV> & aVV) 
+{
+     std::vector<cDenseVect<Type>> aRes;
+
+     for (const auto  & aV : aVV)
+         aRes.push_back(aV.GramSchmidtCompletion(aRes));
+
+     return aRes;
+}
+
+template <class Type> cDenseVect<Type>   cDenseVect<Type>::VecComplem(const std::vector<tDV> & aVV,Type aDMin) 
+{
+     size_t aDim = aVV.at(0).Sz();
+     cDenseVect<Type>  aTest(aDim,eModeInitImage::eMIA_Null);
+
+     cWhichMax<int,Type>  aWMax(-1,-1.0);
+
+     for (size_t aK=0 ; aK<=aDim ; aK++)
+     {
+         // forced end of loop, we select the "less bad vector"
+         if (aK==aDim)
+         {
+             aDMin = -1;
+             aK = aWMax.IndexExtre();
+         }
+         aTest(aK) = 1;
+         
+         cDenseVect<Type> aRes = aTest-aTest.ProjOnSubspace(aVV);
+         Type aNorm = aRes.L2Norm();
+         if (aNorm>aDMin)
+            return Type(1.0/aNorm) * aRes;
+         aWMax.Add(aK,aNorm);
+         aTest(aK) = 0;
+     }
+
+     MMVII_INTERNAL_ASSERT_tiny(false,"VecComplem : should not be here !!");
+     return aTest;
+}
+
+// Can go much faster by selecting all the  result inside VecCompl and selecting the K Best
+template <class Type> std::vector<cDenseVect<Type>>  cDenseVect<Type>::BaseComplem(const std::vector<tDV> & aVV,bool WithInit,Type aDMin) 
+{
+     int aDim = aVV.at(0).Sz();
+     std::vector<tDV> aRes = aVV;
+
+     for (int aK= aVV.size() ; aK<aDim ; aK++)
+         aRes.push_back(VecComplem(aRes,aDMin));
+
+     if (WithInit)
+        return aRes;
+
+    return std::vector<cDenseVect<Type>>(aRes.begin()+aVV.size(),aRes.end());
+}
+
+template <class Type> Type cDenseVect<Type>::ASymApproxDistBetweenSubspace(const std::vector<tDV>  & aVV1,const std::vector<tDV>  & aVV2)
+{
+   Type aRes=0.0;
+
+   for (const auto & aV1 : aVV1)
+       UpdateMax(aRes,aV1.DistToSubspace(aVV2));
+
+   return aRes;
+}
+
+template <class Type> Type cDenseVect<Type>::ApproxDistBetweenSubspace(const std::vector<tDV>  & aVV1,const std::vector<tDV>  & aVV2)
+{
+	return std::max(ASymApproxDistBetweenSubspace(aVV1,aVV2),ASymApproxDistBetweenSubspace(aVV2,aVV1));
+}
+
+
+template <class Type> int cDenseVect<Type>::AllDimComon(const std::vector<tDV>  & aVVect)
+{
+   MMVII_INTERNAL_ASSERT_tiny(!aVVect.empty(),"cDenseVect<Type>::AllDimComon");
+   int aRes =  aVVect[0].Sz();
+#if (The_MMVII_DebugLevel>=The_MMVII_DebugLevel_InternalError_tiny )
+   for (size_t aKV=1 ; aKV<aVVect.size() ; aKV++)
+       MMVII_INTERNAL_ASSERT_tiny(aRes==aVVect[aKV].Sz(),"cDenseVect<Type>::AllDimComon");
+#endif
+
+   return aRes;
+}
+
+
+
+// /template <class Type> Type  DegenDegree(const std::vector<tDV>  & aVVect) ;
+
+
+cDenseVect<tREAL8> NormalizeMoyVar(const cDenseVect<tREAL8> & aV0,tREAL8 aEpsilon)
+{
+    size_t aSz = aV0.Sz();
+
+    cComputeStdDev<tREAL8>  aStdDev;
+    for (size_t aK=0 ; aK<aSz ; aK++)
+        aStdDev.Add(1.0,aV0(aK));
+    aStdDev.SelfNormalize(aEpsilon);
+
+    tREAL8 aSqrtNb = std::sqrt(aSz);
+    cDenseVect<tREAL8> aRes(aSz);
+    for (size_t aK=0 ; aK<aSz ; aK++)
+        aRes(aK) = aStdDev.NormalizedVal(aV0(aK)) / aSqrtNb ;
+
+    return aRes;
+}
+
+std::pair<tREAL8,tREAL8> LstSq_Fit_AxPBEqY(const cDenseVect<tREAL8> & aVX,const cDenseVect<tREAL8> & aVY)
+{
+    MMVII_INTERNAL_ASSERT_tiny(aVX.Sz()==aVY.Sz(),"Different size in LstSq_Fit_AxPBEqY");
+    cLeasSqtAA<tREAL8> aLsq(2);
+
+    cDenseVect<tREAL8> aCoeff(2);
+    aCoeff(1) = 1.0;
+    for (int aK=0 ; aK<aVX.Sz() ; aK++)
+    {
+        aCoeff(0) = aVX(aK);
+	aLsq.PublicAddObservation(1.0,aCoeff, aVY(aK));
+    }
+
+     cDenseVect<tREAL8> aSol = aLsq.SpecificSolve();
+
+     return std::pair<tREAL8,tREAL8>(aSol(0),aSol(1));
+}
+
+cDenseVect<tREAL8> MulAXPB(const cDenseVect<tREAL8> & aV0, tREAL8 A,tREAL8 B)
+{
+    size_t aSz = aV0.Sz();
+    cDenseVect<tREAL8> aRes(aSz);
+    for (size_t aK=0 ; aK<aSz ; aK++)
+        aRes(aK) = A * aV0(aK) + B;
+
+    return aRes;
+}
+
 
 
 /*
@@ -454,10 +701,20 @@ template <class Type> static void TplReadLineInPlace(const cMatrix<Type> & aMat,
         aV(aX) = aMat.V_GetElem(aX,aY);
 }
 
-template <class Type> static void TplWriteLine(cMatrix<Type> & aMat,int aY,const cDenseVect<Type>& aV)
+
+
+template <class Type> static void TplWriteLine(cMatrix<Type> & aMat,int aY,const cDenseVect<Type>& aV,bool OkPartial=false)
 {
-    aMat.TplCheckSizeX(aV);
-    for (int aX=0 ; aX<aMat.Sz().x() ; aX++)
+    int aNb = aMat.Sz().x();
+    if (OkPartial)
+    {
+        aNb = aV.Sz();
+        aMat.TplCheckSizeX_SupEq(aV);
+    }
+    else
+        aMat.TplCheckSizeX(aV);
+
+    for (int aX=0 ; aX<aNb ; aX++)
         aMat.V_SetElem(aX,aY,aV(aX)) ;
 }
 
@@ -504,7 +761,7 @@ template <class Type> Type cMatrix<Type>::MulLineElem(int aX,const tDV & aIn) co
 template <class Type> void cMatrix<Type>::ReadColInPlace(int aX,tDV & aV)  const {TplReadColInPlace(*this,aX,aV);}
 template <class Type> void cMatrix<Type>::WriteCol(int aX,const tDV  &aV)        {TplWriteCol(*this,aX,aV);}
 template <class Type> void cMatrix<Type>::ReadLineInPlace(int aY,tDV & aV) const {TplReadLineInPlace(*this,aY,aV);}
-template <class Type> void cMatrix<Type>::WriteLine(int aY,const tDV  &aV)       {TplWriteLine(*this,aY,aV);}
+template <class Type> void cMatrix<Type>::WriteLine(int aY,const tDV  &aV,bool OkPartial)       {TplWriteLine(*this,aY,aV,OkPartial);}
 
 template <class Type> cDenseVect<Type>  cMatrix<Type>::ReadCol(int aX) const
 {
@@ -514,12 +771,27 @@ template <class Type> cDenseVect<Type>  cMatrix<Type>::ReadCol(int aX) const
      return aRes;
 }
 
-template <class Type> cDenseVect<Type>  cMatrix<Type>::ReadLine(int aX) const
+template <class Type> cDenseVect<Type>  cMatrix<Type>::ReadLine(int aY) const
 {
      cDenseVect<Type> aRes(Sz().x());
-     ReadLineInPlace(aX,aRes);
+     ReadLineInPlace(aY,aRes);
 
      return aRes;
+}
+
+template <class Type> std::vector<cDenseVect<Type>>  cMatrix<Type>::MakeLines() const
+{
+    std::vector<cDenseVect<Type>> aRes;
+    for (int aY=0 ; aY<Sz().y() ; aY++)
+        aRes.push_back(ReadLine(aY));
+
+    return aRes;
+}
+
+template <class Type> void cMatrix<Type>::WriteCol(int aX,const tSpV  &aV)  
+{
+    for (const auto & aPair : aV)
+        V_SetElem(aX,aPair.mInd,aPair.mVal);
 }
 
      //    ===   MulMat ====
@@ -612,6 +884,46 @@ template <class Type> std::ostream & operator << (std::ostream & OS,const cMatri
 }
 
 
+template <class Type>  cDenseVect<Type>   cDenseVect<Type>::ProjOnSubspace(const std::vector<tDV>  & aVV) const
+{
+     cDenseVect<Type>  aRes(Sz(),eModeInitImage::eMIA_Null);
+
+     int aNbVec = aVV.size();
+
+     if (aNbVec)
+     {
+         cLeasSqtAA<Type>   aSys(aNbVec);
+
+         for (int aKCoord=0 ; aKCoord<Sz()  ; aKCoord++)
+         {
+              cDenseVect<Type> anEq(aNbVec);
+              for (int aKV=0 ; aKV<aNbVec ; aKV++)
+                  anEq(aKV) = aVV.at(aKV)(aKCoord);
+
+             aSys.PublicAddObservation(1.0,anEq,(*this)(aKCoord));
+         }
+         cDenseVect<Type>  aSol = aSys.PublicSolve();
+
+         for (int aKV = 0 ; aKV<aNbVec ; aKV++)
+             aRes +=  aSol(aKV) * aVV.at(aKV);
+
+      }
+      return aRes;
+}
+
+template <>  cDenseVect<tINT4>   cDenseVect<tINT4>::ProjOnSubspace(const std::vector<tDV>  & aVV) const
+{
+    return cDenseVect<tINT4>(1);
+}
+
+template <class Type>  Type   cDenseVect<Type>::DistToSubspace(const std::vector<tDV>  & aVV) const
+{
+    cDenseVect<Type> aProj = ProjOnSubspace(aVV);
+
+    return  this->L2Dist(aProj);
+}
+
+
 // template void AddData(const  cAuxAr2007 & anAux, cDenseVect<Type> &);
 
 /* ===================================================== */
@@ -639,7 +951,6 @@ INSTANTIATE_BASE_MATRICES(tREAL16)
 
 // INSTANTIATE_DENSE_VECT(tU_INT1)
 INSTANTIATE_DENSE_VECT(tINT4)
-
 
 
 };

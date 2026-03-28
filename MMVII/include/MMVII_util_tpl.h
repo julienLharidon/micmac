@@ -2,9 +2,12 @@
 #define  _MMVII_Util_TPL_H_
 
 #include <algorithm>
+#include <array>
 #include "MMVII_enums.h"
 #include "MMVII_Error.h"
 #include "MMVII_nums.h"
+#include "MMVII_Stringifier.h"
+
 
 namespace MMVII
 {
@@ -18,6 +21,38 @@ template <class Type> class cExtSet ;
 template <class Type> class cDataExtSet ;
 template <class Type> class cSelector ;
 template <class Type> class cDataSelector ;
+template <class Type>  class cBijectiveMapI2O;
+
+
+/// just a std::array that is Destructible for use with std::optional
+template <class T, size_t Dim> class cArray : public std::array<T,Dim>
+{
+public:
+    ~cArray() {}
+};
+
+template <class Type> bool EqualCont(const Type &aV1,const Type & aV2)
+{
+    return  std::equal(aV1.begin(),aV1.end(),aV2.begin(),aV2.end());
+}
+
+class cTripletName
+{
+     public :
+        typedef cTripletName value;
+
+       std::array<std::string,3> mNames;
+
+        bool operator < (const cTripletName&) const;
+        bool operator == (const cTripletName&) const;
+
+        std::string FullName() const;
+
+        cTripletName();
+
+        cTripletName(const std::string & aN1,const std::string & aN2,const std::string & aN3);
+};
+
 
 
 /* ============================================= */
@@ -81,11 +116,41 @@ template <class Type> cSelector<Type> Str2Interv(const std::string & aStr);
 /*                                               */
 /* ============================================= */
 
+template <class Type> class cTransformator
+{
+     public :
+          virtual Type  Transfo(const Type &) const = 0;
+};
+
+template <class Type> class cIdTransformator : public cTransformator<Type>
+{
+     public :
+          Type  Transfo(const Type &) const override;
+};
+
+/**  Transformation by pattern of regular expression */
+class  cPatternTransfo : public cTransformator<std::string>
+{
+      public :
+            cPatternTransfo(const std::string & aPat,const std::string & aSubst);
+	    /// Can be 2 vect or empty
+            cPatternTransfo(const std::vector<std::string> & aPat);
+
+            std::string  Transfo(const std::string &) const override;
+      private :
+            std::string mPat;
+            std::string mSubst;
+};
+
+
+
 
 ///  Bench some sets functionnalities
 void BenchSet(const std::string & aDir);
 
 ///  Interface to sets services (set in extension)
+
+
 
 /** Derived class will implement the services on :
  
@@ -115,6 +180,7 @@ template <class Type> class cExtSet  : public  cSelector<Type>
          bool Suppress(const Type &)  ;
          void    clear() ;
          int    size() const ;
+         void Filter(const cSelector<Type> &,const cTransformator<Type>&);
          void Filter(const cSelector<Type> &);
 
          virtual void  PutInVect(std::vector<const Type *> &,bool Sorted) const ; ///< Some type requires iteration 
@@ -146,8 +212,12 @@ template <class Type> void SortPtrValue(std::vector<Type*> &aV);
 
 // Xml or pat
 tNameSet SetNameFromPat    (const std::string&); ///< create a set of file from a pattern
+tNameSet SetNameFromPat    (const std::string&,bool WithDir); ///< create a set of file from a pattern
+
 tNameSet SetNameFromFile   (const std::string&, int aNumV); ///< create from a file xml, V1 or V2
 tNameSet SetNameFromString (const std::string&, bool AllowPat); ///< general case, try to recognize automatically V1, V2 or pattern
+tNameSet SetNameFromString(const std::string & aName,bool AllowPat,bool WithDir);
+
 std::vector<std::string>  ToVect(const tNameSet &);  ///< Less economic but more convenient than PutInVect
 
 /** read from file, select version, accept empty, error if file exist bud in bad format */
@@ -164,25 +234,25 @@ tNameRel  RelNameFromXmlFileIfExist
 
 /* ================================================ */
 /*                                                  */
-/*                 cOrderedPair                     */
+/*                 cUnOrderedPair                     */
 /*                                                  */
 /* ================================================ */
 
 /// Pair where we want (a,b) == (b,a)
 
-/** cOrderedPair are pretty match like pair<T,T> ,
+/** cUnOrderedPair are pretty match like pair<T,T> ,
     the main difference being that they modelise symetric graph.
     To assure that they are always in a single way, we
     force V1 <= V2
 */
-template <class Type> class cOrderedPair
+template <class Type> class cUnOrderedPair
 {
       public :
-           typedef cOrderedPair<Type> value;
-           cOrderedPair(const Type & aV1,const Type & aV2); ///< Pair will be reordered
-           cOrderedPair(); ///< Default constructor, notably for serializer
-           bool operator < (const cOrderedPair<Type> & aP2) const;
-           bool operator == (const cOrderedPair<Type> & aP2) const;
+           typedef cUnOrderedPair<Type> value;
+           cUnOrderedPair(const Type & aV1,const Type & aV2); ///< Pair will be reordered
+           cUnOrderedPair(); ///< Default constructor, notably for serializer
+           bool operator < (const cUnOrderedPair<Type> & aP2) const;
+           bool operator == (const cUnOrderedPair<Type> & aP2) const;
            const Type & V1() const;
            const Type & V2() const;
            Type & V1() ;
@@ -214,6 +284,23 @@ template<class TCont,class TVal> bool  BoolFind(const TCont & aCont,const TVal &
     return std::find(aCont.begin(),aCont.end(),aVal) != aCont.end();
 }
 
+template<class TCont,class TVal> bool  MapBoolFind(const TCont & aCont,const TVal & aVal)
+{
+    return aCont.find(aVal) != aCont.end();
+}
+
+template<class TCont,class TKey> const typename  TCont::mapped_type *  MapGet(const TCont & aCont,const TKey & aKey,bool SVP=false)
+{
+    auto anIter = aCont.find(aKey);
+    if (anIter==aCont.end())
+    {
+        MMVII_INTERNAL_ASSERT_tiny(SVP,"MapGet for Key="+ cStrIO<TKey>::ToStr(aKey));
+        return nullptr;
+    }
+    return & anIter->second;
+}
+
+
 template <class TV,class TF> void erase_if(TV & aVec,const TF& aFonc)
 {
    aVec.erase(std::remove_if(aVec.begin(),aVec.end(),aFonc),aVec.end());
@@ -243,7 +330,7 @@ template <class Type> void AppendIn(std::vector<Type> & aRes, const std::vector<
        aRes.push_back(aVal);
 }
 
-template <class Type> void Append(std::vector<Type> & aRes, const std::vector<Type> & aV1,const std::vector<Type> & aV2)
+template <class Type> void AppendIn(std::vector<Type> & aRes, const std::vector<Type> & aV1,const std::vector<Type> & aV2)
 {
    aRes = aV1;
    AppendIn(aRes,aV2);
@@ -252,7 +339,7 @@ template <class Type> void Append(std::vector<Type> & aRes, const std::vector<Ty
 template <class Type> std::vector<Type> Append(const std::vector<Type> & aV1,const std::vector<Type> & aV2)
 {
     std::vector<Type> aRes;
-    Append(aRes,aV1,aV2);
+    AppendIn(aRes,aV1,aV2);
     return aRes;
 }
 
@@ -285,6 +372,9 @@ template <class Type> void ResizeUp(std::vector<Type> & aV1,size_t aSz,const Typ
       aV1.resize(aSz,aVal);
 }
 
+template <class Type> void ResizeDown(std::vector<Type> & aV1,size_t aSz) { aV1.resize(std::min(aV1.size(),aSz)); }
+
+
 template <class Type> void SetAndResize(std::vector<Type> & aVec,size_t aSz,const Type &aVal,const Type & aDef)
 {
       ResizeUp(aVec,aSz,aDef);
@@ -298,6 +388,17 @@ template <class Type> Type GetDef(const std::vector<Type> & aVec,int aSz,const T
    return aDef;
 }
 
+template <class Type> const Type & GetProj(const std::vector<Type> & aVect,int aSz)
+{
+   MMVII_INTERNAL_ASSERT_tiny(! aVect.empty(),"Get proj on empty vector");
+
+   if (aSz<0) 
+      return aVect.at(0);
+   if (aSz>= int(aVect.size()))
+      return aVect.back();
+
+   return aVect.at(aSz);
+}
 
 template <class T1,class T2> std::vector<T1> &  Convert(std::vector<T1> & aV1,const std::vector<T2> & aV2)
 {
@@ -443,6 +544,7 @@ template <class Type>  class cBijectiveMapI2O
 };
 
 typedef  cBijectiveMapI2O<std::string> t2MapStrInt;
+typedef  cBijectiveMapI2O<int>         t2MapIntInt;
 
 ///  make a research in a map using the key and not the val
 template <class Key,class Val> const Key * FindByVal(const std::map<Key,Val> & aMap,const Val & aVal,bool SVP=false)
@@ -465,6 +567,71 @@ template <class tCont>  typename tCont::value_type *  KthElem(tCont & aCont,int 
     MMVII_INTERNAL_ASSERT_tiny(SVP,"KthElem");
 
     return nullptr;
+}
+
+template <class Type> std::vector<const Type*> VecObj2VecPtr(const std::vector<Type> & aVecObj)
+{
+    std::vector<const Type *> aVPtr;
+
+    for (const auto & aObj : aVecObj)
+        aVPtr.push_back(&aObj);
+
+    return aVPtr;
+}
+
+
+
+/**    Used in Metadata, but can be used more generally.
+ *
+ *     Define a try to associate a name to another .
+ *     For a given name "N" if , if N match pattern then pattern
+ *     substitution is used to compute  mValue.
+ *
+ *     For example :
+ *         Pat =  IM_([0-9]*).tif
+ *         Value = Stuf_$1
+ *         N = IM_128.tif
+ *
+ *       the value computed is  Stuf_128
+ */
+
+class cOneTryCAI
+{
+     public :
+        cOneTryCAI();  ///< Defaut cstr, required for serialization
+        cOneTryCAI(const std::string & aPat,const std::string & aValue);
+
+        std::string                  mPat;    ///< Pattern for selecting and translatting
+        tNameSelector                mSel;    ///<  Computation of Pattern
+        std::string                  mValue;  ///<  Value computed 
+};
+
+class cComputeAssociation
+{
+     public :
+          static cComputeAssociation  FromFile(const std::string & aName);
+          void Write(const std::string & aName) const;
+
+          std::string Translate(const std::string & aName) const;
+     //  ==================
+          std::list<cOneTryCAI> mVTries;
+};
+void AddData(const cAuxAr2007 & anAux,cComputeAssociation & aTransl);
+
+
+
+template <class TypeCont> typename TypeCont::value_type SumElem(const TypeCont &aCont)
+{
+    typename TypeCont::value_type  aResult = cNV<typename TypeCont::value_type>::V0();
+    for (const auto aVal : aCont)
+        aResult += aVal;
+    return aResult;
+}
+
+template <class TypeCont> typename TypeCont::value_type AvgElem(const TypeCont &aCont)
+{
+    MMVII_INTERNAL_ASSERT_tiny(!aCont.empty(),"AvgElem on empty vect");
+    return SumElem(aCont) / double (aCont.size());
 }
 
 };

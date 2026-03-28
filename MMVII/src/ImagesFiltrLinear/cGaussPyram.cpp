@@ -1,5 +1,4 @@
 #include "MMVII_Tpl_Images.h"
-#include "V1VII.h"
 #include "MMVII_2Include_Serial_Tpl.h"
 #include "MMVII_Linear2DFiltering.h"
 #include "MMVII_NonLinear2DFiltering.h"
@@ -367,7 +366,6 @@ void cFilterPCar::FinishAC(double aVal)
         if (int(mAutoC.size()) == aK)
            mAutoC.push_back(mAutoC.back()-aVal);
     }
-// StdOut() << "HhhhhhhHHhhhhhhh " << mAutoC.size() << " :: " << mAutoC << std::endl;
 }
 
 std::vector<double> &  cFilterPCar::AutoC() {return mAutoC;}

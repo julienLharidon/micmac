@@ -7,7 +7,8 @@
 namespace MMVII
 {
 
-typedef cSegment<tREAL8,3> tSeg3dr;
+typedef cSegment<tREAL8,3>         tSeg3dr;
+typedef cSegmentCompiled<tREAL8,3> tSegComp3dr;
 
 template<class T> cPtxd<T,3>  PFromNumAxe(int aNum); ///< return I,J or K according to 0,1 or 2
 /// use the 3 "colum vector" to compute the matrix
@@ -24,6 +25,19 @@ template <class T>  cPtxd<T,3> operator ^ (const cPtxd<T,3> & aP1,const cPtxd<T,
                aP1.x() * aP2.y() -aP1.y()*aP2.x()
           );
 }
+
+template <class Type> inline cPtxd<Type,3> PSymXY (const cPtxd<Type,3> & aP)
+{
+    return cPtxd<Type,3>(aP.y(),aP.x(),aP.z());
+}
+
+//  Cylindric coordinates, 
+cPt3dr Cart2Cyl(const cPt3dr & aPtCart);
+cPt3dr Cyl2Cart(const cPt3dr & aPtspher);
+cPt3dr cart2spher(const cPt3dr & aPtCart);
+cPt3dr spher2cart(const cPt3dr & aPtspher);
+
+
 
 ///< compute determinant  as A.(B ^ C)
 template <class T>  T  Determinant (const cPtxd<T,3> &,const cPtxd<T,3> & aP2,const cPtxd<T,3> & aP3);
@@ -86,12 +100,19 @@ template <class Type> class cRotation3D
 {
     public :
        static constexpr int       TheDim=3;
+       static constexpr int       NbDOF = 3;
+       static constexpr int       NbPtsMin = 2;  // != NbDOF/TheDim
+
        typedef cPtxd<Type,3>      tPt;
        typedef Type               tTypeElem;
        typedef cRotation3D<Type>  tTypeMap;
        typedef cRotation3D<Type>  tTypeMapInv;
-       static int NbDOF()   {return 3;}
+       typedef std::vector<tPt>   tVPts;
+       typedef const tVPts&       tCRVPts;
+       typedef tPt   tTabMin[NbPtsMin];  // Used for estimate with min number of point=> for ransac
 
+       /// Create a "dummy" rotation, initialized with null matrix (to force problem if not init later)
+       cRotation3D();
 
        /// RefineIt : if true, assume not fully orthog and compute closest one
        cRotation3D(const cDenseMatrix<Type> &,bool RefineIt);
@@ -111,10 +132,10 @@ template <class Type> class cRotation3D
        tPt   AxeJ() const ;
        tPt   AxeK() const ;
 
-       /// Compute a normal repair, first vector being colinear to Pt
-       static cRotation3D<Type> CompleteRON(const tPt & aPt);
+       /// Compute a normal repair, first vector being colinear to Pt (or second or last according to aNumP0)
+       static cRotation3D<Type> CompleteRON(const tPt & aPt,int aNumP0=0);
        /// Compute a normal repair, first vector being colinear to P1, second in the plane P1,P2
-       static cRotation3D<Type> CompleteRON(const tPt & aP0,const tPt & aP1);
+       static cRotation3D<Type> CompleteRON(const tPt & aP0, const tPt & aP1, bool SVP=false); // SVP=return Identity if impossible
        /// Compute a rotation arround a given axe and with a given angle
        static cRotation3D<Type> RotFromAxe(const tPt & anAxe,Type aTeta);
        ///  Axiator close to Rot From but teta=Norm !!  exp(Mat(^Axe))
@@ -125,16 +146,75 @@ template <class Type> class cRotation3D
        static cRotation3D<Type> RandomRot(const Type & aAmpl);
        /// create rotation from  string like "ijk" "i-kj" ... if sth like "ikj" => error !, so last is redundant but necessary
        static cRotation3D RotFromCanonicalAxes(const std::string&);
+
+        // ================  RandomRot, but with standard names for standard group interface ==========
+
+        /// return a random elem,  +or- with uniform density (whatever it means)
+        static cRotation3D<Type> RandomElem();
+
+        /// return a random small elem,  +or- with uniform density on tangent space (whatever it means)
+        static cRotation3D<Type> RandomSmallElem(const Type & aAmpl);
+        /// return a random rot with nomr in [V0,V1]
+        static cRotation3D<Type> RandomInInterval(const Type & aV0,const Type & aV1);
+
+        /// distance between 2 rotation; uses matrixes
+        Type Dist(const  cRotation3D<Type> &) const;
+        /// Max possible distance
+        static Type MaxDist() {return 2.0 * std::sqrt(2);}
+
+        /// this function must defined for differentiable group considered as variety
+        static tTypeMap  Centroid(const std::vector<tTypeMap> & aV,const std::vector<Type> &);
+        /// Average of 2 rotation
+        tTypeMap  Centroid(const tTypeMap & aR2) const;
+
+        /// Select the pose minimizing the sum of distance to other
+        static tTypeMap  PseudoMediane(const std::vector<tTypeMap> & aV,int aSzProgr=-1);
+        /// Select the pose minimizing the sum of distance to other in the interval K0,K1
+        // static tTypeMap  PseudoMediane(const std::vector<tTypeMap> & aV,int aK0,int aK1);
+
+
+        ///  Make a "robust" weighted average, starting from S0, W=[s0,A,B]-> 1/(1+R/s0^A)^B,defA=2, defB=1/A
+        static tTypeMap  RobustAvg(const std::vector<tTypeMap> & aV,const tTypeMap & , const std::vector<tREAL8>& aWeight);
+        ///  Make an iterate robust estimator
+        static tTypeMap  RobustAvg
+                         (    const std::vector<tTypeMap> & aV,tTypeMap  , const std::vector<tREAL8>& aWeight,
+                              int aNbIterMin,
+                              tREAL8 aDistStab = 1e30,
+                              int aNbIterMax   = -1
+                         );
+        ///  Call robust avh with PseudoMediane initialization
+        static tTypeMap  RobustMedAvg(const std::vector<tTypeMap> & aV,const std::vector<tREAL8> aWeight,int aNbIter,int aNbProg=-1);
+
+       //  0-> arround I, 1->arround J ...
+        static cRotation3D RotArroundKthAxe(int aNum);
        
        //// Compute a normal repair, first vector being colinear to P1, second in the plane P1,P2
       // static cRotation3D<Type> CompleteRON(const tPt & aP0,const tPt & aP1);
 
-       // Extract Axes of a rotation and compute its angle 
-       void ExtractAxe(tPt & anAxe,Type & aTeta);
+       /// Extract Axes of a rotation and compute its angle 
+       void ExtractAxe(tPt & anAxe,Type & aTeta) const;
+       /// More modern interface to ExtractAxe
+       std::pair<tPt,Type> ExtractAxe() const;
 
-       // conversion to Omega Phi Kapa
+       /// Convenient if you only need Angle, but slow else
+       Type Angle() const;
+       /// Convenient if you only need Axe, but slow else
+       tPt    Axe() const;
+
+       /// conversion to Omega Phi Kapa
        static cRotation3D<Type>  RotFromWPK(const tPt & aWPK);
+       /// extrecat Omega Phi Kapa from rotation
        tPt                       ToWPK() const;
+
+       /// Rotation arround X
+       static cDenseMatrix<Type> RotOmega(const tREAL8 & aOmega);
+       /// Rotation arround Y
+       static cDenseMatrix<Type> RotPhi(const tREAL8 & aPhi);
+       /// Rotation arround Z
+       static cDenseMatrix<Type> RotKappa(const tREAL8 & aKappa);
+
+       ///  0-> Omega   1->Phi  2-> Kappa
+       static cDenseMatrix<Type> Rot1WPK(int aK,const tREAL8 & aOmega);
 
        // conversion to Yaw Pitch Roll
        static cRotation3D<Type>  RotFromYPR(const tPt & aWPK);
@@ -143,6 +223,18 @@ template <class Type> class cRotation3D
     private :
        cDenseMatrix<Type>  mMat;
 };
+
+typedef cRotation3D<tREAL8> tRotR; 
+void AddData(const  cAuxAr2007 & anAux,tRotR&);
+/** Make aq "pretty print" of line aY of matrice Rot,  assume |coeffs| <=1,
+ * print them as int, assure a "perfect" allignment */
+void PP_1Line_MatRot(const cMatrix<tREAL8> & aMat,int aY,size_t aNbChar=4);
+
+/// Make a pretty print of full matric
+void PP_Full_MatRot(const cMatrix<tREAL8> & aMat,size_t aNbChar=4);
+void PP_Full_2MatRot(const cMatrix<tREAL8> & aMat1,const cMatrix<tREAL8> & aMat2,size_t aNbChar=4);
+
+
 
 
 /**  Class for 3D "affine" rotation of vector
@@ -153,29 +245,49 @@ template <class Type> class cIsometry3D
 {
     public :
        static constexpr int       TheDim=3;
+       static constexpr int       NbDOF= 6;
+       static constexpr int       NbPtsMin = 3;  // != NbDOF/TheDim
+
+
        typedef cPtxd<Type,3>      tPt;
+       typedef cRotation3D<Type>  tRot;
        typedef cPtxd<Type,2>      tPt2;
        typedef cTriangle<Type,3>  tTri;
        typedef cTriangle<Type,2>  tTri2d;
        typedef Type               tTypeElem;
+       typedef std::vector<tPt>   tVPts;
+       typedef const tVPts&       tCRVPts;
+       typedef std::vector<Type> tVVals;
+       typedef const tVVals *    tCPVVals;
+
+       typedef tPt   tTabMin[NbPtsMin];  // Used for estimate with min number of point=> for ransac
+
        typedef cIsometry3D<Type> tTypeMap;
        typedef cIsometry3D<Type> tTypeMapInv;
-       static int NbDOF()   {return 6;}
 
        /// Default constructor is only provided for serialization, it initialize with dummy stuff
        cIsometry3D();
 
-       cIsometry3D(const tPt& aTr,const cRotation3D<Type> &);
+       cIsometry3D(const tPt& aTr,const tRot &);
        tTypeMapInv  MapInverse() const; // {return cIsometry3D(-mRot.Inverse(mTr),mRot.MapInverse());}
        tTypeMap  operator* (const tTypeMap &) const;
+       tTypeMap  ScaleTr (Type aScale) const;
+
        static tTypeMap Identity();
 
+       ///  Distance with normalisation to unity on center, W= weight of center dist vs rot
+       Type DistPoseRel(const tTypeMap & aIsom2,const Type & aWTr) const;
+
+       ///  Idem but dont normalize to unity
+       Type DistPose(const tTypeMap & aIsom2,const Type & aWTr) const;
+
+
        /// Return Isometrie with given Rot such I(PTin) = I(PTout)
-       static cIsometry3D<Type> FromRotAndInOut(const cRotation3D<Type> &,const tPt& aPtIn,const tPt& aPtOut );
+       static cIsometry3D<Type> FromRotAndInOut(const tRot &,const tPt& aPtIn,const tPt& aPtOut );
        /// Return Isome such thqt I(InJ) = OutK ;  In(InJJp1) // OutKKp1 ; In(Norm0) = NormOut
-       static cIsometry3D<Type> FromTriInAndOut(int aKIn,const tTri  & aTriIn,int aKOut,const tTri  & aTriOut);
+       static cIsometry3D<Type> FromTriInAndOut(int aKIn, const tTri  & aTriIn, int aKOut, const tTri  & aTriOut, bool SVP=false); // SVP: do not crash if impossible, return Id
        /// Idem put use canonique tri = 0,I,J as input
-       static cIsometry3D<Type> FromTriOut(int aKOut,const tTri  & aTriOut,bool Direct=true);
+       static cIsometry3D<Type> FromTriOut(int aKOut, const tTri  & aTriOut, bool Direct=true, bool SVP=false); // SVP: do not crash if impossible, return Id
 
        /// return a 2D triangle isometric to 3d, PK in 0,0  PK->PK1 // to Ox
        static tTri2d ToPlaneZ0(int aKOut,const tTri  & aTriOut,bool Direct=true);
@@ -183,10 +295,13 @@ template <class Type> class cIsometry3D
        /// return a random isometry, amplt fix size of randomization for tr
        static cIsometry3D<Type> RandomIsom3D(const Type & AmplPt);
 
+       /// this function must defined for differentiable group considered as variety
+       static tTypeMap  Centroid(const std::vector<tTypeMap> & aV,const std::vector<Type> &);
 
-       void SetRotation(const cRotation3D<Type> &);
+       void SetRotation(const tRot &);
 
-       const cRotation3D<Type> & Rot() const {return mRot;}  ///< Accessor
+       const tRot & Rot() const {return mRot;}  ///< Accessor
+       tRot & Rot() {return mRot;}  ///< Accessor
        const tPt &Tr() const {return mTr;}  ///< Accessor
        tPt &Tr() {return mTr;}  ///< Accessor
 
@@ -195,9 +310,31 @@ template <class Type> class cIsometry3D
 
        cSimilitud3D<Type>  ToSimil() const; ///< make a similitude with scale 1
 
+
+       // ********************************************************************************************
+       // **********************  MAP ESTIMATION *****************************************************
+       // ********************************************************************************************
+
+       //  --------------------- Function to do the map estimate (Ransac/LeastSq ...) usign ge
+       ///  Estimate using ransac 
+       static tTypeMap RansacL1Estimate(tCRVPts aVIn,tCRVPts aVOut,int aNbTest);
+      ///  Refine least square solution
+      tTypeMap LeastSquareRefine(tCRVPts aVIn,tCRVPts aVOut,Type * aRes2=nullptr,tCPVVals=nullptr)const;
+      /// Global estimate Ransac + Weight Least squares
+      tTypeMap StdGlobEstimate ( tCRVPts aVIn, tCRVPts aVOut, tTypeElem* aRes, tCPVVals   aVW, cParamCtrlOpt aParam);
+
+       /// Estimate from 3 point , interface to "FromTriOut"  for  "RansacL1Estimate"
+       static tTypeMap FromMinimalSamples(const tTabMin&,const tTabMin&);
+      /// Basic   Value(aPIn) - aPOUt 
+      tPt DiffInOut(const tPt & aPIn,const tPt & aPOUt) const;
+      /// compute the vector used in least square equation
+      static void ToEqParam(tPt & aRHS,std::vector<cDenseVect<Type>>&,const tPt &In,const tPt & Out);
+      ///  evaluate from a vec [TrX,TrY,ScX,ScY], typycally result of mean square
+      static tTypeMap  FromParam(const cDenseVect<Type> &);
+
     private :
-       tPt                mTr;
-       cRotation3D<Type>  mRot;
+       tPt          mTr;
+       tRot         mRot;
 };
 typedef cIsometry3D<tREAL8> tPoseR; 
 void AddData(const cAuxAr2007 & anAux,tPoseR & aPose);
@@ -210,16 +347,24 @@ template <class Type> class cSimilitud3D
 {
     public :
        static constexpr int       TheDim=3;
+       static constexpr int       NbDOF=7;
+       static constexpr int       NbPtsMin = 3;  // == NbDOF/TheDim
+
        typedef cPtxd<Type,3>      tPt;
        typedef cPtxd<Type,2>      tPt2;
        typedef cTriangle<Type,3>  tTri;
        typedef Type               tTypeElem;
+       typedef std::vector<tPt>   tVPts;
+       typedef const tVPts&       tCRVPts;
+       typedef std::vector<Type>  tVVals;
+       typedef const tVVals *     tCPVVals;
+       typedef tPt   tTabMin[NbPtsMin];  // Used for estimate with min number of point=> for ransac
        typedef cSimilitud3D<Type> tTypeMap;
        typedef cSimilitud3D<Type> tTypeMapInv;
-       static int NbDOF()   {return 7;}
 
 
        cSimilitud3D(const Type & aScale,const tPt& aTr,const cRotation3D<Type> &);
+       cSimilitud3D();
        tTypeMapInv  MapInverse() const; // {return cIsometry3D(-mRot.Inverse(mTr),mRot.MapInverse());}
        tTypeMap  operator* (const tTypeMap &) const;
 
@@ -229,6 +374,8 @@ template <class Type> class cSimilitud3D
        static tTypeMap FromTriInAndOut(int aKIn,const tTri  & aTriIn,int aKOut,const tTri  & aTriOut);
        /// Idem put use canonique tri = 0,I,J as input
        static tTypeMap FromTriOut(int aKOut,const tTri  & aTriOut);
+       ///  Random similitud
+       static tTypeMap RandomSim3D(Type aLevelScale,Type aLevelTr);
        /*  Create a cIsom that aline seg KKp1 of tri on P1->P2  and the normal oriented on axe Z
        */
        static cSimilitud3D<Type> FromTriInAndSeg(const tPt2&aP1,const tPt2&aP2,int aKIn,const tTri  & aTriIn);
@@ -237,14 +384,51 @@ template <class Type> class cSimilitud3D
        const tPt & Tr() const {return mTr;}  ///< Accessor
        const Type & Scale() const {return mScale;}  ///< Accessor
 
-       tPt   Value(const tPt & aPt) const  {return mTr + mRot.Value(aPt)*mScale;}
-       tPt   Inverse(const tPt & aPt) const {return mRot.Inverse((aPt-mTr)/mScale) ;}  // Work as M tM = Id
+
+       tPt   VecValue(const tPt & aPt) const  {return  mRot.Value(aPt)*mScale;}
+       tPt   VecInverse(const tPt & aPt) const {return mRot.Inverse((aPt)/mScale) ;}
+
+       tPt   Value(const tPt & aPt) const  {return mTr + VecValue(aPt);}
+       tPt   Inverse(const tPt & aPt) const {return VecInverse(aPt-mTr) ;}  // Work as M tM = Id
+
+       // ********************************************************************************************
+       // **********************  MAP ESTIMATION *****************************************************
+       // ********************************************************************************************
+
+       //  --------------------- Function to do the map estimate (Ransac/LeastSq ...) usign ge
+       ///  Estimate using ransac 
+       static tTypeMap RansacL1Estimate(tCRVPts aVIn,tCRVPts aVOut,int aNbTest);
+      ///  Refine least square solution
+      tTypeMap LeastSquareRefine(tCRVPts aVIn,tCRVPts aVOut,Type * aRes2=nullptr,tCPVVals=nullptr)const;
+      /// Global estimate Ransac + Weight Least squares
+      tTypeMap StdGlobEstimate ( tCRVPts aVIn, tCRVPts aVOut, tTypeElem* aRes, tCPVVals   aVW, cParamCtrlOpt aParam);
+
+       /// Estimate from 3 point , interface to "FromTriOut"  for  "RansacL1Estimate"
+       static tTypeMap FromMinimalSamples(const tTabMin&,const tTabMin&);
+      /// Basic   Value(aPIn) - aPOUt 
+      tPt DiffInOut(const tPt & aPIn,const tPt & aPOUt) const;
+      /// compute the vector used in least square equation
+      static void ToEqParam(tPt & aRHS,std::vector<cDenseVect<Type>>&,const tPt &In,const tPt & Out);
+      ///  evaluate from a vec [TrX,TrY,ScX,ScY], typycally result of mean square
+      static tTypeMap  FromParam(const cDenseVect<Type> &);
 
     private :
        tTypeElem          mScale;
        tPt                mTr;
        cRotation3D<Type>  mRot;
 };
+typedef cSimilitud3D<tREAL8>  tSim3dR;
+
+///  Tr ->   aSim.Value(aR.Tr();   R -> Sym.Rot *  R
+template <class Type> cIsometry3D<Type>    TransfoPose(const cSimilitud3D<Type> & aSim,const cIsometry3D<Type> & aR);
+
+///  Compute the similitude tha make P0 Identity and P0/P1 unit base
+tSim3dR  SimOfPosesRef(const tSim3dR & aP0,const tSim3dR & aP1);
+
+/// V1 and V2 being pose "identic" but in different repair, compute the transfer similitude that best align
+std::pair<tREAL8,tSim3dR>   EstimateSimTransfertFromPoses(const std::vector<tPoseR> & aV1,const std::vector<tPoseR> & aV2);
+
+
 
 /**  Class to store the devlopment planar of two adjacent faces      :          P2
  * adjacent face . At the end we have two 2Dtriangle   with  P0P1    :         /    \   [T1] 
@@ -296,22 +480,39 @@ template <class Type> class cTriangulation3D : public cTriangulation<Type,3>
 
 	   cTriangle<Type,2>     TriDevlpt(int aKF,int aNumSom) const;  // aNumSom in [0,1,2]
 	   cDevBiFaceMesh<Type>  DoDevBiFace(int aKF1,int aNumSom) const;  // aNumSom in [0,1,2]
+
+           cBox2dr  Box2D() const;
+
+           void MakePatches(std::list<std::vector<int> > & ,tREAL8 aDistNeigh,tREAL8 aDistReject,int aSzMin) const;
+
+
         private :
            /// Read/Write in ply format using
            void PlyInit(const std::string &);
            void PlyWrite(const std::string &,bool isBinary) const;
 };
 
+
 class cPlane3D
 {
      public :
+	 /* ---------------------  Static constructor ---------------------------*/
+	     /// construct with 1 point inside, and 2 vector inside
          static cPlane3D FromP0And2V(const cPt3dr & aP0,const cPt3dr& aAxeI , const cPt3dr& aAxeJ);
+	     /// construct with 1 point inside, and the normal direction
          static cPlane3D FromPtAndNormal(const cPt3dr & aP0,const cPt3dr& aAxeK);
+	     /// construct with 3 point inside
          static cPlane3D From3Point(const cPt3dr & aP0, const cPt3dr & aP1, const cPt3dr &aP2);
+
+	 /// Estimate from a set of point,
+         static std::pair<cPlane3D,tREAL8> RansacEstimate(const std::vector<cPt3dr> & aP0,bool AvgOrMax,int aNbTest=-1,tREAL8 aRegulMinTri =1e-3);
 	 /// Return the indexes of the "best" plane
          static std::pair<cPt3di,tREAL8>  IndexRansacEstimate(const std::vector<cPt3dr> & aP0,bool AvgOrMax,int aNbTest=-1,tREAL8 aRegulMinTri =1e-3);
-         static std::pair<cPlane3D,tREAL8> RansacEstimate(const std::vector<cPt3dr> & aP0,bool AvgOrMax,int aNbTest=-1,tREAL8 aRegulMinTri =1e-3);
 
+     /// Return a plane estimate by least-square
+         static std::pair<cPlane3D,tREAL8> LSQEstimate(const std::vector<cPt3dr> & aP0,const std::vector<tREAL8>* =nullptr);
+
+	 ///   Avegrage distance 
 	 tREAL8 AvgDist(const std::vector<cPt3dr> &) const;
 	 tREAL8 MaxDist(const std::vector<cPt3dr> &) const;
 
@@ -323,10 +524,19 @@ class cPlane3D
 
          // return 3 point for random plane
          static std::vector<cPt3dr>  RandParam();
-         const cPt3dr& AxeI() const;
-         const cPt3dr& AxeJ() const;
-         const cPt3dr& AxeK() const;
 
+         const cPt3dr& P0() const; ///< Accessor
+         const cPt3dr& AxeI() const; ///< Accessor
+         const cPt3dr& AxeJ() const; ///< Accessor
+         const cPt3dr& AxeK() const; ///< Accessor
+	 
+	 /** Return the intersection of the planes consider  as vector space , used eigen decomposition
+	  * to get the best solutuob if Nb>2, if Sz=1 or 0 and aSzMin is Ok, return a random acceptable solution */
+	 static cPt3dr DirInterPlane(const std::vector<const cPlane3D*>& aVPlanes,int aSzMin=2);
+	 static cPt3dr DirInterPlane(const std::vector<cPlane3D>& aVPlanes,int aSzMin=2);
+
+	 static tSeg3dr InterPlane(const std::vector<const cPlane3D*>& aVPlanes,int aSzMin=2,tREAL8 aWeithStab=1e-10);
+	 static tSeg3dr InterPlane(const std::vector<cPlane3D>& aVPlanes,int aSzMin=2,tREAL8 aWeithStab=1e-10);
      private :
          cPlane3D(const cPt3dr & aP0,const cPt3dr& aAxeI , const cPt3dr& aAxeJ);
          cPt3dr mP0;
@@ -347,7 +557,25 @@ cPt3dr  BundleInters(const std::vector<tSeg3dr> & aVSeg,const std::vector<tREAL8
 cPt3dr  BundleInters(const tSeg3dr & aSeg1,const tSeg3dr & aSeg2,tREAL8 aW12=0.5);
 ///  If we want to have the coeff of intersection
 cPt3dr  BundleInters(cPt3dr & aCoeff,const tSeg3dr & aSeg1,const tSeg3dr & aSeg2,tREAL8 aW12=0.5);
+///   Return point on bundle having given Z Value
+cPt3dr  BundleFixZ(const tSeg3dr & aSeg1,const tREAL8 &);
 
+///  Compute intersection on all pairs, and return the one minimizing sum of euclidian distances
+cPt3dr  RobustBundleInters(const std::vector<tSeg3dr> & aVSeg);
+
+/// Having poses + dir of bundles, return the ground point + resisdual as average angle
+std::pair<tREAL8,cPt3dr> AnglesInterBundles
+                         (
+                               const std::vector<tPoseR> & aVPose,
+                               const cPt3dr * aDirBdund,
+                               tREAL8 aEpsilon
+                          );
+
+/// Compute bundle intersection using a L1 criteria with barodale, "NbSegCompl" handle to be closer to euclidian distance
+// cPt3dr  L1_BundleInters(const std::vector<tSeg3dr> & aVSeg,int NbSegCompl=0,const std::vector<tREAL8> * aVWeight = nullptr);
+
+/// Compute isometry between two 3D points vectors. at least 3 points
+tPoseR RobustIsometry(const std::vector<cPt3dr> & aPtsA, const std::vector<cPt3dr> & aPtsB);
 
 /**  Class for sampling the space of quaternion/quaternion.  Method :
  *
@@ -373,6 +601,7 @@ class cSampleQuat
 
 
          cPt4dr  KthQuat(int aK) const; ///< Main method return the number of rot
+         tRotR   KthRot(int aK) const;
          size_t NbRot() const;  ///< Accessor
          size_t NbStep() const;  ///< Accessor
 
@@ -398,6 +627,113 @@ class cSampleQuat
          size_t  mNbRot;
 };
 
+/// class for sampling regularly the hypercube, useful for sampling not so irregularly the hyper sphere
+class cSampleHyperCube
+{
+   public :
+        cSampleHyperCube(int aDim,int aNbStep,bool isProj = false);
+        /// number of sampled points
+        int NbSamples() const;
+        ///  Main method return the Kth point
+        void  KthPt(std::vector<tREAL8> & aPts,int aK) const;
+
+   private :
+        tREAL8 Int2Coord(int aK) const;  ///< convert on 1 direction [0,NbStep] => [-1,1]
+
+        int  mDim;        // dimension of the cube
+        int  mNbStep;     // memo nuber of step
+        bool mIsProj;     // is it projective (i P ~ -P , and only of 2 is returned)
+        int  mNbF;        // number of face
+        int  mNbSamples;  // number of sample of the cube
+};
+
+///  Class for sampling point +- regularly on the sphere
+class cSampleSphere3D
+{
+   public :
+      cSampleSphere3D(int aNbStep,bool isProj=false);
+
+      cPt3dr KthPt(int aK) const;
+      int NbSamples() const;
+   private :
+      cSampleHyperCube mSHC;
+};
+
+
+class cEllipse3D
+{
+    public:
+        static void Bench();
+
+        cEllipse3D();
+
+        void AddData(const cPt3dr&, double);
+        void Normalise();
+        void Reset();
+
+
+        cPt3dr & CDG();
+        const cPt3dr & CDG()const ;
+
+        double & Sxx();
+        const double & Sxx()const ;
+
+        double & Syy();
+        const double & Syy()const ;
+
+        double & Szz();
+        const double & Szz()const ;
+
+        double & Sxy();
+        const double & Sxy()const ;
+
+        double & Sxz();
+        const double & Sxz()const ;
+
+        double & Syz();
+        const double & Syz()const ;
+
+        double & Pds();
+        const double & Pds()const ;
+
+        bool & Norm();
+        const bool & Norm()const ;
+
+    private:
+        cPt3dr mCDG;
+        double mSxx;
+        double mSyy;
+        double mSzz;
+        double mSxy;
+        double mSxz;
+        double mSyz;
+        double mPds;
+        bool mNorm;
+
+};
+
+class cGenGauss3D
+{
+    public :
+        cGenGauss3D(const cEllipse3D & anEl );
+        const double & ValP(int aK) const {return mVP(aK);};
+        const cDenseVect<tREAL8>   VecP(int aK) const {return mVecP.ReadCol(aK); };
+        const cPt3dr  & CDG() const {return mCDG;}
+
+        //distribution de points selon e1,e2,e3
+        //indiqué par (2*aN1+1),(2*aN2+1),(2*aN3+1) et Gauss
+        void GetDistribGaus(std::vector<cPt3dr> &,int,int,int);
+
+        //5-pts distribution
+        void GetDistrib5Pts(std::vector<cPt3dr> &,double aSca=1.0);
+
+    private :
+
+        cPt3dr mCDG;
+        cDenseVect<tREAL8> mVP;
+        cDenseMatrix<tREAL8> mVecP;
+
+};
 
 
 

@@ -16,6 +16,19 @@ namespace MMVII
 /*                                                             */
 /* *********************************************************** */
 
+#if (The_MMVII_DebugLevel>=The_MMVII_DebugLevel_InternalError_tiny )
+void cEllipse::AssertOk() const
+{
+    if (! mOk)
+       MMVII_INTERNAL_ERROR("Access to Ellipse Non OK");
+}
+#else
+void cEllipse::AssertOk() const
+{
+}
+#endif
+
+
 	//  =================== Create/Read/Write  ======================
 
 /**   Create an ellipse from it equation : v0 XX + v1 XY + v2 YY + v3 X + v4 Y = 1
@@ -26,6 +39,8 @@ namespace MMVII
  *
  *        =>  S = 1/2  Q-1 P  because  E(X,Y) = t(P-S) Q (P-S) +  CSte
  */
+
+bool DebugEll=true;
 
 cEllipse::cEllipse(cDenseVect<tREAL8> aDV,const cPt2dr & aC0) :
     mV    (aDV.Dup()),
@@ -44,7 +59,10 @@ cEllipse::cEllipse(cDenseVect<tREAL8> aDV,const cPt2dr & aC0) :
      mLSa = aRSEV.EigenValues()(1);
 
      mOk = (mLGa >0) && (mLSa>0) && (mCste<0) ;
-     if (!mOk) return;
+     if (!mOk)
+     {
+         return;
+     }
 
      mLGa = std::sqrt((-mCste)/mLGa);
      mLSa = std::sqrt((-mCste)/mLSa);
@@ -78,14 +96,54 @@ cEllipse::cEllipse(const cPt2dr & aCenter,tREAL8 aTeta,tREAL8 aLGa,tREAL8 aLSa):
 {
 }
 
+cEllipse::cEllipse(const cPt2dr & aCenter,tREAL8 aRay) :
+	cEllipse(aCenter,0.0,aRay,aRay)
+{
+}
+
+cEllipse cEllipse::Scale(tREAL8 aScale) const
+{
+    return cEllipse(Center()*aScale,TetaGa(),LGa()*aScale,LSa()*aScale);
+}
+
+
+/*
+template <class Type> void AddDataAsStdVect(const cAuxAr2007 & anAux,cDenseVect<Type>& aDenseV)
+{
+     std::vector<Type> aStdV;
+     if (anAux.Input())
+     {
+        MMVII::AddData(anAux,aStdV);
+	aDenseV = cDenseVect<Type>(aStdV);
+     }
+     else
+     {
+        aStdV = aDenseV.ToStdVect();
+        MMVII::AddData(anAux,aStdV);
+     }
+}
+*/
+
+
 void cEllipse::AddData(const  cAuxAr2007 & anAux)
 {
-     MMVII::AddData(cAuxAr2007("Vect",anAux),mV);
+     AssertOk();
+     AddDataAsStdVect(anAux,mV);
+     //  MMVII::AddData(cAuxAr2007("Vect",anAux),mV);
      MMVII::AddData(cAuxAr2007("C0",anAux),mC0);
+     //  MMVII::AddData(cAuxAr2007("C0",anAux),mC0);
+     {
+         cAuxAr2007 anAuxGeom("GeomForComment",anAux);
+	 MMVII::AddData(cAuxAr2007("LengthGreatAxe",anAuxGeom),mLGa);
+	 MMVII::AddData(cAuxAr2007("LengthSmallAxe",anAuxGeom),mLSa);
+	 MMVII::AddData(cAuxAr2007("DirGreatAxe",anAuxGeom),mVGa);
+         anAuxGeom.Ar().AddComment("GA=" + ToStr(mLGa) + " SA=" + ToStr(mLSa));
+     }
      if (anAux.Input())
      {
           *this = cEllipse(mV,mC0);
      }
+
 }
 
 void AddData(const  cAuxAr2007 & anAux,cEllipse & anEl)
@@ -96,61 +154,86 @@ void AddData(const  cAuxAr2007 & anAux,cEllipse & anEl)
 
 	//  =================== Accessor  ======================
 
-const cPt2dr & cEllipse::VGa() const {return mVGa;}
-const cPt2dr & cEllipse::VSa() const {return mVSa;}
+const cPt2dr & cEllipse::VGa() const {AssertOk(); return mVGa;}
+const cPt2dr & cEllipse::VSa() const {AssertOk(); return mVSa;}
 bool   cEllipse::Ok() const   {return mOk;}
-tREAL8 cEllipse::LGa() const  {return mLGa;}
-tREAL8 cEllipse::LSa() const  {return mLSa;}
-tREAL8 cEllipse::RayMoy() const  {return mRayMoy;}
-const cPt2dr &  cEllipse::Center() const {return mCenter;}
-double cEllipse::TetaGa() const { return ToPolar(mVGa).y(); }
+tREAL8 cEllipse::LGa() const  {AssertOk(); return mLGa;}
+tREAL8 cEllipse::LSa() const  {AssertOk(); return mLSa;}
+tREAL8 cEllipse::RayMoy() const  {AssertOk(); return mRayMoy;}
+const cPt2dr &  cEllipse::Center() const {AssertOk(); return mCenter;}
+double cEllipse::TetaGa() const {AssertOk();  return ToPolar(mVGa).y(); }
+tREAL8  cEllipse::EVP() const {return (mLGa>0) && (mLSa>0) ;}
+
 
 
 
 
 cPt2dr  cEllipse::PtOfTeta(tREAL8 aTeta,tREAL8 aMulRho) const
 {
+    AssertOk();
     return  mCenter+ mVGa *(cos(aTeta)*mLGa*aMulRho) + mVSa *(sin(aTeta)*mLSa*aMulRho);
 }
 
+cPt2dr cEllipse::InterSemiLine(tREAL8 aTeta) const
+{ 
+    AssertOk();
+     cPt2dr aPt = VectToCoordLoc(FromPolar(1.0,aTeta));
+     aPt = VUnit(aPt);
+     return FromCoordLoc(aPt);
+}
 
 
 cPt2dr  cEllipse::ToCoordLoc(const cPt2dr & aP0) const
 {
-     cPt2dr aP = (aP0-mCenter)/mVGa;
+     // cPt2dr aP = (aP0-mCenter)/mVGa;
+     // return cPt2dr(aP.x()/mLGa,aP.y()/mLSa);
+    AssertOk();
+     return VectToCoordLoc(aP0-mCenter);
+}
+
+cPt2dr  cEllipse::VectToCoordLoc(const cPt2dr & aP0) const
+{
+    AssertOk();
+     cPt2dr aP = aP0/mVGa;
 
      return cPt2dr(aP.x()/mLGa,aP.y()/mLSa);
 }
 
 cPt2dr  cEllipse::FromCoordLoc(const cPt2dr & aP0) const
 {
+    AssertOk();
    return mCenter + VectFromCoordLoc(aP0);
 }
 
 cPt2dr  cEllipse::VectFromCoordLoc(const cPt2dr & aP0) const
 {
+    AssertOk();
    return  mVGa * cPt2dr(aP0.x()*mLGa,aP0.y()*mLSa);
 }
 
 
 cPt2dr cEllipse::ToRhoTeta(const cPt2dr & aP0) const
 {
+    AssertOk();
      return ToPolar(ToCoordLoc(aP0));
 }
 
 cPt2dr  cEllipse::Tgt(const cPt2dr &aPInit) const
 {
+    AssertOk();
      return VectFromCoordLoc(Rot90(ToCoordLoc(aPInit)));
 }
 
 cPt2dr  cEllipse::NormalInt(const cPt2dr &aPInit) const
 {
+    AssertOk();
      return Rot90(Tgt(aPInit));
 }
 
 
 cPt2dr  cEllipse::PtAndGradOfTeta(tREAL8 aTeta,cPt2dr &aGrad,tREAL8 aMulRho) const
 {
+    AssertOk();
     // Tgt = DP/Dteta =  (-mLGa sin(aTeta)  ,  mLSa cos(teta)
     // Norm = Tgt * P(0,-1) =>    mLSa cos(teta) , mLGa sin(aTeta)
 
@@ -165,6 +248,7 @@ cPt2dr  cEllipse::PtAndGradOfTeta(tREAL8 aTeta,cPt2dr &aGrad,tREAL8 aMulRho) con
 
 double cEllipse::SignedQF_D2(const cPt2dr& aP) const
 {
+    AssertOk();
     cPt2dr aQ = aP-mCenter;
     tREAL8 aRes =   QScal(aQ,mQF,aQ)  + mCste;
 
@@ -173,11 +257,13 @@ double cEllipse::SignedQF_D2(const cPt2dr& aP) const
 
 double cEllipse::QF_Dist(const cPt2dr & aP) const 
 {
+    AssertOk();
     return std::sqrt(std::abs(SignedQF_D2(aP)));
 }
 
 double cEllipse::ApproxSigneDist(const cPt2dr & aP0) const
 {
+    AssertOk();
     cPt2dr aP = (aP0-mCenter) / mVGa;
     aP = cPt2dr(aP.x()/mSqRatio,aP.y()*mSqRatio);
 
@@ -186,16 +272,20 @@ double cEllipse::ApproxSigneDist(const cPt2dr & aP0) const
 
 double cEllipse::ApproxDist(const cPt2dr & aP0) const
 {
+    AssertOk();
 	return std::abs(ApproxSigneDist(aP0));
 }
 
 double cEllipse::EuclidDist(const cPt2dr& aP) const
 {
-     return Norm2(aP-ProjOnEllipse(aP));
+    AssertOk();
+     tREAL8 aRes = Norm2(aP-ProjOnEllipse(aP));
+     return aRes;
 }
 
 double cEllipse::SignedEuclidDist(const cPt2dr& aP) const
 {
+    AssertOk();
      cPt2dr aPProj = ProjOnEllipse(aP);
 
      tREAL8 aD = Norm2(aPProj-aP);
@@ -208,11 +298,16 @@ double cEllipse::SignedEuclidDist(const cPt2dr& aP) const
 
 cPt2dr  cEllipse::ProjOnEllipse(const cPt2dr & aPtAbs) const
 {
+    AssertOk();
+
     // Precaution because if A==B the polynon will be ill formed
     if (mSqRatio <= 1+3e-3)
     {
+
          if (mSqRatio <= 1+1e-7) 
+	 {
             return  ProjNonEuclOnEllipse(aPtAbs);
+	 }
          cPt2dr aRhoTeta =  ToRhoTeta(aPtAbs);
 
 	 double aStep    = std::max(mSqRatio-1.0,1e-5)*4.0;
@@ -246,7 +341,7 @@ cPt2dr  cEllipse::ProjOnEllipse(const cPt2dr & aPtAbs) const
 	 }
 
          return PtOfTeta(aTetaCur);
-}
+    }
 
     cPt2dr aPLoc  = (aPtAbs-mCenter)/mVGa;
 
@@ -292,17 +387,18 @@ cPt2dr  cEllipse::ProjOnEllipse(const cPt2dr & aPtAbs) const
     }
     return mCenter + mVGa * aBestP.IndexExtre();
 
-    /*
-    cPt2dr aPCS = aBestP.IndexExtre();
-    cPt2dr aPEllipse  (mLGa * aPCS.x()  , mLSa * aPCS.y());
-
-    return mCenter + mVGa * aPEllipse;
-    */
 }
 
 cPt2dr  cEllipse::ProjNonEuclOnEllipse(const cPt2dr & aPt) const
 {
-     return FromCoordLoc(VUnit(ToCoordLoc(aPt)));
+    AssertOk();
+     cPt2dr aRes =  FromCoordLoc(VUnit(ToCoordLoc(aPt)));
+     return aRes;
+}
+
+tREAL8 cEllipse::NonEuclidDist(const cPt2dr& aP) const
+{
+    return Norm2(aP-ProjNonEuclOnEllipse(aP));
 }
 
           // ===================   BENCH ============================
@@ -362,9 +458,14 @@ void cEllipse::BenchEllispe()
 
          for (int aKp=0 ; aKp<10 ; aKp++)
 	 {
-             cPt2dr aP1 =  anEl.PtOfTeta(RandInInterval(-M_PI,M_PI),RandInInterval(0.99,0.999));
-             cPt2dr aP2 =  anEl.PtOfTeta(RandInInterval(-M_PI,M_PI),RandInInterval(1.001,1.01));
-             cPt2dr aP3 =  anEl.PtOfTeta(RandInInterval(-M_PI,M_PI),1.0);
+             auto v1 = RandInInterval(-M_PI,M_PI);
+             auto v2 = RandInInterval(0.99,0.999);
+             auto v3 = RandInInterval(-M_PI,M_PI);
+             auto v4 = RandInInterval(1.001,1.01);
+             auto v5 = RandInInterval(-M_PI,M_PI);
+             cPt2dr aP1 =  anEl.PtOfTeta(v1,v2);
+             cPt2dr aP2 =  anEl.PtOfTeta(v3,v4);
+             cPt2dr aP3 =  anEl.PtOfTeta(v5,1.0);
 
 	     MMVII_INTERNAL_ASSERT_bench(anEl.SignedQF_D2(aP1)<0,"BenchEllispe");
 	     MMVII_INTERNAL_ASSERT_bench(anEl.SignedQF_D2(aP2)>0,"BenchEllispe");
@@ -380,19 +481,21 @@ void cEllipse::BenchEllispe()
 	 }
 
          for (int aKp=0 ; aKp<10 ; aKp++)
-	 {
-             cPt2dr aP1 =  anEl.PtOfTeta(RandInInterval(0.1,10),RandInInterval(-M_PI,M_PI));
-	     cPt2dr aPP = anEl.ProjOnEllipse(aP1);
-	     if (Bug)
-	     {
-		     StdOut() << anEl.ToRhoTeta(aP1) << " " <<   Scal(anEl.Tgt(aPP),aP1-aPP)  << aP1-aPP  << std::endl;
-		     StdOut() <<  "Ratiooo=" << aLSa/aLGa   << std::endl;
-	     }
+         {
+             auto v1 = RandInInterval(0.1,10);
+             auto v2 = RandInInterval(-M_PI,M_PI) ;
+             cPt2dr aP1 =  anEl.PtOfTeta(v1,v2);
+             cPt2dr aPP = anEl.ProjOnEllipse(aP1);
+             if (Bug)
+             {
+                 StdOut() << anEl.ToRhoTeta(aP1) << " " <<   Scal(anEl.Tgt(aPP),aP1-aPP)  << aP1-aPP  << std::endl;
+                 StdOut() <<  "Ratiooo=" << aLSa/aLGa   << std::endl;
+             }
 
-	     MMVII_INTERNAL_ASSERT_bench(std::abs(anEl.ToRhoTeta(aPP).x()-1.0)<1e-5,"BenchEllispe");
-	     MMVII_INTERNAL_ASSERT_bench(std::abs(Scal(anEl.Tgt(aPP),aP1-aPP))<1e-3,"BenchEllispe");
-	     // getchar();
-	 }
+             MMVII_INTERNAL_ASSERT_bench(std::abs(anEl.ToRhoTeta(aPP).x()-1.0)<1e-5,"BenchEllispe");
+             MMVII_INTERNAL_ASSERT_bench(std::abs(Scal(anEl.Tgt(aPP),aP1-aPP))<1e-3,"BenchEllispe");
+             // getchar();
+         }
 
 	 /* Check experimentaly that ApproxDist ~ EuclidDist and that the approximation can be bounded as a fonction
 	  * of ellipse excentricity*/
@@ -400,7 +503,9 @@ void cEllipse::BenchEllispe()
 	 cWeightAv<tREAL8>  aWAvg;
          for (int aKp=0 ; aKp<100 ; aKp++)
 	 {
-             cPt2dr aP1 =  anEl.PtOfTeta(RandInInterval(0.9,1.1),RandInInterval(-M_PI,M_PI));
+             auto v1 = RandInInterval(0.9,1.1);
+             auto v2 = RandInInterval(-M_PI,M_PI);
+             cPt2dr aP1 =  anEl.PtOfTeta(v1,v2);
              tREAL8  aRatio= anEl.ApproxDist(aP1) / anEl.EuclidDist(aP1) ;
 	     UpdateMax(aMaxRatio,aRatio);
 	     aWAvg.Add(1.0,aRatio);
@@ -428,10 +533,16 @@ void cEllipse::BenchEllispe()
 /*               cEllipseEstimate                               */
 /*                                                              */
 /*  *********************************************************** */
-cEllipse_Estimate::cEllipse_Estimate(const cPt2dr & aC0) :
-    mSys  (new cLeasSqtAA<tREAL8> (5)),
-    mC0   (aC0)
+cEllipse_Estimate::cEllipse_Estimate(const cPt2dr & aC0,bool isCenterFree,bool isCircle) :
+    mIsCenterFree  (isCenterFree),
+    mIsCircle      (isCircle),
+    mSys           (new cLeasSqtAA<tREAL8> (5)),
+    mC0            (aC0)
 {
+	/*
+      if (mIsCircle)
+         MMVII_INTERNAL_ASSERT_strong(!isCenterFree,"Still dont handle Free center for circle");
+	 */
 }
 
 cLeasSqtAA<tREAL8> & cEllipse_Estimate::Sys() {return *mSys;}
@@ -441,27 +552,62 @@ cEllipse_Estimate::~cEllipse_Estimate()
     delete mSys;
 }
 
-void cEllipse_Estimate::AddPt(cPt2dr aP)
+void cEllipse_Estimate::AddPt(cPt2dr aP,tREAL8 aWeight)
 {
      aP = aP-mC0;
 
      cDenseVect<tREAL8> aDV(5);
-     aDV(0) = Square(aP.x());
-     aDV(1) = 2 * aP.x() * aP.y();
-     aDV(2) = Square(aP.y());
-     aDV(3) = aP.x();
-     aDV(4) = aP.y();
+     if (mIsCircle)
+     {
+         aDV(0) = Square(aP.x()) + Square(aP.y());
+         aDV(1) = 0 ;
+         aDV(2) = 0 ;
+     }
+     else
+     {
+         aDV(0) = Square(aP.x());
+         aDV(1) = 2 * aP.x() * aP.y();
+         aDV(2) = Square(aP.y());
+     }
 
-     mSys->AddObservation(1.0,aDV,1.0);
+     if (mIsCenterFree)
+     {
+        aDV(3) = aP.x();
+        aDV(4) = aP.y();
+     }
+     else
+     {
+        aDV(3) = 0.0 ;
+        aDV(4) = 0.0 ;
+     }
+
+     mSys->PublicAddObservation(aWeight,aDV,1.0);
 
      mVObs.push_back(aP);
 }
 
 cEllipse cEllipse_Estimate::Compute()
 {
-     auto  aSol = mSys->Solve();
+     if (! mIsCenterFree)
+     {
+         mSys->AddObsFixVar(1.0,3,0.0);
+         mSys->AddObsFixVar(1.0,4,0.0);
+     }
+     if ( mIsCircle)
+     {
+         mSys->AddObsFixVar(1.0,1,0.0);
+         mSys->AddObsFixVar(1.0,2,0.0);
+     }
 
-     return cEllipse(aSol,mC0);
+     auto  aSol = mSys->PublicSolve();
+
+     if (mIsCircle)
+     {
+         aSol(2) = aSol(0);
+     }
+
+     cEllipse aRes(aSol,mC0);
+     return aRes;
      /// return  aRes;
 }
 

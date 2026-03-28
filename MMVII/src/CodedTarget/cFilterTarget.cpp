@@ -237,6 +237,13 @@ template <class Type> double cFilterDCT<Type>::ComputeVal(const cPt2dr & aP)
 
     return Compute();
 }
+
+template <class Type> cPt1dr cFilterDCT<Type>::Value(const cPt2dr& aP) const 
+{ 
+     return cPt1dr(const_cast<cFilterDCT<Type>&>(*this).ComputeVal(aP)); 
+}
+
+
 //static bool BUGF = false;
 
 template <class Type> double cFilterDCT<Type>::ComputeValMaxCrown(const cPt2dr & aP,const double & aThreshold)
@@ -399,7 +406,6 @@ template<class TypeEl> cIm2D<TypeEl> ImScalab(const  cDataIm2D<TypeEl> & aDImIn,
 {
     std::vector<cPt2di>  aVectVois = SortedVectOfRadius(aR0,aR1,true);
 
-    // aVectVois = GetPts_Circle(cPt2dr(0,0),aR0,true);  StdOut() << "SYMMMM" << std::endl;
 
     int aD = round_up(aR1);
     cPt2di aPW(aD,aD);
@@ -686,6 +692,13 @@ template <class Type>
 {
     return new  cSymFilterCT<Type>(anIm,aParam);
 }
+
+template <class Type>
+    cFilterDCT<Type> * cFilterDCT<Type>::AllocSym(tIm anIm,double aR0,double aR1,double aEpsilon)
+{
+    return new  cSymFilterCT<Type>(anIm,aR0,aR1,aEpsilon);
+}
+
 
 template <class Type>
     cFilterDCT<Type> * cFilterDCT<Type>::AllocBin(tIm anIm,const cParamAllFilterDCT & aParam)

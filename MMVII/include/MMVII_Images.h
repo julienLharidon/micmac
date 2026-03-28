@@ -12,6 +12,7 @@ namespace MMVII
 */
 
 template <class Type>  class cIm2D;
+template <const int Dim> void IncrementPixBoxIteratorGen(cPixBoxIterator<Dim>&);
 
 /**  Class allow to iterate the pixel of an image (in fact a rectangular object) using the
 same syntax than stl iterator => for (auto aP : anIma) ....
@@ -19,6 +20,8 @@ same syntax than stl iterator => for (auto aP : anIma) ....
 template <const int Dim>  class cPixBoxIterator
 {
      public :
+       friend void IncrementPixBoxIteratorGen<Dim>(cPixBoxIterator<Dim>&);
+
         typedef cPtxd<int,Dim>        tPt;
         typedef cPixBoxIterator<Dim>  tIter;
         typedef cPixBox<Dim>          tPB;
@@ -52,9 +55,11 @@ template <const int Dim>  class cPixBoxIterator
            P0[aK] <= Pix [aK] < P1[aK]  for K in [0,Dim[
 */
 
+
 template <const int Dim>  class cPixBox : public cTplBox<int,Dim>
 {
     public : 
+
         typedef int                   tScalPt;
         typedef cPtxd<tScalPt,Dim>        tPt;
         typedef cTplBox<tScalPt,Dim>      tBox;
@@ -87,8 +92,10 @@ template <const int Dim>  class cPixBox : public cTplBox<int,Dim>
         tPt  CircNormProj(const tPt &) const;
 
         cBorderPixBox<Dim>  Border(int aSz) const;
+        cPixBox<Dim>  Interior(int aSz) const;
 
         inline bool InsideBL(const cPtxd<double,Dim> & aP) const; ///< Inside for Bilin
+        bool InsideInterpolator(const cInterpolator1D &,const cPtxd<double,Dim> & aP,tREAL8 aMargin=0.0) const; ///< Inside for Bilin
         inline void AssertInsideBL(const cPtxd<double,Dim> & aP) const
         {
              MMVII_INTERNAL_ASSERT_tiny(InsideBL(aP),"Outside image in bilinear mode");
@@ -120,6 +127,22 @@ template <> inline  bool cPixBox<3>::InsideBL(const cPtxd<double,3> & aP) const
           && (aP.z() >= tBox::mP0.z()) &&  ((aP.z()+1) <  tBox::mP1.z())
     ;
 }
+template <> inline  bool cPixBox<4>::InsideBL(const cPtxd<double,4> & aP) const
+{
+    return   (aP.x() >= tBox::mP0.x()) &&  ((aP.x()+1) <  tBox::mP1.x())
+          && (aP.y() >= tBox::mP0.y()) &&  ((aP.y()+1) <  tBox::mP1.y())
+          && (aP.z() >= tBox::mP0.z()) &&  ((aP.z()+1) <  tBox::mP1.z())
+          && (aP.t() >= tBox::mP0.t()) &&  ((aP.t()+1) <  tBox::mP1.t())
+    ;
+}
+template <> inline  bool cPixBox<5>::InsideBL(const cPtxd<double,5> & aP) const
+{
+   // need it for linking reason, but not sure it will ever used, to see
+   MMVII_INTERNAL_ERROR("No cPixBox<5>::InsideBL");
+   return false;
+}
+
+
 
 #if ! defined(_MSC_VER)
 template<> const cPixBox<2>     cPixBox<2>::TheEmptyBox;  // Pb Clang, requires explicit declaration of specialization
@@ -275,6 +298,19 @@ template <> inline cPixBoxIterator<3> &  cPixBoxIterator<3>::operator ++()
     return *this;
 }
 
+// Higher dimension are not often used, and by the way, the gain to inlining and
+// specialization becomes low, so for theses dimension we use the "slower" generic methods
+template <> inline cPixBoxIterator<4> &  cPixBoxIterator<4>::operator ++() 
+{ 
+    IncrementPixBoxIteratorGen(*this);
+    return *this;
+}
+
+template <> inline cPixBoxIterator<5> &  cPixBoxIterator<5>::operator ++() 
+{
+   IncrementPixBoxIteratorGen(*this);
+   return *this;
+}
 
 
 ///  Abstract class allowing to manipulate images independanlty of their type
@@ -293,20 +329,40 @@ template <const int Dim> class cDataGenUnTypedIm : public cPixBox<Dim>,
         typedef cPixBox<Dim>            tPB;
         const   tPB  & RO() {return *this;}
 
+        typedef cPtxd<int,Dim>             tPixI;
+        typedef cPtxd<tREAL8,Dim>          tPixR;
+;
         cDataGenUnTypedIm(const cPtxd<int,Dim> & aP0,const cPtxd<int,Dim> & aP1);
+
+        virtual ~cDataGenUnTypedIm();
+
 
          
            // Get Value, integer coordinates
                 /// Pixel -> Integrer Value
-        virtual int VI_GetV(const cPtxd<int,Dim> & aP)  const =0;
+        virtual int VI_GetV(const tPixI & aP)  const =0;
                 /// Pixel -> float Value
-        virtual double VD_GetV(const cPtxd<int,Dim> & aP)  const =0;
+        virtual double VD_GetV(const tPixI & aP)  const =0;
            // Set Value, integer coordinates
                 /// Set Pixel Integrer Value
-        virtual void VI_SetV(const  cPtxd<int,Dim> & aP,const int & aV) =0;
+        virtual void VI_SetV(const  tPixI & aP,const int & aV) =0;
+                /// Set Value for vector of points, default use VI_SetV
+        virtual void VI_VPtsSetV(const  std::vector<tPixI> & aP, int  aV);
+        virtual void VD_VPtsSetV(const  std::vector<tPixI> & aP, tREAL8 aV);
+
                 /// Set Pixel Float Value
-        virtual void VD_SetV(const  cPtxd<int,Dim> & aP,const double & aV)=0 ;
+        virtual void VD_SetV(const  tPixI & aP,const double & aV)=0 ;
+
+        virtual double GetVBL(const  tPixR & aP) const  = 0;
+
+        /// Interpolated value+derivative, using a generic diffentiable interpolator
+        virtual std::pair<tREAL8,cPt2dr> GetValueAndGradInterpol(const cDiffInterpolator1D &,const cPt2dr & aP) const;
 };
+
+/// Specfy the box, if EmptyBox full file
+cDataGenUnTypedIm<2> * ReadIm2DGen(const std::string &aName, cBox2di );
+/// Read full file
+cDataGenUnTypedIm<2> * ReadIm2DGen(const std::string &aName);
 
 
 ///  Classes for   ram-image containg a given type of pixel
@@ -330,11 +386,12 @@ template <class Type,const int Dim> class cDataTypedIm : public cDataGenUnTypedI
         typedef tNumTrait<Type> tTraits;
         typedef typename tTraits::tBase  tBase;
         typedef cPixBox<Dim>            tPB;
+        typedef cPtxd<int,Dim>          tPix;
 
         const tINT8 & NbElem() const {return tPB::NbElem();} ///< Number total of pixel
-        const cPtxd<int,Dim> & P0() const {return tPB::P0();}  ///< facility
-        const cPtxd<int,Dim> & P1() const {return tPB::P1();}  ///< facility
-        const cPtxd<int,Dim> & Sz() const {return tPB::Sz();}  ///< facility
+        const tPix & P0() const {return tPB::P0();}  ///< facility
+        const tPix & P1() const {return tPB::P1();}  ///< facility
+        const tPix & Sz() const {return tPB::Sz();}  ///< facility
 
         Type * RawDataLin() {return  mRawDataLin;}  ///< linear raw data
         const Type * RawDataLin() const {return  mRawDataLin;}  ///< linear raw data
@@ -362,15 +419,20 @@ template <class Type,const int Dim> class cDataTypedIm : public cDataGenUnTypedI
 
         cDataTypedIm (const cPtxd<int,Dim> & aP0,const cPtxd<int,Dim> & aP1,
                       Type * DataLin=nullptr,eModeInitImage=eModeInitImage::eMIA_NoInit);  ///< Only cstr
+
+        static cDataTypedIm<Type,Dim> * AllocIm(const tPix & );
         virtual ~cDataTypedIm(); ///<   Big obj, do it virtual
-        // All distance-norm are  normalized/averaged , so that const image has a norm equal to the constante
-        double L1Dist(const cDataTypedIm<Type,Dim> & aV) const;  ///< Distance som abs
-        double L2Dist(const cDataTypedIm<Type,Dim> & aV) const;  ///< Dist som square
-        double SqL2Dist(const cDataTypedIm<Type,Dim> & aV) const;  ///< Square L2Dist
+        // If Avg=true, All distance-norm are  normalized/averaged , so that const image has a norm equal to the constante
+        // This is default for image, but not for matrix/vector
+        double L1Dist(const cDataTypedIm<Type,Dim> & aV,bool Avg=true) const;  ///< Distance som abs
+        double L2Dist(const cDataTypedIm<Type,Dim> & aV,bool Avg=true) const;  ///< Dist som square
+        double SqL2Dist(const cDataTypedIm<Type,Dim> & aV,bool Avg=true) const;  ///< Square L2Dist
         double LInfDist(const cDataTypedIm<Type,Dim> & aV) const; ///< Dist max
-        double L1Norm() const;   ///< Norm som abs
-        double L2Norm() const;   ///< Norm square
+        double SafeMaxRelDif(const cDataTypedIm<Type,Dim> & aV,tREAL8 aEps) const;  ///<  Maximal safe relative dif
+        double L1Norm(bool Avg=true) const;   ///< Norm som abs
+        double L2Norm(bool Avg=true) const;   ///< Norm square
         double LInfNorm() const; ///< Nomr max
+        double SqL2Norm(bool Avg=true) const;   ///< Norm square
 
         Type     MinVal() const;
         Type     MaxVal() const;
@@ -378,6 +440,7 @@ template <class Type,const int Dim> class cDataTypedIm : public cDataGenUnTypedI
         tREAL16  MoyVal() const;
 
         void DupIn(cDataTypedIm<Type,Dim> &) const;  ///< Duplicate raw data
+        void ChSignIn(cDataTypedIm<Type,Dim> &) const;  ///< Duplicate with sign change in raw data
         void DupInVect(std::vector<Type> &) const;  ///< Duplicate raw data in a vect
 
         // Defaults values quitt slow but may be usefull
@@ -390,6 +453,12 @@ template <class Type,const int Dim> class cDataTypedIm : public cDataGenUnTypedI
                 /// Set Pixel Float Value
         void VD_SetV(const  cPtxd<int,Dim> & aP,const double & aV)override;
         void Resize(const cPtxd<int,Dim> & aP0,const cPtxd<int,Dim> & aP1,eModeInitImage=eModeInitImage::eMIA_NoInit);
+
+        double GetVBL(const  cPtxd<tREAL8,Dim> & aP) const  override
+        {
+            MMVII_INTERNAL_ERROR("No Im3D::GetVBL");
+            return 0.0;
+        }
     protected :
 
         ///< Test 4 writing
@@ -406,6 +475,14 @@ template <class Type,const int Dim> class cDataTypedIm : public cDataGenUnTypedI
         Type *   mRawDataLin; ///< raw data containing pixel values
         int      mNbElemMax;  ///< maxim number reached untill now, for resize
 };
+
+/* Add explicit specialization declarations for some compilers */
+
+template <>   cDataTypedIm<tREAL8,1>* cDataTypedIm<tREAL8,1>::AllocIm(const tPix& aPix);
+template <>   cDataTypedIm<tREAL8,2>* cDataTypedIm<tREAL8,2>::AllocIm(const tPix & aPix);
+template <>   cDataTypedIm<tREAL8,3>* cDataTypedIm<tREAL8,3>::AllocIm(const tPix& aPix);
+//template <>  std::string cStrIO<bool>::ToStr(const bool & anI);
+
 
 
 ///  Class for 1D image in Ram of a given type
@@ -438,9 +515,21 @@ template <class Type>  class cDataIm1D  : public cDataTypedIm<Type,1>
            tPB::AssertInsideBL(cPt1dr(aP));
            return  ValueBL(aP);
         }
+        inline double GetVBL(const cPt1dr & aP) const override  {return GetVBL(aP.x());}
+
         const Type & GetV(const cPt1di & aP)  const {return GetV(aP.x());}
         /// Used by matrix/vector interface 
         Type & GetV(const int & aP) { tPB::AssertInside(aP); return  Value(aP); }
+
+	tBase  DefGetV(const int & aP,const tBase & aDef )  const
+        {
+            if (tPB::Inside(cPt1di(aP)))
+               return Value(aP);
+            return aDef;
+        }
+	tBase  DefGetV(const cPt1di aP,const tBase & aDef )  const {return DefGetV(aP.x(),aDef);}
+
+
 
 
         const Type & CircGetV(const int & aP)  const {return Value(tPB::CircNormProj(cPt1di(aP)).x());}
@@ -513,14 +602,15 @@ template <class Type>  class cDataIm1D  : public cDataTypedIm<Type,1>
         inline tREAL8  AvgInterv(int aX0,int aX1) const;
 
 	void CropIn(const int & aP0,const cDataIm1D<Type> &);
+        cDataIm1D(const cPt1di & aP0,const cPt1di & aP1,
+                      Type * DataLin=nullptr,eModeInitImage=eModeInitImage::eMIA_NoInit); ///< Called by shared ptr (cIm2D)
     protected :
     private :
         void PostInit();
         Type * RawData1D() {return mRawData1D;}  ///< Used by matrix/vector interface
 
         cDataIm1D(const cDataIm1D<Type> &) = delete;  ///< No copy constructor for big obj, will add a dup()
-        cDataIm1D(const cPt1di & aP0,const cPt1di & aP1,
-                      Type * DataLin=nullptr,eModeInitImage=eModeInitImage::eMIA_NoInit); ///< Called by shared ptr (cIm2D)
+        void operator = (const cDataIm1D<Type> &) = delete;  ///< No copy constructor for big obj, will add a dup()
 
         
         Type & Value(const int & aX)   {return mRawData1D[aX];} ///< Data Access
@@ -616,12 +706,14 @@ template <class Type>  class cDataIm3D  : public cDataTypedIm<Type,3>
         // Not private because called by shared_ptr ...
         virtual ~cDataIm3D();
 
+        cDataIm3D(const cPt3di & aSz,Type * aRawDataLin=nullptr,eModeInitImage aModeInit=eModeInitImage::eMIA_NoInit) ;
+
     private :
         cDataIm3D(const cDataIm3D &) = delete;
+        void operator = (const cDataIm3D &) = delete;
         Type & Value(const cPt3di & aP)               {return mRawData3D[aP.z()][aP.y()][aP.x()];} ///< Data Access
         const Type & Value(const cPt3di & aP) const   {return mRawData3D[aP.z()][aP.y()][aP.x()];} /// Const Data Access
 
-        cDataIm3D(const cPt3di & aSz,Type * aRawDataLin,eModeInitImage aModeInit) ;
         tPPVal * mRawData3D;
 };
 
@@ -680,9 +772,9 @@ template <class TypeH,class TypeCumul>  class cHistoCumul
 class cTabulFonc1D : public cFctrRR
 {
      public  :
-       double F (double) const override;  ///< Virtual usable as cFctRR
+       double F (double) const override;  ///< Virtual usable as cFctRR calls InlF
 
-       cTabulFonc1D(const cFctrRR & aFctr,double XMin,double XMax,int aNbStep);
+       cTabulFonc1D(const cFctrRR & aFctr,double XMin,double XMax,int aNbStep,bool  IsBilin=false);
 
      private  :
        inline int    ToIntCoord(double aX) const;
@@ -694,6 +786,7 @@ class cTabulFonc1D : public cFctrRR
        double  mStep;
        double  mValXMin;
        double  mValXMax;  
+       bool    mIsBilin;
        cIm1D<double>      mIm;
        cDataIm1D<double>* mDIm;
 };

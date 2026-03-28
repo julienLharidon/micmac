@@ -127,7 +127,7 @@ cAutoTimerSegm::~cAutoTimerSegm()
 /*                                 */
 /***********************************/
 
-static const std::string DefTime(" OTHERS");
+static const std::string DefTime("OTHERS");
 
 cTimerSegm::cTimerSegm(cMMVII_Ap_CPU * anAppli) :
    mLastIndex     (DefTime),
@@ -136,6 +136,8 @@ cTimerSegm::cTimerSegm(cMMVII_Ap_CPU * anAppli) :
    mShowAtDel     (true)
 {
 }
+
+double cTimerSegm::CurBeginTime() const {return  mCurBeginTime;}
 
 void  cTimerSegm::SetNoShowAtDel()
 {

@@ -12,9 +12,26 @@ namespace MMVII
 // Call V1 Fast kth value extraction
 double NC_KthVal(std::vector<double> &, double aProportion);
 double Cst_KthVal(const std::vector<double> &, double aProportion);
-double Average(const std::vector<double> &);
+template <class Type> Type Average(const Type * aTab,size_t aNb);
+template <class Type> Type Average(const std::vector<Type> &);
 
-tREAL8 AngleInRad(eTyUnitAngle);
+double  IKthVal(std::vector<double> & aV, int aK);
+
+
+/** this function aims to be some universal weighting function for supression of outlayers when we are
+ initally completely "blind" , the weithing is decreasing function of the rank, it can be linear
+or have a cos shape (~ 1 in 0 , Esp^2 at max), and can be modulated with a pow. The RankMin is added 
+iw we want than even high value have some influence.
+*/
+tREAL8 RankWeigthedAverage(const std::vector<tREAL8>&,tREAL8 aPow,bool CosTransf,tREAL8 aRkMin=0.0);
+
+
+tREAL8 AngleFromRad(eTyUnitAngle);
+tREAL8 AngleFromRad(tREAL8 aAngInRad,eTyUnitAngle);
+tREAL8 Rad2DMgon(tREAL8 aAngInRad);
+
+
+bool AssertRadAngleInOneRound(tREAL8 aAngleRad, bool makeError=true);
 
 // some time needs a null val for any type with + (neutral for +)
 
@@ -69,6 +86,12 @@ double RandUnif_N(int aN); ///< Uniform disrtibution in [0,N[
 double RandUnif_C_NotNull(double aEps);   ///<  Uniform distribution in  -1 1, but abs > aEps
 double RandUnif_NotNull(double aEps);   ///<  Uniform distribution in  0 1, but abs > aEps
 double RandInInterval(double a,double b); ///<  Uniform distribution in [a,b]
+double RandInInterval(const cPt2dr &interval); ///<  Uniform distribution in [interval.x,interval.y]
+double RandInInterval_C(const cPt2dr &interval); ///<  Uniform distribution in [-interval.y,-interval.x]U[interval.x,interval.y]
+
+double RandUnif_Angle(); ///<  Uniform distribution in [0 2Pi]
+
+int RandUnif_M_N(int aM,int aN); ///< Uniform disrtibution in [M,N] 
 
 /** Class for mapping object R->R */
 class cFctrRR
@@ -89,6 +112,8 @@ template<class Type>  std::vector<Type>  RandomOrder(const std::vector<Type> & a
         aRes.push_back(aV.at(aI));
     return aRes;
 }
+///  Permutation as a shift 
+std::vector<int> ShitPerm(int aN,int aDelta);
 
 /// Random subset K among  N  !! Higher bias => lower proba of selection
 std::vector<int> RandSet(int aK,int aN,cFctrRR & aBias =cFctrRR::TheOne);
@@ -116,6 +141,7 @@ class cRandKAmongN
 /// K is the numbre to select, it will be selected regularly with a proportion aProp
 bool SelectWithProp(int aK,double aProp);
 bool SelectQAmongN(int aK,int aQ,int aN);
+int  KthSelectQAmonN(int aKTh,int aQ,int aN,tREAL8 aPhase=0.5);
 
 
 /* ============ Definition of numerical type ================*/
@@ -321,6 +347,8 @@ template <> class tElemNumTrait<tINT2> : public tBaseNumTrait<tStdInt>
 {
     public :
         static tINT2 DummyVal() {MMVII_INTERNAL_ERROR("No DummyVal for type");return 0;}
+        static tINT2 MaxVal() {return  std::numeric_limits<tINT2>::max();}
+        static tINT2 MinVal() {return  std::numeric_limits<tINT2>::min();}
         static bool   Signed() {return true;}
         static eTyNums   TyNum() {return eTyNums::eTN_INT2;}
         typedef tREAL4   tFloatAssoc;
@@ -350,6 +378,8 @@ template <> class tElemNumTrait<tINT8> : public tBaseNumTrait<tINT8>
 template <> class tElemNumTrait<tREAL4> : public tBaseNumTrait<tStdDouble>
 {
     public :
+        static tREAL4 MaxVal() {return  std::numeric_limits<tREAL4>::max();}
+        static tREAL4 MinVal() {return  std::numeric_limits<tREAL4>::min();}
         static tREAL4 DummyVal() {return std::nanf("");}
         static tREAL4 Accuracy() {return 1e-2f;}
         static bool   Signed() {return true;} ///< Not usefull but have same interface
@@ -455,6 +485,15 @@ template <class Type> class tNumTrait : public tElemNumTrait<Type> ,
                  return MinValue() + RandUnif_0_1() * (int(MaxValue())-int(MinValue())) ;
               return RandUnif_C();
          }
+         static Type AmplRandomValueCenter()
+         {
+              if (tETrait::IsInt())
+                 return  (int(MaxValue())-int(MinValue())) ;
+              return 2.0;
+         }
+
+
+
          static Type Eps()
          {
               if (tETrait::IsInt())
@@ -478,6 +517,16 @@ template <> class tMergeF<tREAL8,tREAL4> { public : typedef tREAL8  tMax; };
 template <> class tMergeF<tREAL4,tREAL8> { public : typedef tREAL8  tMax; };
 template <> class tMergeF<tREAL8,tREAL8> { public : typedef tREAL8  tMax; };
 
+template <class Type>  void AssertTabValueOk(const Type * aTab,size_t aNb)
+{
+    for (size_t aK=0 ; aK<aNb ; aK++)
+        tNumTrait<Type>::AssertValueOk(aTab[aK]);
+}
+
+template <class Type> void  AssertTabValueOk(const std::vector<Type> & aVec)
+{
+    AssertTabValueOk(aVec.data(),aVec.size());
+} 
 
 
 
@@ -528,38 +577,45 @@ template<class Type> Type DivSup(const Type & a,const Type & b)
 /// Return a value depending only of ratio, in [-1,1], eq 0 if I1=I2, and invert sign when swap I1,I2
 double NormalisedRatio(double aI1,double aI2);
 double NormalisedRatioPos(double aI1,double aI2);
+double Der_NormalisedRatio_I1(double aI1,double aI2);
+double Der_NormalisedRatio_I2(double aI1,double aI2);
+double Der_NormalisedRatio_I1Pos(double aI1,double aI2);
+double Der_NormalisedRatio_I2Pos(double aI1,double aI2);
 
 
 tINT4 HCF(tINT4 a,tINT4 b); ///< = PGCD = Highest Common Factor
 tREAL8   rBinomialCoeff(int aK,int aN);
 tU_INT8  liBinomialCoeff(int aK,int aN);
 tU_INT4  iBinomialCoeff(int aK,int aN);
-/* ****************  cDecomposPAdikVar *************  */
+/** ****************  cDecomposPAdikVar ************* 
 
-//  P-adik decomposition
-//  given a b c ...
-//     x y z   ->   x + a * y +  a * b *z
-//     M  -> M%a (M/a)%b ...
-//
+ P-adik decomposition
+ given a b c ...
+    x y z   ->   x + a * y +  a * b *z
+    M  -> M%a (M/a)%b ...
+  When a=b=c .. it coincides with usual p-adik decomposition (if all equal 2, (0 1 1 0) <=> 6 
+
+*/
+
 class cDecomposPAdikVar
 {
      public :
        typedef std::vector<int> tVI;
-       cDecomposPAdikVar(const tVI &);  // Constructot from set of bases
+       cDecomposPAdikVar(const tVI & aVBases);  // Constructot from set of bases
 
        const tVI &  Decompos(int) const; // P-Adik decomposition return internal buffer
        const tVI &  DecomposSizeBase(int) const; // Make a decomposition using same size (push 0 is need), requires < mMumBase
        int          FromDecompos(const tVI &) const; // P-Adik recomposition
        static void Bench();  // Make the test on correctness of implantation
-       const int&  MulBase() const;
+       const int&  MulBase() const;  ///< Accessor
      private:
        static void Bench(const std::vector<int> & aVB);
        void Bench(int aValue) const;
        const int & BaseOfK(int aK) const {return mVBases.at(aK%mNbBase);}
 
-       tVI          mVBases;
-       int          mNbBase;
-       int          mMulBase;
+       tVI          mVBases;   ///< memorize the bases
+       int          mNbBase;   ///< size of mVBases
+       int          mMulBase;  ///< Product of all element
        mutable tVI  mRes;
 };
 
@@ -648,14 +704,17 @@ template <class TypeIndex,class TypeVal,const bool IsMin> class cWhichExtrem
 	 }
 	 bool IsInit() const {return mIsInit;}
 
-         void Add(const TypeIndex & anIndex,const TypeVal & aNewVal)
+	 // return value indicate if modif was done
+         bool Add(const TypeIndex & anIndex,const TypeVal & aNewVal)
          {
               if ( (IsMin?(aNewVal<mValExtre):(aNewVal>=mValExtre)) || (!mIsInit))
               {     
                     mValExtre   = aNewVal;
                     mIndexExtre = anIndex;
+                    mIsInit = true;
+		    return true;
               }
-              mIsInit = true;
+	      return false;
          }
          const TypeIndex & IndexExtre() const {AssertIsInit();return mIndexExtre;}
          const TypeVal   & ValExtre  () const {AssertIsInit();return mValExtre;}
@@ -713,6 +772,9 @@ template <class TypeIndex,class TypeVal> class cWhichMinMax
          const cWhichMin<TypeIndex,TypeVal> & Min() const {return  mMin;}
          const cWhichMax<TypeIndex,TypeVal> & Max() const {return  mMax;}
 
+         const TypeIndex &  IndMin() const {return  mMin.IndexExtre();}
+         const TypeIndex &  IndMax() const {return  mMax.IndexExtre();}
+
      private :
          cWhichMin<TypeIndex,TypeVal> mMin;
          cWhichMax<TypeIndex,TypeVal> mMax;
@@ -728,13 +790,29 @@ template <class TypeVal> void UpdateMinMax(TypeVal & aVarMin,TypeVal & aVarMax,c
     if (aValue>aVarMax) aVarMax = aValue;
 }
 
+template <class TVal> TVal MinTab(TVal * Data,int aNb)
+{
+    MMVII_INTERNAL_ASSERT_tiny(aNb!=0,"No values in MinTab");
+    TVal aMin=Data[0];
+    for (int aK=1 ; aK<aNb ; aK++)
+        if (Data[aK]< aMin)
+           aMin = Data[aK];
+
+    return aMin;
+}
+
+// Min or Max with a weight on other,  for W=0.8 -> close to min
+tREAL8 SoftExtre(tREAL8 aWMax,tREAL8 aV1,tREAL8 aV2);
+
+
 /// Class to store min and max values
 template <class TypeVal> class cBoundVals
 {
 	public :
             cBoundVals() :
                    mVMin ( std::numeric_limits<TypeVal>::max()),
-		   mVMax (-std::numeric_limits<TypeVal>::max())
+		   //mVMax (-std::numeric_limits<TypeVal>::max())  MPD : strange why not min() ??
+		   mVMax (std::numeric_limits<TypeVal>::min())
 	    {
             }
             void Add(const TypeVal & aVal)
@@ -806,6 +884,14 @@ template <typename Type> Type DerX_ATan2(const Type & aX,const Type & aY);
 template <typename Type> Type DerY_ATan2(const Type & aX,const Type & aY);
 
 
+/// to have it in good namespace in code gen
+template <typename Type> Type DiffAngMod(const Type & aA,const Type & aB);
+/// to have it d/dx in code gen
+template <typename Type> Type DerA_DiffAngMod(const Type & aA,const Type & aB);
+/// to have it d/dy in code gen
+template <typename Type> Type DerB_DiffAngMod(const Type & aA,const Type & aB);
+
+
 /// Sinus hyperbolic
 template <typename Type> Type sinH(const Type & aTeta);
 /// CoSinus hyperbolic
@@ -827,6 +913,12 @@ template <typename Type> Type DerYAtanXsY_sX(const Type & X,const Type & Y);
 template <typename Type> Type AtanXsY_sX(const Type & X,const Type & Y,const Type & aEps);
    /// Same as DerXAtanXY_sX ...  ... bench
 template <typename Type> Type DerXAtanXsY_sX(const Type & X,const Type & Y,const Type & aEps);
+
+      //   -------------- miscelaneaous functions ------------------------
+/// Reciprocal function of X-> X|X|
+template <typename Type> Type SignedSqrt(const Type & aTeta); 
+
+
 
 /*  ****************************************** */
 /*     REPRESENTATION of num on a base         */
@@ -875,9 +967,11 @@ class cCelCC : public cMemCheck
      public :
         std::vector<size_t>  mEquivCode;  /// all codes equivalent
         size_t               mLowCode;    ///< lower representant
-        bool                 mTmp;        /// some marker to use when convenient
+        bool                 mTmp;        ///< some marker to use when convenient
+        int                  mNum;        ///< Num used so that names is alway the same whatever maybe the selection
+        bool                 mSelfSym;    ///< is the code self sym with permutation of system
 
-	size_t HammingDist(const cCelCC &) const;
+        size_t HammingDist(const cCelCC &) const;
 
         cCelCC(size_t aLowestCode);
      public :
@@ -894,7 +988,7 @@ class cCompEquiCodes : public cMemCheck
        static std::string NameCERNLookUpTable(size_t aNbBits); ///< name of file where are stored CERN'S   LUT
        static std::string NameCERNPannel(size_t aNbBits); ///< name of file where are stored CERN'S   3D target
        ///  allocate & compute code , return the same adress if param eq
-       static cCompEquiCodes * Alloc(size_t aNbBits,size_t aPerAmbig=1,bool WithMirror=false);
+       static cCompEquiCodes * Alloc(size_t aNbBits,size_t aPerAmbig=1,bool WithMirror=false,bool OkSelfSym=true);
 
        /// For a set code (p.y()) return the cell containing them (or not contatining them)
        std::vector<cCelCC*>  VecOfUsedCode(const std::vector<cPt2di> &,bool Used);
@@ -903,6 +997,7 @@ class cCompEquiCodes : public cMemCheck
        const std::vector<cCelCC*>  & VecOfCells() const; ///< Accessor
        const cCelCC &  CellOfCodeOK(size_t aCode) const;  ///< Error if null
        const cCelCC *  CellOfCode(size_t) const;  ///< nullptr if bad range or no cell
+       cCelCC *  CellOfCode(size_t) ;  ///< nullptr if bad range or no cell
 
        ~cCompEquiCodes();
        static void Bench(size_t aNBB,size_t aPer,bool Miror);
@@ -910,7 +1005,7 @@ class cCompEquiCodes : public cMemCheck
    private :
        static std::string NameCERStuff(const std::string & aPrefix,size_t aNbBits); ///< name of file where are stored CERN'S   3D target
 
-       cCompEquiCodes(size_t aNbBits,size_t aPerdAmbig,bool WithMirror);
+       cCompEquiCodes(size_t aNbBits,size_t aPerdAmbig,bool WithMirror,bool OkSelfSym);
        /// put all the code identic, up to a circular permutation, in the same cellu
        void AddCodeWithPermCirc(size_t aCode,cCelCC *);
 
@@ -958,6 +1053,7 @@ template <class Type> class  cPolynom
 {
         public :
            typedef std::vector<Type>  tCoeffs;
+           typedef cPtxd<Type,2>      tCompl;
            cPolynom(const tCoeffs &);
            cPolynom(const cPolynom &);
            cPolynom(size_t aDegre);
@@ -967,18 +1063,29 @@ template <class Type> class  cPolynom
            static cPolynom<Type>  D1FromRoot(const Type &aRoot);    ///< degre 1 polynom with aRoot
            static cPolynom<Type>  D2NoRoot(const Type & aVMin,const Type &aArgmin);  ///< +- (|V| + (x-a) ^2) ,
 
-           static cPolynom<Type>  RandomPolyg(int aDegree,Type & anAmpl);
+           static cPolynom<Type>  Monom(size_t aDegre);      ///< Monom  X ^D
+
+	   /// Ampl is typycal valu of X => Coef[d] ~  anAmpl ^(-d)
+           static cPolynom<Type>  RandomPolyg(size_t aDegree,const Type & anAmpl);
            ///  Generate random polygo from its randomly generated roots => test for
            static cPolynom<Type>  RandomPolyg(std::vector<Type> & aVRoots,int aNbRoot,int aNbNoRoot,Type Interv,Type MinDist);
 
 
-           Type  Value(const Type & aVal) const;
+           Type    Value(const Type & aVal) const;
+           tCompl  Value(const tCompl & aVal) const;
+           /// return som(|a_k x^k|) , used for some bounding stuffs
+           Type  AbsValue(const Type & aVal) const;
+
 
            cPolynom<Type> operator * (const cPolynom<Type> & aP2) const;
            cPolynom<Type> operator + (const cPolynom<Type> & aP2) const;
            cPolynom<Type> operator - (const cPolynom<Type> & aP2) const;
            cPolynom<Type> operator * (const  Type & aVal) const;
-           std::vector<Type> RealRoots(const Type & aTol,int ItMax);
+           cPolynom<Type> Deriv() const;
+
+           cPolynom<Type> & operator += (const cPolynom<Type> & aP2);
+
+           std::vector<Type> RealRoots(const Type & aTol,int ItMax) const;
 
 
            Type&   operator [] (size_t aK) {return mVCoeffs[aK];}
@@ -1015,11 +1122,64 @@ void  ReadFilesStruct
           bool CheckFormat= true  // if true check :  XYZN have same count ... and more 2 com
       );
 
+class cReadFilesStruct
+{
+     public :
+
+       cReadFilesStruct( const std::string &  aNameFile,const std::string & aFormat,
+                         int aL0,int aLastL, int  aComment);
+
+       void Read();
+
+       const std::vector<std::string>               & VNameIm () const; ///< Accessor + Check init
+       const std::vector<std::string>               & VNamePt () const; ///< Accessor + Check init  "N"
+       const std::vector<std::vector<std::string>>  & VStrings () const; ///< Accessor + Check init  "S"
+       const std::vector<cPt3dr>                    & VXYZ () const; ///< Accessor + Check init    "XYZ"
+       const std::vector<cPt2dr>                    & Vij () const; ///< Accessor + Check init      "ij"
+       const std::vector<cPt3dr>                    & VWPK () const; ///< Accessor + Check init    "WPK"
+       const std::vector<std::vector<double>>       & VNums () const; ///< Accessor + Check init   "FF*F"
+       const std::vector<std::vector<int>>          & VInts () const; ///< Accessor + Check init     "EE*E"
+       const std::vector<std::string>               & VLinesInit () const; ///< Accessor + Check init
+       int NbRead() const;  ///< Number of line read
+       void SetMemoLinesInit() ;  ///< Activate the memo of initial lines (false by default)
+
+
+     private :
+         template <class Type> inline const std::vector<Type> & GetVect(const std::vector<Type> & aV) const
+         {
+                 MMVII_INTERNAL_ASSERT_tiny((int)aV.size()==mNbLineRead,"cReadFilesStruct::GetV");
+                 return aV;
+         }
+         // ============== copy of  constructor parameters ===================
+
+         std::string     mNameFile; ///< name of file
+         std::string     mFormat;   ///< format of each line
+         int             mL0;       ///< num of first line
+         int             mLastL;    ///< num of last line
+         int             mComment;  ///< carac used for comment if any
+
+         int             mNbLineRead;  ///< count number of line
+	 bool            mMemoLinesInt;   ///< Do we maintains a memory of initial line (w/o supressed one so that it match data)
+
+         std::vector<std::string>               mVNameIm;
+         std::vector<std::string>               mVNamePt;
+         std::vector<cPt3dr>                    mVXYZ;
+         std::vector<cPt2dr>                    mVij;
+         std::vector<cPt3dr>                    mVWPK;
+         std::vector<std::vector<double>>       mVNums;
+         std::vector<std::vector<int>>          mVInts;
+         std::vector<std::string>               mVLinesInit;
+         std::vector<std::vector<std::string>>  mVStrings;
+};
+
 /// nuber of occurence of aC0 in aStr
 int CptOccur(const std::string & aStr,char aC0);
 /// Check same number of occurence of Str0 in aStr, and return it, Str0 cannot be empty
 int CptSameOccur(const std::string & aStr,const std::string & aStr0);
 
+
+///  Weight fo "robust" weighted average, starting from S0, W=[s0,A,B,Thr]-> 1/(1+R/s0^A)^B,defA=2, defB=1/A, defT=1e30
+tREAL8  StdWeightResidual(const std::vector<tREAL8> &aWeight,tREAL8 aResidual);
 
 
 

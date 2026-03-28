@@ -1,5 +1,7 @@
-#include "MMVII_MMV1Compat.h"
+#include "MMVII_MMV1Compat.h" // TO SEE
 #include "MMVII_2Include_Serial_Tpl.h"
+#include "MMVII_util_tpl.h"
+
 
 #include <regex>
 #include <unordered_set>
@@ -15,9 +17,16 @@
 */
 
 
+namespace MMVII
+{
+
+
+
+}
+
 /* ======================================== */
 /*                                          */
-/*     cOrderedPair<Type>                   */
+/*     cUnOrderedPair<Type>                   */
 /*                                          */
 /* ======================================== */
 
@@ -27,10 +36,20 @@ namespace std
 template<>
 class hash<MMVII::tNamePair> {
 public:
-    size_t operator()(const MMVII::tNamePair &s) const 
+    size_t operator()(const MMVII::tNamePair &s) const
     {
         return std::hash<std::string>()(s.V1()) ^ std::hash<std::string>()(s.V2());
     }
+};
+template<>
+class hash<MMVII::cTripletName> {
+public:
+    size_t operator()(const MMVII::cTripletName &a3) const
+    {
+        return std::hash<std::string>()(a3.FullName());
+    }
+
+
 };
 }
 
@@ -41,40 +60,42 @@ namespace MMVII
 
 static bool TheCmp4Op=false;
 
-template <class Type> const Type & cOrderedPair<Type>::Min4OP(const Type & aV1,const Type & aV2)
+template <class Type> const Type & cUnOrderedPair<Type>::Min4OP(const Type & aV1,const Type & aV2)
 {
     TheCmp4Op = (aV1<aV2);
-    return TheCmp4Op ? aV1 : aV2; 
+    return TheCmp4Op ? aV1 : aV2;
 }
 
-template <class Type>  cOrderedPair<Type>::cOrderedPair(const Type & aV1,const Type & aV2) :
+template <class Type>  cUnOrderedPair<Type>::cUnOrderedPair(const Type & aV1,const Type & aV2) :
    mV1 (Min4OP(aV1,aV2)),
    mV2 (TheCmp4Op?aV2:aV1)
 {
 }
 
-template <class Type>  cOrderedPair<Type>::cOrderedPair() 
+template <class Type>  cUnOrderedPair<Type>::cUnOrderedPair()
 {
 }
 
-template <class Type>  bool cOrderedPair<Type>::operator < (const cOrderedPair<Type> & aP2) const
+template <class Type>  bool cUnOrderedPair<Type>::operator < (const cUnOrderedPair<Type> & aP2) const
 {
    if (mV1 < aP2.mV1) return true;
    if (mV1 > aP2.mV1) return false;
    if (mV2 < aP2.mV2) return true;
    return false;
 }
-template <class Type> bool cOrderedPair<Type>::operator == (const cOrderedPair<Type> & aP2) const
+template <class Type> bool cUnOrderedPair<Type>::operator == (const cUnOrderedPair<Type> & aP2) const
 {
   return (mV1 == aP2.mV1) && (mV2 == aP2.mV2);
 }
 
-template <class Type> const Type & cOrderedPair<Type>::V1() const {return  mV1;}
-template <class Type> const Type & cOrderedPair<Type>::V2() const {return  mV2;}
-template <class Type> Type & cOrderedPair<Type>::V1() {return  mV1;}
-template <class Type> Type & cOrderedPair<Type>::V2() {return  mV2;}
+template <class Type> const Type & cUnOrderedPair<Type>::V1() const {return  mV1;}
+template <class Type> const Type & cUnOrderedPair<Type>::V2() const {return  mV2;}
+template <class Type> Type & cUnOrderedPair<Type>::V1() {return  mV1;}
+template <class Type> Type & cUnOrderedPair<Type>::V2() {return  mV2;}
 
-template  class cOrderedPair<std::string>;
+template  class cUnOrderedPair<std::string>;
+template  class cUnOrderedPair<int>;
+
 
 /* =============   cDataSelector<Type>   ========= */
 
@@ -83,7 +104,7 @@ template  class cOrderedPair<std::string>;
      the heriting class will implement override Match
      Class is accessible via cSelector
 
-     As the implentation is "hidden" in this file, I dont see the benefit of 
+     As the implentation is "hidden" in this file, I dont see the benefit of
     setting private the methods.
 */
 
@@ -127,7 +148,7 @@ template <class Type> bool  cSelector<Type>::Match(const Type & aV) const
 */
 
 template <class Type> class cDataIntervSelector : public  cDataSelector<Type>
-{   
+{
     public :
        typedef std::optional<Type> tOObj;
        typedef const  tOObj *        tCOOPtr;
@@ -144,7 +165,7 @@ template <class Type> class cDataIntervSelector : public  cDataSelector<Type>
        {
            if (mV1) // no value no use
            {
-              if (mInclLow)  
+              if (mInclLow)
               {
                  // if Incl and equal => ok
                  if (aV< mV1) return false;
@@ -158,7 +179,7 @@ template <class Type> class cDataIntervSelector : public  cDataSelector<Type>
 
            if (mV2) // no value no use
            {
-              if (mInclUp)  
+              if (mInclUp)
               {
                  // if Incl and equal => ok
                  if (aV> mV2) return false;
@@ -187,10 +208,10 @@ template <class Type> class cDataIntervSelector : public  cDataSelector<Type>
        tOObj             mV1;        ///< lower bound , optionnal no value-no use
        tOObj             mV2;        ///< upper bound
        bool              mInclLow;   ///< Is it open lower bound (Open <=> bound excluded)
-       bool              mInclUp;    ///< Is it open upper bound 
+       bool              mInclUp;    ///< Is it open upper bound
 };
 
-template<class Type> cSelector<Type> GenIntervalSelector( const std::optional<Type> & aV1, 
+template<class Type> cSelector<Type> GenIntervalSelector( const std::optional<Type> & aV1,
                                                          const std::optional<Type> & aV2,
                                                          bool aInclLow,bool InclUp)
 {
@@ -325,12 +346,12 @@ template<class Type> cSelector<Type> CsteSelector  (bool aVal)
 /// Is next caracter an interval delimitor? If yes is iit inclusive (set in 'aIncl')
 bool GetInclus(bool & aIncl,int aChar,bool begin)
 {
-   if (aChar==']') 
+   if (aChar==']')
    {
       aIncl = ! begin;
       return true;
    }
-   if (aChar=='[')  
+   if (aChar=='[')
    {
       aIncl = begin;
       return true;
@@ -341,7 +362,7 @@ bool GetInclus(bool & aIncl,int aChar,bool begin)
 
 typedef std::pair<std::string,bool> tElemStrInterv;
 
-///   Prepare processing string 2 interval 
+///   Prepare processing string 2 interval
 
 /** Make the low level job, pair of string an bool indicating inclusion
     "]ab,cd][,uu]" => {{ab,false},{cd,true}{,true}{uu,true}}
@@ -352,7 +373,7 @@ std::vector<tElemStrInterv> LireInterv(const std::string & aStr)
    const char * aC = aStr.c_str();
    while (*aC)
    {
-      SkeepWhite(aC);
+      SkipWhite(aC);
       // Get [ or ]
       bool aLowIncl,anUpIncl;
       if (!GetInclus(aLowIncl,*aC,true))
@@ -377,7 +398,7 @@ std::vector<tElemStrInterv> LireInterv(const std::string & aStr)
       aRes.push_back(tElemStrInterv(aStrUp,anUpIncl));
 
       aC++;
-      SkeepWhite(aC);
+      SkipWhite(aC);
    }
 
 /*
@@ -412,10 +433,57 @@ template <class Type> cSelector<Type> Str2Interv(const std::string & aStr)
             aV2 = cStrIO<Type>::FromStr(aVI[aK+1].first);
          aRes = aRes || GenIntervalSelector(aV1,aV2,aVI[aK].second,aVI[aK+1].second);
     }
-     
+
 
     return aRes;
 }
+
+/******************************************************************/
+/*                                                                */
+/*                       cIdTransformator                         */
+/*                                                                */
+/******************************************************************/
+
+template <class Type> Type cIdTransformator<Type>::Transfo(const Type & aVal) const
+{
+    return aVal;
+}
+
+/******************************************************************/
+/*                                                                */
+/*                       cPatternTransfo                          */
+/*                                                                */
+/******************************************************************/
+
+// replace a pattern :  yy(.*)zz , A$1 , yytotozz  => Atoto
+//std::string ReplacePattern(const std::string & aPattern,const std::string & aSubst,const std::string & aString);
+
+
+cPatternTransfo::cPatternTransfo(const std::string & aPat,const std::string & aSubst) :
+    mPat  (aPat),
+    mSubst (aSubst)
+{
+}
+
+cPatternTransfo::cPatternTransfo(const std::vector<std::string> & aVec) :
+     cPatternTransfo
+     (
+          GetDef(aVec,0,std::string(".*")),
+          GetDef(aVec,1,std::string("$&"))
+     )
+{
+    // JOE
+    if ( (aVec.size()!=0) && (aVec.size() != 2))
+       MMVII_UnclasseUsEr("cPatternTransfo bad size");
+}
+
+
+std::string  cPatternTransfo::Transfo(const std::string & aValue) const
+{
+   return  ReplacePattern(mPat,mSubst,aValue);
+}
+
+
 
 
 #define MACRO_INSTANTIATE_SELECTOR(Type)\
@@ -435,6 +503,7 @@ template class cDataNegSelector<Type>;\
 template class cDataAndSelector<Type>;\
 template class cDataOrSelector<Type>;\
 template class cDataCsteSelector<Type>;\
+template class cIdTransformator<Type>;\
 
 
 MACRO_INSTANTIATE_SELECTOR(int)
@@ -456,7 +525,7 @@ class cDataStdRegex : public  cDataSelector<std::string>
             mRegex (aName)
         {
         }
-        bool Match(const std::string &  aStr) const override 
+        bool Match(const std::string &  aStr) const override
         {
              return regex_match(aStr,mRegex);
         }
@@ -473,20 +542,20 @@ tNameSelector  AllocRegex(const std::string& aPat)
 
 bool  MatchRegex(const std::string& aName,const std::string& aPat)
 {
-	 return AllocRegex(aPat).Match(aName);
+     return AllocRegex(aPat).Match(aName);
 }
 
 std::string ReplacePattern(const std::string & aPattern,const std::string & aSubst,const std::string & aString)
 {
    //  [4JO]
-   //  to see  jo why  
-   //     ReplacePattern(".*","15","toto") -> 1515    ??? 
+   //  to see  jo why
+   //     ReplacePattern(".*","15","toto") -> 1515    ???
    //     ReplacePattern("t.*","15","toto") -> 15    as it should be
    //
    std::string aRes ="";
    if (aPattern==".*")
    {
-	   // tricky to we replace the univ pattern by the string that macth itself perfectly !!
+       // tricky to we replace the univ pattern by the string that macth itself perfectly !!
          aRes=  std::regex_replace(aString,std::regex(aString),aSubst, std::regex_constants::format_no_copy);
    }
    else
@@ -548,13 +617,13 @@ void BenchSelector(cParamExeBench & aParam,const std::string & aDir)
 
     cSelector<int> aS5 = aS1 || aS2 || aS3 || aS4;
     cSelector<int> aS6 = Str2Interv<int>("],5] [8,9[ ]12,15] ]17,]");
-   
-    
+
+
     cExtSet<int> aSet5; // Test equivalence Set/Sel
     cExtSet<int> aSet6; // Test filter
     for (int aK=0 ; aK<20 ; aK++)
     {
-      if (aS5.Match(aK))  
+      if (aS5.Match(aK))
          aSet5.Add(aK);
        aSet6.Add(aK);
     }
@@ -587,7 +656,7 @@ void BenchSelector(cParamExeBench & aParam,const std::string & aDir)
         MMVII_INTERNAL_ASSERT_bench(aS2.Match(aK)== ((aK>=8)&&(aK<9)),"Selector");
         MMVII_INTERNAL_ASSERT_bench(aS3.Match(aK)== ((aK>12)&&(aK<=15)),"Selector");
         MMVII_INTERNAL_ASSERT_bench(aS4.Match(aK)== (aK>17),"Selector");
-	
+
         MMVII_INTERNAL_ASSERT_bench(aS5.Match(aK)==aS6.Match(aK),"Selector");
 
         MMVII_INTERNAL_ASSERT_bench(aS5.Match(aK)==aSet5.Match(aK),"Selector");
@@ -615,13 +684,13 @@ template <class Type> class cDataExtSet : public cDataSelector<Type>
          virtual cDataExtSet<Type> *  VDupl() const = 0; // return a duplicata
          virtual cDataExtSet<Type> *  VEmptySet() const = 0; // return an empty set of same type
 
-         virtual bool Add(const Type &) = 0; 
+         virtual bool Add(const Type &) = 0;
          virtual bool In(const Type &) const = 0;
          virtual bool Suppress(const Type &)  = 0;
          virtual void    clear() = 0;
          virtual int    size() const = 0;
 
-         virtual void  PutInVect(std::vector<const Type *> &,bool Sorted) const = 0; ///< Some type requires iteration 
+         virtual void  PutInVect(std::vector<const Type *> &,bool Sorted) const = 0; ///< Some type requires iteration
 
          static  cDataExtSet<Type> * AllocFromType(eTySC);
 
@@ -661,24 +730,24 @@ template <class Type> bool cExtSet<Type>::IsInit() const
 }
 
 
-template <class Type> bool cExtSet<Type>::Match(const Type &aVal) const 
+template <class Type> bool cExtSet<Type>::Match(const Type &aVal) const
 {
    ASSERT_SET_ISINIT();
    return mDES->In(aVal);
 }
 
 
-template <class Type> cExtSet<Type>   cExtSet<Type>::Dupl() const 
+template <class Type> cExtSet<Type>   cExtSet<Type>::Dupl() const
 {
    ASSERT_SET_ISINIT();
    return cExtSet<Type>(mDES->VDupl());
 }
-template <class Type>   cExtSet<Type>   cExtSet<Type>::EmptySet() const 
+template <class Type>   cExtSet<Type>   cExtSet<Type>::EmptySet() const
 {
    ASSERT_SET_ISINIT();
    return cExtSet<Type>(mDES->VEmptySet());
 }
-template <class Type> bool cExtSet<Type>::Add(const Type & aVal) 
+template <class Type> bool cExtSet<Type>::Add(const Type & aVal)
 {
    ASSERT_SET_ISINIT();
    return mDES->Add(aVal);
@@ -688,7 +757,7 @@ template <class Type> bool cExtSet<Type>::In(const Type & aVal)  const
    ASSERT_SET_ISINIT();
    return mDES->In(aVal);
 }
-template <class Type> bool cExtSet<Type>::Suppress(const Type & aVal) 
+template <class Type> bool cExtSet<Type>::Suppress(const Type & aVal)
 {
    ASSERT_SET_ISINIT();
    return mDES->Suppress(aVal);
@@ -703,7 +772,7 @@ template <class Type> int cExtSet<Type>::size() const
    ASSERT_SET_ISINIT();
    return mDES->size();
 }
-template <class Type>  void  cExtSet<Type>::PutInVect(std::vector<const Type *> & aV,bool Sorted) const 
+template <class Type>  void  cExtSet<Type>::PutInVect(std::vector<const Type *> & aV,bool Sorted) const
 {
    ASSERT_SET_ISINIT();
    mDES->PutInVect(aV,Sorted);
@@ -724,16 +793,25 @@ template <class Type> bool cExtSet<Type>::Equal(const  cExtSet<Type> & aSet) con
    return  IncludedIn(aSet) && aSet.IncludedIn(*this);
 }
 
-template <class Type>  void  cExtSet<Type>::Filter(const cSelector<Type> & aSel)
+template <class Type>  void  cExtSet<Type>::Filter(const cSelector<Type> & aSel,const cTransformator<Type> & aTranfo)
 {
     std::vector<const Type *> aV;
     PutInVect(aV,false);
     for (const auto & ptr : aV)
     {
-        if (! aSel.Match(*ptr))
+        if (! aSel.Match(aTranfo.Transfo(*ptr)))
            Suppress(*ptr);
     }
 }
+
+
+template <class Type>  void  cExtSet<Type>::Filter(const cSelector<Type> & aSel)
+{
+    cIdTransformator<Type> aTransfoId;
+
+    Filter(aSel,aTransfoId);
+}
+
 
 template <class Type>  void cExtSet<Type>::OpAff(const eOpAff & anOp,const cExtSet<Type> aS)
 {
@@ -755,7 +833,7 @@ template <class Type>  void cExtSet<Type>::OpAff(const eOpAff & anOp,const cExtS
  //=========================== Intersection ================
 
    /** Intersection, in - situ
-      Algo :  Parse aRes and suppress  those who are not in aFilter 
+      Algo :  Parse aRes and suppress  those who are not in aFilter
    */
 
 template <class Type>  void  operator *= (cExtSet<Type> & aRes,const cExtSet<Type> & aFilter)
@@ -843,12 +921,12 @@ template <class Type>  cExtSet<Type>   operator - (const cExtSet<Type> & aS1,con
 //========================    Comparison/sort/helper =============================
 //================================================================================
 
-       /// Comparison on pointed value 
+       /// Comparison on pointed value
 template <class Type> bool CmpOnPtrValue(const Type * & aV1,const Type * & aV2)
 {
    return *aV1 < *aV2;
 }
-       /// Sort on pointed value and not adress  
+       /// Sort on pointed value and not adress
 template <class Type> void SortPtrValue(std::vector<Type*> & aV)
 {
     std::sort(aV.begin(),aV.end(),CmpOnPtrValue<Type>);
@@ -879,8 +957,8 @@ template  <class Type> class cUnorderedSet : public cDataExtSet<Type>
 
          // Big three of a set
          bool Add(const Type & aVal) override
-         { 
-             return mUS.insert(aVal).second; 
+         {
+             return mUS.insert(aVal).second;
          }
          bool Suppress(const Type & aVal)  override
          {
@@ -949,7 +1027,7 @@ template  cExtSet<Type>   operator *  (const cExtSet<Type> & aRes,const cExtSet<
 template  void   operator += (cExtSet<Type> & aRes,const cExtSet<Type> & aFilter); \
 template  cExtSet<Type>   operator +  (const cExtSet<Type> & aRes,const cExtSet<Type> & aFilter); \
 template  void   operator -= (cExtSet<Type> & aRes,const cExtSet<Type> & aFilter); \
-template  cExtSet<Type>   operator -  (const cExtSet<Type> & aRes,const cExtSet<Type> & aFilter); 
+template  cExtSet<Type>   operator -  (const cExtSet<Type> & aRes,const cExtSet<Type> & aFilter);
 /*
 */
 
@@ -960,6 +1038,8 @@ INSTANTIATE_SET(void *)
 INSTANTIATE_SET(const void *)
 INSTANTIATE_SET(std::string)
 INSTANTIATE_SET(tNamePair)
+INSTANTIATE_SET(cTripletName)
+
 
 /* ======================================================= */
 /*                                                         */
@@ -968,7 +1048,7 @@ INSTANTIATE_SET(tNamePair)
 /* ======================================================= */
 
 /*
-    For string the input output is more complicated, as the 
+    For string the input output is more complicated, as the
    input can a pattern or a file, input and output can be V1 or V2
 */
 tNameSet SetNameFromFile(const std::string& aNameFile,int aNumV)
@@ -986,7 +1066,7 @@ tNameSet SetNameFromFile(const std::string& aNameFile,int aNumV)
 
 }
 
-tNameSet SetNameFromString(const std::string & aName,bool AllowPat)
+tNameSet SetNameFromString(const std::string & aName,bool AllowPat,bool WithDir)
 {
    if (IsFileGivenTag(true,aName,TagSetOfName)) // MMVII
    {
@@ -998,17 +1078,22 @@ tNameSet SetNameFromString(const std::string & aName,bool AllowPat)
    }
    else if (AllowPat)
    {
-      return SetNameFromPat(aName);
+      return SetNameFromPat(aName,WithDir);
    }
    // If we are here, we accept  file as empty set, but not file of bad format
    if (ExistFile(aName))
    {
-      MMVII_UsersErrror(eTyUEr::eBadFileSetName,"Set from string, file has bad format for :" +aName);
+      MMVII_UserError(eTyUEr::eBadFileSetName,"Set from string, file has bad format for :" +aName);
    }
    return  tNameSet(); // emty set mode US
 }
 
-tNameSet SetNameFromPat(const std::string& aFullPat)
+tNameSet SetNameFromString(const std::string & aName,bool AllowPat)
+{
+    return SetNameFromString(aName,AllowPat,false);
+}
+
+tNameSet SetNameFromPat(const std::string& aFullPat,bool WithDir)
 {
      std::string aDir,aPat;
      SplitDirAndFile(aDir,aPat,aFullPat,false);
@@ -1017,8 +1102,17 @@ tNameSet SetNameFromPat(const std::string& aFullPat)
 
      GetFilesFromDir(aV,aDir,AllocRegex(aPat));
      for (const auto & el : aV)
-        aRes.Add(el);
+     {
+         if (WithDir)
+             aRes.Add(aDir+el);
+         else
+             aRes.Add(el);
+     }
      return aRes;
+}
+tNameSet SetNameFromPat(const std::string& aFullPat)
+{
+   return    SetNameFromPat(aFullPat,false);
 }
 
 std::vector<std::string>  ToVect(const tNameSet & aSet)
@@ -1065,7 +1159,7 @@ tNameRel  RelNameFromFile (const std::string& aNameFile)
 
    if (ExistFile(aNameFile))
    {
-      MMVII_UsersErrror(eTyUEr::eBadFileRelName,"Rel from string, file has bad format for :" +aNameFile);
+      MMVII_UserError(eTyUEr::eBadFileRelName,"Rel from string, file has bad format for :" +aNameFile);
    }
    return  tNameRel(); // emty rel mode US
 }
@@ -1144,6 +1238,15 @@ void BenchSet(cParamExeBench & aParam,const std::string & aDir)
 {
     if (! aParam.NewBench("Set")) return;
 
+    {
+        cExtSet<cTripletName> aS3;
+        aS3.Add(cTripletName("b","a","c"));
+        aS3.Add(cTripletName());
+        aS3.Add(cTripletName("a","b","c"));
+
+        MMVII_INTERNAL_ASSERT_bench(aS3.size()==2,"cExtSet<cTripletName>");
+    }
+
     cMMVII_Appli &  anAp = cMMVII_Appli::CurrentAppli();
 
     TplBenchSet<int>        (aDir);
@@ -1158,7 +1261,7 @@ void BenchSet(cParamExeBench & aParam,const std::string & aDir)
        aTest.Add(tNamePair("b","a"));
        aTest.Add(tNamePair("c","d"));
        aTest.Add(tNamePair("d","c"));
-       
+
        MMVII_INTERNAL_ASSERT_bench(aTest.size()==2,"BenchSet");
        std::string aNameFile = anAp.TmpDirTestMMVII() + "TestRel."+GlobTaggedNameDefSerial();
        SaveInFile(aTest,aNameFile);
@@ -1168,6 +1271,61 @@ void BenchSet(cParamExeBench & aParam,const std::string & aDir)
        MMVII_INTERNAL_ASSERT_bench(aT2.Equal(aTest),"BenchSet");
     }
     aParam.EndBench();
+}
+
+
+/* ******************************************************* */
+/*                                                         */
+/*                       cTripletName                      */
+/*                                                         */
+/* ******************************************************* */
+
+
+cTripletName::cTripletName(const std::string & aN1,const std::string & aN2,const std::string & aN3) :
+    mNames {aN1,aN2,aN3}
+{
+    std::sort(mNames.begin(),mNames.end());
+}
+cTripletName::cTripletName() :
+    cTripletName("","","")
+{
+
+}
+
+bool cTripletName::operator < (const cTripletName& aTri) const
+{
+    for (size_t aK=0 ; aK<mNames.size() ; aK++)
+    {
+        if (mNames[aK] < aTri.mNames[aK])
+            return true;
+        else  if (mNames[aK] >aTri.mNames[aK])
+            return false;
+    }
+    return false;
+}
+bool cTripletName::operator == (const cTripletName& aTri) const
+{
+    for (size_t aK=0 ; aK<mNames.size() ; aK++)
+    {
+        if (mNames[aK] != aTri.mNames[aK])
+            return false;
+    }
+    return true;
+}
+
+std::string cTripletName::FullName() const
+{
+    return mNames.at(0) +"#@#" +  mNames.at(1) +"#@#" +  mNames.at(2) ;
+}
+
+void AddData(const cAuxAr2007 & anAux,cTripletName & a3)
+{
+
+    AddData(cAuxAr2007("N1",anAux),a3.mNames[0]);
+    AddData(cAuxAr2007("N2",anAux),a3.mNames[1]);
+    AddData(cAuxAr2007("N3",anAux),a3.mNames[2]);
+
+
 }
 
 

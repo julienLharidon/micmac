@@ -334,18 +334,18 @@ template <class Type>  void TplBenchDenseMatr(int aSzX,int aSzY)
            MMVII_INTERNAL_ASSERT_bench(aRSEV.EigenVectors().Unitarity() <1e-5,"Bench unitarity EigenValue");
                // Test Eigen value are given in growing order
            const cDenseVect<Type>   & aEVals = aRSEV.EigenValues();
-           //  check decreasing order
+           //  check growing order
            for (int aK=1 ; aK<aNb ; aK++)
            {
-               MMVII_INTERNAL_ASSERT_bench(aEVals(aK-1)<=aEVals(aK),"Bench decreasing order EigenValue");
+               MMVII_INTERNAL_ASSERT_bench(aEVals(aK-1)<=aEVals(aK),"Bench growing order EigenValue");
            }
            cDenseMatrix<Type> aCheckEV =  aRSEV.OriMatr();
            MMVII_INTERNAL_ASSERT_bench(aCheckEV.DIm().L2Dist(aSim.DIm())<1e-5,"Bench unitarity EigenValue");
 
         }
-  
 
-        double aDTest = 1e-4 * pow(10,-(4-sizeof(Type))/2.0) * pow(aNb,1.0) ;  // Accuracy expectbale vary with tREAL4, tREAL8 ...
+        // CM: sizeof is unsigned. This can lead to unexpected result in calculus when mixing with double, so convert it to double
+        double aDTest = 1e-4 * pow(10,-(4-(double)sizeof(Type))/2.0) * pow(aNb,1.0) ;  // Accuracy expectbale vary with tREAL4, tREAL8 ...
     
         // Singular value decomposition
         {
@@ -528,7 +528,7 @@ template <class Type> static Type Residual
     Type aRes = 0.0;
     for (int aK=0 ; aK<int(aLVec.size()) ; aK++)
     {
-        aRes += aSys.Residual(aSol,aLWeight[aK],aLVec[aK],aLVal[aK]);
+        aRes += aSys.ResidualOf1Eq(aSol,aLWeight[aK],aLVec[aK],aLVal[aK]);
     }
     return aRes;
 }
@@ -541,7 +541,7 @@ template <class Type> void BenchSysSur(cLinearOverCstrSys<Type>& aSys,bool Exact
    for (int aNbIter=0 ; aNbIter<2; aNbIter++)
    {
       cLeasSqtAA<Type>  aSpSys(aNbVar);
-      aSys.Reset();
+      aSys.PublicReset();
       std::vector<Type>               aLWeight;
       std::vector<cDenseVect<Type> >  aLVec;
       std::vector<Type>               aLVal;
@@ -569,11 +569,11 @@ template <class Type> void BenchSysSur(cLinearOverCstrSys<Type>& aSys,bool Exact
           aLVec.push_back(aDV);
           aLVal.push_back(aVal);
           aLWeight.push_back(aWeight);
-          aSys.AddObservation(aWeight,aDV,aVal);
-          aSpSys.AddObservation(aWeight,aSV,aVal);
+          aSys.PublicAddObservation(aWeight,aDV,aVal);
+          aSpSys.PublicAddObservation(aWeight,aSV,aVal);
       }
-      cDenseVect<Type> aSol = aSys.Solve();
-      cDenseVect<Type> aSpSol = aSpSys.Solve();
+      cDenseVect<Type> aSol = aSys.PublicSolve();
+      cDenseVect<Type> aSpSol = aSpSys.PublicSolve();
       double aDist= aSol.DIm().L2Dist(aSpSol.DIm());
       MMVII_INTERNAL_ASSERT_bench(aDist<1e-5,"Bench Op Im");
 
@@ -587,8 +587,6 @@ template <class Type> void BenchSysSur(cLinearOverCstrSys<Type>& aSys,bool Exact
          for (int aK=0 ; aK<aNbVar ; aK++)
          {
              Type aDif = std::abs( aLVal[aK] - aSol.DotProduct(aLVec[aK]));
-             /* StdOut() << "ddDddDDDD " << aDif << " " << E2Str(tElemNumTrait<Type>::TyNum()) 
-                   << " Eps: " << std::numeric_limits<Type>::epsilon() << " " <<  aDTest << "\n"; */
              MMVII_INTERNAL_ASSERT_bench(aDif<aDTest,"Bench Op Im");
              // StdOut() << "ScaAal " <<  aLVal[aK] - aSol.DotProduct(aLVec[aK]) << std::endl;
          }
@@ -643,12 +641,12 @@ template <class Type> void BenchObsFixVar
    aSys2.AddObsFixVar(1.0,aSV2B);  // fix even var in S2
    aSys3.AddObsFixVar(1.0,aDV3);  // fix all var in S3
 
-   cDenseVect<Type>  aV1 = aSys1.Solve();
+   cDenseVect<Type>  aV1 = aSys1.PublicSolve();
    // cDenseVect<Type>  aV2 = aSys2.Solve().DIm();
    // cDenseVect<Type>  aV3 = aSys3.Solve().DIm();
    double aD1 = aDV3.DIm().L2Dist(aV1.DIm());
-   double aD2 = aDV3.DIm().L2Dist(aSys2.Solve().DIm());
-   double aD3 = aDV3.DIm().L2Dist(aSys3.Solve().DIm());
+   double aD2 = aDV3.DIm().L2Dist(aSys2.PublicSolve().DIm());
+   double aD3 = aDV3.DIm().L2Dist(aSys3.PublicSolve().DIm());
 
    MMVII_INTERNAL_ASSERT_bench((aD1+aD2+aD3)<1e-5,"Bench Add Obs Fix Var");
 }
@@ -685,11 +683,13 @@ template <class Type,class TypeSys> void TplBenchLsq()
             StdOut()  << "NBVARR=" << aNbVar << " NbE="<<aNbEq << std::endl;
 
          // random param for sparse normal syst
+         auto v1 = round_ni(aNbVar*pow(RandUnif_0_1(), 4.0));
+         auto v2 = round_ni(0.5*aNbVar*pow(RandUnif_0_1(), 2.0));
 	 cParamSparseNormalLstSq aParam
 		                 (
 				       8.0*RandUnif_0_1(), 
-                                       round_ni(aNbVar*pow(RandUnif_0_1(), 4.0)),      // Max range Dense fix
-                                       round_ni(0.5*aNbVar*pow(RandUnif_0_1(), 2.0))   // tempo
+                                       v1,      // Max range Dense fix
+                                       v2   // tempo
                                  );
          // the different type of solver, that should return the same result
 	 std::vector<cLeasSq<Type>*> aVSys = {
@@ -700,27 +700,26 @@ template <class Type,class TypeSys> void TplBenchLsq()
 
 	 cDenseVect<Type> aRandSol(aNbVar,eModeInitImage::eMIA_RandCenter);
 	 // use to test NonLinear in mode AddObservationLinear
-	 cResolSysNonLinear<Type> aSysLin(eModeSSR::eSSR_LsqDense,aRandSol);
+	 cResolSysNonLinear<Type> aSysNonLin(eModeSSR::eSSR_LsqDense,aRandSol);
 
          // juste make several time the test , becaude chek also reseting
 	 for (int aNbTest=0 ; aNbTest<3 ; aNbTest++)
 	 {
-
               std::vector< cSparseVect<Type> > aVSV;
 	      for (int aK=0 ; aK<= 3*aNbEq ; aK++)
 	      {
                   // sparse vector with density K/aNbEq
-                  cSparseVect<Type> aVCoeff = cSparseVect<Type>::RanGenerate(aNbVar,double(aK)/aNbEq);
+                  cSparseVect<Type> aVCoeff = cSparseVect<Type>::RanGenerate(aNbVar,double(aK+1)/aNbEq);
                   aVSV.push_back(aVCoeff);
                   Type  aCste =  RandUnif_C();
                   Type  aW    =   0.5 + RandUnif_0_1();
 	          for (auto & aSys : aVSys)
-		      aSys->AddObservation(aW,aVCoeff,aCste);
+		      aSys->PublicAddObservation(aW,aVCoeff,aCste);
 		  // Add sparse or dense
 		  if (aK%2)  
-		      aSysLin.AddObservationLinear(aW,aVCoeff,aCste);
+		      aSysNonLin.AddObservationLinear(aW,aVCoeff,aCste);
 		  else
-		      aSysLin.AddObservationLinear(aW,cDenseVect<Type>(aNbVar,aVCoeff),aCste);
+		      aSysNonLin.AddObservationLinear(aW,cDenseVect<Type>(aVCoeff,aNbVar),aCste);
 	      }
 
               static int aCpt = 0; aCpt++;
@@ -752,7 +751,7 @@ template <class Type,class TypeSys> void TplBenchLsq()
                      else
                          PushErrorEigenErrorLevel(eLevelCheck::NoCheck); // else just ignore
                  }
-                  aVSol.push_back(aSys->Solve());
+                  aVSol.push_back(aSys->PublicSolve());
                   if ((aKSys==1)&& (!TrackBugEigenSucc)) // restore eventually
                      PopErrorEigenErrorLevel();
 	          Type aDist = aVSol[0].L2Dist(aVSol.back()) / tNumTrait<Type>::Accuracy() ;
@@ -773,7 +772,7 @@ template <class Type,class TypeSys> void TplBenchLsq()
                        
 	              for (int aKS2=0 ; aKS2<int(aVSys.size()) ;  aKS2++)
                       {
-                          cDenseVect<Type> aRes = atAA * aVSys[aKS2]->Solve() - atARhs;
+                          cDenseVect<Type> aRes = atAA * aVSys[aKS2]->PublicSolve() - atARhs;
                           StdOut() << "NNNN " << aRes.L2Norm()   << " " << atARhs.L2Norm() << std::endl;
                       }
   
@@ -781,13 +780,13 @@ template <class Type,class TypeSys> void TplBenchLsq()
                   }
 
 	      }
-	      cDenseVect<Type> aSolLin = aSysLin.SolveUpdateReset() - aVSol[0];
+	      cDenseVect<Type> aSolLin = aSysNonLin.SolveUpdateReset() - aVSol[0];
 	      MMVII_INTERNAL_ASSERT_bench(aSolLin.L2Norm()<1e-5,"Cmp Least Square");
 
 	      for (int aKSys=0 ; aKSys<int(aVSys.size()) ;  aKSys++)
               {
 	          auto & aSys  =  aVSys[aKSys];
-		  aSys->Reset();
+		  aSys->PublicReset();
               }
 	 }
 
@@ -833,7 +832,7 @@ void BenchLsqDegenerate()
         double aVal = RandUnif_C();
 
         for (const auto & aPtrSys : aVSys)
-            aPtrSys->AddObservation(1.0,aV,aVal);
+            aPtrSys->PublicAddObservation(1.0,aV,aVal);
     }
     
     cDenseMatrix<tREAL8>  atAA = aVSys[2]->V_tAA();
@@ -842,7 +841,7 @@ void BenchLsqDegenerate()
     {
         // check if  tAA * Sol = tARhs  or not ...
         const auto & aPtrSys = aVSys[aK];
-        cDenseVect<tREAL8>  aSol = aPtrSys->Solve();
+        cDenseVect<tREAL8>  aSol = aPtrSys->PublicSolve();
         cDenseVect<tREAL8> aDif  = atAA * aSol - atARhs;
         //  stop only if DenseLeastSq, as other are not robust (to investigate ...)
         if ((aDif.L2Norm()>=1e-5) && (aK==2))
@@ -993,9 +992,108 @@ template <class Type,const int DimX,const int DimY> void BenchMatPt()
      // std::cout << "DLLLLCC " << aDL << " " << aDC << "\n";
 }
 
+template <class Type> void  BenchProj()
+{
+
+
+    for (int aK=0 ; aK<100 ; aK++)
+    {
+         int aDimTot  = 2 + (aK%10);
+         int aDimProj = std::min(aDimTot-1,1+(aK%3));
+
+         //  --- [0]  Generate "ground truth"  two complemantary matri   aMatProj & aMatCompl, orthognal to each other
+         //    MatProj being a non orthognal 
+         cDenseMatrix<Type>  aMatOrth = cDenseMatrix<Type>::RandomOrthogMatrix(aDimTot);  // Generate N Orhog vector
+         // Generate a non orthog base of [0,DimProj] and a vector inside
+         cDenseMatrix<Type>  aMatProj = aMatOrth.SubMatrix(cPt2di(aDimTot,aDimProj));     // Extract a orthog base of proj space
+         // Make a base non orthog but no degenerate
+         aMatProj =   cDenseMatrix<Type>::RandomSquareRegMatrix(cPt2di(aDimProj,aDimProj),false,0.1,0.1) * aMatProj;  
+         std::vector<cDenseVect<Type>> aBase = aMatProj.MakeLines();
+
+         // Generate a orthog matrix of complementary space
+         cDenseMatrix<Type>  aMatCompl = aMatOrth.SubMatrix(cPt2di(0,aDimProj),cPt2di(aDimTot,aDimTot));     // Extract a orthog base of compl space
+
+         // -----------  [1]   Test Projection --------------------------------------------
+         {
+             cDenseVect<Type> aV =   aMatProj.Random1LineCombination();
+             MMVII_INTERNAL_ASSERT_bench(aV.DistToSubspace(aBase)<1e-5,"Dist Proj");
+
+             cDenseVect<Type> aVCompl = aMatCompl.Random1LineCombination();
+
+             cDenseVect<Type> aV2Proj = aV+ aVCompl;
+             MMVII_INTERNAL_ASSERT_bench(aV.L2Dist(aV2Proj.ProjOnSubspace(aBase))<1e-5,"ProjOnSubspace");
+         }
+         //  ---------- [2]  Test Gram-Schmidt ----------------------
+         {
+              std::vector<cDenseVect<Type>>  aGS = cDenseVect<Type>::GramSchmidtOrthogonalization(aBase);
+
+              // test that all vector are orthogonal to each other
+              for (size_t aK1 = 0 ; aK1<aGS.size() ; aK1++)
+              {
+                  for (size_t aK2 = aK1+1 ; aK2<aGS.size() ; aK2++)
+                  {
+                       tREAL8 aDP = aGS.at(aK1).DotProduct(aGS.at(aK2));
+                       //  StdOut() << "DOOOOOP= " << aDP << " " << aGS.at(aK1) << "\n";
+                       MMVII_INTERNAL_ASSERT_bench(std::abs(aDP)<1e-5,"Gram-Schmidt orthogonalization");
+                  }
+              }
+              // Test that all growing subspace are equals,
+              for (size_t aK = 0 ; aK<aGS.size() ; aK++)
+              {
+                   std::vector<cDenseVect<Type>> aSubBase(aBase.begin(),aBase.begin()+aK +1);
+                   tREAL8 aD1 = aGS.at(aK).DistToSubspace(aSubBase);
+
+                   std::vector<cDenseVect<Type>> aSubGS(aGS.begin(),aGS.begin()+aK +1);
+                   tREAL8 aD2 = aBase.at(aK).DistToSubspace(aSubGS);
+                   MMVII_INTERNAL_ASSERT_bench(aD1+aD2<1e-5,"Gram-Schmidt subspace");
+              }
+         }
+         {
+             //   Test the vector added are orthonormal
+             std::vector<cDenseVect<Type>> aBaseCompl =   cDenseVect<Type>::BaseComplem(aBase,false);
+             for (size_t aK1 = 0 ; aK1<aBaseCompl.size() ; aK1++)
+             {
+                  MMVII_INTERNAL_ASSERT_bench(std::abs(1-aBaseCompl.at(aK1).L2Norm())<1e-5,"Base compl : not normal");
+                  for (size_t aK2 = aK1+1 ; aK2<aBaseCompl.size() ; aK2++)
+                  {
+                       tREAL8 aDP = aBaseCompl.at(aK1).DotProduct(aBaseCompl.at(aK2));
+                       MMVII_INTERNAL_ASSERT_bench(std::abs(aDP)<1e-5,"Base compl : not orthog");
+                  }
+              }
+             //   Test the vector added are orthogonal to initial
+             for (size_t aK1 = 0 ; aK1<aBaseCompl.size() ; aK1++)
+                  for (size_t aK2 = 0 ; aK2<aBase.size() ; aK2++)
+                  {
+                       tREAL8 aDP = aBaseCompl.at(aK1).DotProduct(aBase.at(aK2));
+                       MMVII_INTERNAL_ASSERT_bench(std::abs(aDP)<1e-5,"Base compl : not orthog");
+                  }
+
+         }
+
+    }
+}
+
 void BenchDenseMatrix0(cParamExeBench & aParam)
 {
     if (! aParam.NewBench("Matrix0")) return;
+
+
+    // Test NormalizeMoyVar , LstSq_Fit_AxPBEqY , MulAXPB
+    {
+        int aNbV = 10;
+        cDenseVect<tREAL8> aV0 =  cDenseVect<tREAL8>::RanGenerate(aNbV);
+        cDenseVect<tREAL8> aV1 = NormalizeMoyVar(aV0);
+	MMVII_INTERNAL_ASSERT_bench(std::abs(aV1.AvgElem()) < 1e-5,"BenchDenseMatrix0  NormalizeMoyVar");
+	MMVII_INTERNAL_ASSERT_bench(std::abs(aV1.L2Norm()-1) < 1e-5,"BenchDenseMatrix0  NormalizeMoyVar");
+
+	auto [A,B] = LstSq_Fit_AxPBEqY(aV0,aV1);
+
+	MMVII_INTERNAL_ASSERT_bench(aV1.L2Dist(MulAXPB(aV0,A,B)),"BenchDenseMatrix0 LstSq_Fit_AxPBEqY/MulAXPB");
+	// StdOut() << "NNNNNN " << aV1.L2Dist(MulAXPB(aV0,A,B))  << "\n";
+	// StdOut() << "NNNNNN " <<aV1.AvgElem() << " " << aV1.L2Norm() << "\n";
+    };
+
+    BenchProj<tREAL8>();
 
     Bench_EigenDecompos(aParam);
 
@@ -1037,8 +1135,8 @@ void BenchDenseMatrix0(cParamExeBench & aParam)
     cDenseVect<double> aV1(2);
     aV0(0) = 10; aV0(1) = 20;
     aV1(0) = 13; aV1(1) = 24;
-    MMVII_INTERNAL_ASSERT_bench(std::abs(aV0.L1Dist(aV1)-3.5)<1e-5,"Bench Matrixes");
-    MMVII_INTERNAL_ASSERT_bench(std::abs(aV0.L2Dist(aV1)-5.0/sqrt(2))<1e-5,"Bench Matrixes");
+    MMVII_INTERNAL_ASSERT_bench(std::abs(aV0.L1Dist(aV1,true)-3.5)<1e-5,"Bench Matrixes");
+    MMVII_INTERNAL_ASSERT_bench(std::abs(aV0.L2Dist(aV1,true)-5.0/sqrt(2))<1e-5,"Bench Matrixes");
    
 
 
@@ -1076,7 +1174,6 @@ void BenchDenseMatrix0(cParamExeBench & aParam)
         int aNb = std::min(60,20+aParam.Level()*5);
         for (int aK=1 ; aK<aNb ; aK++)
         {
-// StdOut() << "KKKKKK " << aK << std::endl;
            TplBenchDenseMatr<tREAL4>(aK,aK);
            TplBenchDenseMatr<tREAL8>(aK,aK);
         }

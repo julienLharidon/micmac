@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.10)
 project(saisieQT)
 
 if(POLICY CMP0020)
@@ -53,3 +53,8 @@ if (UNIX)
 endif()
 
 install(TARGETS SaisieQT DESTINATION ${Install_Dir})
+
+if (WIN32)
+   # copy *.dll and plugins/ to bin directory
+  install(DIRECTORY $<TARGET_FILE_DIR:SaisieQT>/ DESTINATION ${Install_Dir})
+endif()

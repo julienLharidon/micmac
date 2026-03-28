@@ -1,6 +1,7 @@
 #include <bitset>
 #include "CodedTarget.h"
 #include "MMVII_2Include_Serial_Tpl.h"
+#include "MMVII_Sensor.h"
 
 //  49 : 387 =  256 + 128 + 2 +1
 //              00000110000011
@@ -11,11 +12,15 @@
 namespace MMVII
 {
 
+class cNormPix2Bit;
+class cCircNP2B ;
+class cStraightNP2B ;
+
 /**  Generate a visualistion of target, made an external-non-friend  function
  * to test the usability.
  *
  */
-void TestReloadAndShow_cFullSpecifTarget(const std::string & aName,int aZoom)
+void TestReloadAndShow_cFullSpecifTarget(const std::string & aDir,const std::string & aName,int aZoom)
 {
     // -1- ----------- Create the object from file ------------------
     std::unique_ptr<cFullSpecifTarget> aFullSpec (cFullSpecifTarget::CreateFromFile(aName));
@@ -27,15 +32,15 @@ void TestReloadAndShow_cFullSpecifTarget(const std::string & aName,int aZoom)
 
        // -2.2- generate a "standard" target image
     cFullSpecifTarget::tIm anIm = aFullSpec->OneImTarget(aEnc);
-    anIm.DIm().ToFile("TestTarget_"+aFullSpec->Prefix()+".tif");
+    // anIm.DIm().ToFile(aDir+"TestTarget_"+aFullSpec->Prefix()+".tif");
 
     // -3-  ------------------generate a high resolution to visualize
     cRGBImage aImZoom =   RGBImFromGray(anIm.DIm(),1.0,aZoom);
 
          // -3.1- visualize centers and corners
     aImZoom.DrawCircle(cRGBImage::Blue,aFullSpec->Center(),1.0);
-    aImZoom.DrawCircle(cRGBImage::Red,aFullSpec->CornerlEl_BW(),1.0);
-    aImZoom.DrawCircle(cRGBImage::Green,aFullSpec->CornerlEl_WB(),1.0);
+    aImZoom.DrawCircle(cRGBImage::Red,aFullSpec->CornerlEl_BW(),3.0);
+    aImZoom.DrawCircle(cRGBImage::Green,aFullSpec->CornerlEl_WB(),3.0);
 
          // -3.2- visualize the bits
     for (const auto & aC : aFullSpec->BitsCenters())
@@ -45,7 +50,7 @@ void TestReloadAndShow_cFullSpecifTarget(const std::string & aName,int aZoom)
     }
 
          // -3.3- write the file
-    aImZoom.ToFile("TestZoom_"+aFullSpec->Prefix()+".tif");
+    aImZoom.ToFile(aDir+"TestZoom_"+aFullSpec->Prefix()+".tif");
 }
 
 void Bench_Target_Encoding()
@@ -85,6 +90,45 @@ void Bench_Target_Encoding()
     }
 }
 
+/**************************************************/
+/*                                                */
+/*           cDecodeFromCoulBits                  */
+/*                                                */
+/**************************************************/
+
+cDecodeFromCoulBits::cDecodeFromCoulBits(const cFullSpecifTarget * aSpec) :
+     mSpec       (aSpec),
+     mCode       (0),
+     mBitsFixed  (0)
+{
+}
+
+void cDecodeFromCoulBits::SetColBit(bool IsBlack,size_t aBit)
+{
+    MMVII_INTERNAL_ASSERT_tiny(aBit< mSpec->NbBits(),"Unvalide bit in cDecodeFromCoulBits::SetColBit");
+    if (mSpec->BitIs1(!IsBlack))
+       mCode.AddElem(aBit);
+    else
+       mCode.SuprElem(aBit);
+    mBitsFixed.AddElem(aBit);
+}
+
+bool cDecodeFromCoulBits::IsComplete() const
+{
+    return mBitsFixed.Cardinality() == mSpec->NbBits();
+}
+
+
+const cOneEncoding * cDecodeFromCoulBits::Encoding() const
+{
+    MMVII_INTERNAL_ASSERT_tiny(IsComplete(),"Cannot decode uncomplete in cDecodeFromCoulBits::Encoding()");
+    return mSpec->EncodingFromCode(mCode.FlagBits());
+}
+
+const  tSet32Bits &  cDecodeFromCoulBits::Code () const
+{
+      return mCode;
+}
 
 /**************************************************/
 /*                                                */
@@ -101,7 +145,7 @@ std::string  cParamCodedTarget::NameOfBinCode(int aNum) const
 }
 
 
-void cParamCodedTarget::AddData(const cAuxAr2007 & anAuxParam)
+void cParamCodedTarget::PCT_AddData(const cAuxAr2007 & anAuxParam,const cSpecBitEncoding * aSpec)
 {
     cAuxAr2007  anAux(TheMainTag,anAuxParam);
 
@@ -123,21 +167,26 @@ void cParamCodedTarget::AddData(const cAuxAr2007 & anAuxParam)
     MMVII::AddData(cAuxAr2007("WithChessBoard",anAux),mWithChessboard);
     MMVII::AddData(cAuxAr2007("WhiteBackGround",anAux),mWhiteBackGround);
     MMVII::AddData(cAuxAr2007("ZeroIsBackGround",anAux),mZeroIsBackGround);
-    MMVII::AddData(cAuxAr2007("AntiClockWiseBit,",anAux),mAntiClockWiseBit);
+    MMVII::AddData(cAuxAr2007("AntiClockWiseBit",anAux),mAntiClockWiseBit);
 
-    MMVII::AddData(cAuxAr2007("RayOrientTablet",anAux),mRayOrientTablet);
+    MMVII::AddData(cAuxAr2007("RayOrientTablet",anAux),mRadiusOrientTablet);
     MMVII::AddData(cAuxAr2007("CenterOrientTablet",anAux),mCenterOrientTablet);
-    MMVII::AddData(cAuxAr2007("RayCenterMiniTarget",anAux),mRayCenterMiniTarget);
+    MMVII::AddData(cAuxAr2007("RayCenterMiniTarget",anAux),mRadiusCenterMiniTarget);
 
-     if (anAux.Input())
-	Finish();
+    //  MMVII::AddData(cAuxAr2007("SzHalfStr",anAux),mSzHalfStr);
+
+
+    if (anAux.Input())
+    {
+        MMVII_INTERNAL_ASSERT_strong(aSpec!=nullptr," cParamCodedTarget::PCT_AddData no Spec in input mode");
+        FinishInitOfSpec(*aSpec,false);
+	FinishWoSpec();
+    }
 }
-
 const std::string cParamCodedTarget::TheMainTag = "GeometryCodedTarget";
-
 void AddData(const  cAuxAr2007 & anAux,cParamCodedTarget & aPCT)
 {
-   aPCT.AddData(anAux);
+   aPCT.PCT_AddData(anAux,nullptr);
 }
 
 void cParamCodedTarget::InitFromFile(const std::string & aNameFile)
@@ -171,19 +220,20 @@ cParamCodedTarget::cParamCodedTarget(int aNbPixBin) :
    mSzGaussDeZoom    (3),
    mNbPixelBin       (-1), // Put fake value, because init is done later
    mSz_CCB           (1),
-   mThickN_WInt      (0.35),
+   mThickN_WInt      (0.5),
    mThickN_Code      (0.35),
-   mThickN_WExt      (0.2),
-   mThickN_Car       (0.5),
-   mThickN_BorderExt (0.05),
+   mThickN_WExt      (0.04),
+   mThickN_Car       (0.7),
+   mThickN_BorderExt (0.04),
+   mFactEnlargeCar   (1.0),
    mChessboardAng    (0.0),
    mWithChessboard   (true),
    mWhiteBackGround  (true),
    mZeroIsBackGround (true),
    mAntiClockWiseBit (true),
-   mRayOrientTablet     (-1),
+   mRadiusOrientTablet     (-1),
    mCenterOrientTablet  (0,0),
-   mRayCenterMiniTarget (-1),
+   mRadiusCenterMiniTarget (-1),
    mModeFlight       (false),  // MPD => def value was not initialized ?
    mCBAtTop          (false),//
    mDecP             ({1,1})  // "Fake" init 4 now
@@ -191,7 +241,7 @@ cParamCodedTarget::cParamCodedTarget(int aNbPixBin) :
     SetNbPixBin(aNbPixBin);
 }
 
-void cParamCodedTarget::FinishInitOfSpec(const cSpecBitEncoding & aSpec)
+void cParamCodedTarget::FinishInitOfSpec(const cSpecBitEncoding & aSpec,bool createInit)
 {
    mType = aSpec.mType;
    cMMVII_Appli & anAppli = cMMVII_Appli::CurrentAppli();
@@ -199,43 +249,62 @@ void cParamCodedTarget::FinishInitOfSpec(const cSpecBitEncoding & aSpec)
    mNbBit = aSpec.mNbBits;
    mWithParity = aSpec.mParity;
 
-   if (aSpec.mType==eTyCodeTarget::eIGNIndoor)
+   // if we are not in initial creation (i.e we reading existing file) all these modif that are related
+   // to the fact that user did or didnt specify are meaningless, value read must not be changed
+   if (createInit)
    {
-         // Nothingto do all default value have been setled for this case
-   }
-   else if ((aSpec.mType==eTyCodeTarget::eIGNDroneSym) || (aSpec.mType==eTyCodeTarget::eIGNDroneTop))
-   {
-       anAppli.SetIfNotInit(mModeFlight,true);
-       anAppli.SetIfNotInit(mCBAtTop,(aSpec.mType==eTyCodeTarget::eIGNDroneTop));
-       anAppli.SetIfNotInit(mThickN_WInt,0.1);
-       anAppli.SetIfNotInit(mThickN_Code,0.0);
-       anAppli.SetIfNotInit(mThickN_WExt,0.0);
-       anAppli.SetIfNotInit(mThickN_Car,0.3);
-       anAppli.SetIfNotInit(mChessboardAng,-M_PI/4.0);
+       if (aSpec.mType==eTyCodeTarget::eIGNIndoor)
+       {
+             // Nothingto do all default value have been setled for this case
+       }
+       else if ((aSpec.mType==eTyCodeTarget::eIGNDroneSym) || (aSpec.mType==eTyCodeTarget::eIGNDroneTop))
+       {
+           anAppli.SetIfNotInit(mModeFlight,true);
+           anAppli.SetIfNotInit(mCBAtTop,(aSpec.mType==eTyCodeTarget::eIGNDroneTop));
+           anAppli.SetIfNotInit(mThickN_WInt,0.05);
+           anAppli.SetIfNotInit(mThickN_Code,0.0);
+           anAppli.SetIfNotInit(mThickN_WExt,0.0);
+           anAppli.SetIfNotInit(mThickN_Car,0.3);
+           anAppli.SetIfNotInit(mChessboardAng,-M_PI/4.0);
+           anAppli.SetIfNotInit(mThickN_BorderExt,0.05);
 
-       anAppli.SetIfNotInit(mRayOrientTablet,0.1);
-       anAppli.SetIfNotInit(mCenterOrientTablet,cPt2dr(0.7,0));
-   }
-   else if (aSpec.mType==eTyCodeTarget::eCERN)
-   {
-      //  anAppli.SetIfNotInit(mNbBit,20);
-       // anAppli.SetIfNotInit(mWithParity,false);
+           anAppli.SetIfNotInit(mRadiusOrientTablet,0.1);
+           anAppli.SetIfNotInit(mCenterOrientTablet,cPt2dr(0.7,0));
+       }
+       else if (aSpec.mType==eTyCodeTarget::eCERN)
+       {
+          //  anAppli.SetIfNotInit(mNbBit,20);
+           // anAppli.SetIfNotInit(mWithParity,false);
 
-       anAppli.SetIfNotInit(mNbRedond,1);
-       anAppli.SetIfNotInit(mThickN_WInt,(mNbBit==20) ? 1.5 : 1.0);
-       anAppli.SetIfNotInit(mThickN_Code,(mNbBit==20) ? 1.5 : 1.0);
-       anAppli.SetIfNotInit(mThickN_WExt,0.0);
-       anAppli.SetIfNotInit(mWithChessboard,false);
-       anAppli.SetIfNotInit(mWhiteBackGround,false);
-       anAppli.SetIfNotInit(mAntiClockWiseBit,false);
+           anAppli.SetIfNotInit(mNbRedond,1);
+           anAppli.SetIfNotInit(mThickN_WInt,(mNbBit==20) ? 1.5 : 1.0);
+           anAppli.SetIfNotInit(mThickN_Code,(mNbBit==20) ? 1.5 : 1.0);
+           anAppli.SetIfNotInit(mThickN_WExt,0.9);
+           anAppli.SetIfNotInit(mThickN_BorderExt,0.10);
+
+           anAppli.SetIfNotInit(mWithChessboard,false);
+           anAppli.SetIfNotInit(mWhiteBackGround,false);
+           anAppli.SetIfNotInit(mAntiClockWiseBit,false);
+       }
    }
-   mThickN_Car *= (aSpec.mNbDigit+1)/2;
+   mSzHalfStr = (aSpec.mNbDigit+1)/2;
+
+  // StdOut() << " mThickN_CarmThickN_Car " << mThickN_Car  << " " << (aSpec.mNbDigit+1)/2 << "\n";
+  //  Split string in 2
+   mThickN_Car *= mSzHalfStr;
 }
 
+cPt2dr cParamCodedTarget::Pix2Norm(const cPt2dr & aPix) const
+{
+   return (aPix-mMidle) / mScale;
+}
 cPt2dr cParamCodedTarget::Pix2Norm(const cPt2di & aPix) const
 {
-   return (ToR(aPix)-mMidle) / mScale;
+   return Pix2Norm(ToR(aPix));
 }
+
+
+
 cPt2dr cParamCodedTarget::Norm2PixR(const cPt2dr & aP) const
 {
     return mMidle + aP * mScale;
@@ -248,7 +317,7 @@ cPt2di cParamCodedTarget::Norm2PixI(const cPt2dr & aP) const
 int&    cParamCodedTarget::NbRedond() {return mNbRedond;}
 int&    cParamCodedTarget::NbCircle() {return mNbCircle;}
 
-void cParamCodedTarget::Finish()
+void cParamCodedTarget::FinishWoSpec()
 {
 
   MMVII_INTERNAL_ASSERT_strong(((mNbPixelBin%2)==0),"Require odd pixel 4 binary image");
@@ -274,14 +343,41 @@ void cParamCodedTarget::Finish()
   aCumulThick += mThickN_WExt;
   mRho_3_BeginCar =  mSz_CCB   * aCumulThick;
 
+
+  mThickN_Car = std::min(mThickN_Car, mRho_2_EndCode * (sqrt(2)-1));
+  {
+      std::string aS(mSzHalfStr,'s');
+      cIm2D<tU_INT1>  aImStr = ImageOfString_10x8(aS,1);
+      cPt2dr aSz = ToR(aImStr.DIm().Sz());
+      aSz = aSz / NormInf(aSz);
+
+      //  (l x-R3)^ + (ly-R3)^2 = R3^2
+      //  l^2 (x2+y2) - 2lR3 (x+y) + 2R3^2 - R3^2
+      // For l   : a L2 + b L + C
+      
+      tREAL8 a = SqN2(aSz);
+      tREAL8 b = -2 * mRho_3_BeginCar * Norm1(aSz);
+      tREAL8 c = 2*Square(mRho_3_BeginCar) - Square(mRho_3_BeginCar);
+
+      //  l = (-b +-sqrt(b2-4ac))/2a
+      tREAL8 aDelta =  Square(b) - 4 * a * c;
+      // smallest root
+      tREAL8 aL1 = (-b - sqrt(aDelta)) / (2*a);
+      mPSzCar  = aSz * aL1;
+
+  }
+
+  mRho_4_EndCar = mRho_3_BeginCar;
+/*
   mRho_4_EndCar = std::max
                   (
                         mRho_3_BeginCar,
-                        mRho_3_BeginCar/sqrt(2) + mThickN_Car
+                        mRho_3_BeginCar/sqrt(2) + (mThickN_Car*mSz_CCB)
                   );
+*/
 
 
-  aCumulThick = mRho_4_EndCar;
+  aCumulThick = mRho_4_EndCar / mSz_CCB;
   aCumulThick += mThickN_BorderExt;
   mRho_EndIm = mSz_CCB * aCumulThick; 
 
@@ -314,7 +410,6 @@ void cParamCodedTarget::Finish()
                <<  "r4 : " << mRho_4_EndCar << "\n"
 	       <<  "r5 : " << mRho_EndIm << "\n";
 
-      getchar();
   }
 }
 
@@ -363,21 +458,24 @@ std::string cParamCodedTarget::NameFileOfNum(int aNum) const
 }
 
 
-
-
 /* *************************************************** */
 /*                                                     */
 /*             cNormPix2Bit                            */
 /*                                                     */
 /* *************************************************** */
 
-
+/**  Class for specifying the mapping between image and bits, it works with "normalized"
+ *   coordinates 
+ */
 class cNormPix2Bit
 {
     public :
+         /// Indicate if the point is coding a bit 
 	 virtual bool    PNormIsCoding(const cPt2dr & aPt)   const = 0;
+         /// Indicate the num of the bit coded
 	 virtual int     BitsOfNorm    (const cPt2dr & aPt)  const = 0;
 
+	 ///  Allocator retun one the derivate class
          static cNormPix2Bit * Alloc(const cFullSpecifTarget & aSpecif);
 
 	 virtual ~cNormPix2Bit() {}
@@ -390,22 +488,25 @@ class cNormPix2Bit
 /*                                                     */
 /* *************************************************** */
 
+/**  A "cNormPix2Bit" where the bits are code in a circle arround the checkboard */
 
 class cCircNP2B : public  cNormPix2Bit
 {
      public :
+         /// Construct from the full specification
          cCircNP2B(const cFullSpecifTarget & aSpecif);
-	 bool    PNormIsCoding(const cPt2dr & aPt)      const   override;
-	 int     BitsOfNorm    (const cPt2dr & aPt)     const   override;
+	 bool    PNormIsCoding(const cPt2dr & aPt)      const   override; ///< is it between circle
+	 int     BitsOfNorm    (const cPt2dr & aPt)     const   override; ///< convert teta to a num
 
      private :
-	 cPt2dr  PreProcessCoord(const cPt2dr & aPt)    const;
+         /// Pre-processing, just convert to polar coordinate
+	 cPt2dr  PreProcessCoord(const cPt2dr & aPt)    const; 
 
-	 tREAL8 mRho0;
-	 tREAL8 mRho1;
-	 tREAL8 mTeta0;
-	 int    mNbBits;
-	 tREAL8 mSignT;
+	 tREAL8 mRho0;    ///< minimal ray of coding part
+	 tREAL8 mRho1;    ///< maximal ray of coding part
+	 tREAL8 mTeta0;   ///< origin of teta for first bit
+	 int    mNbBits;  ///< number of bit to code
+	 tREAL8 mSignT;   ///< sign use to code the sens (clock-wise or not)
 };
 
 
@@ -423,19 +524,24 @@ cPt2dr  cCircNP2B::PreProcessCoord(const cPt2dr & aPt)   const
 {
     return ToPolar(aPt);
 }
+
 bool  cCircNP2B::PNormIsCoding(const cPt2dr & aPt) const 
 {
+    // extract the ray
     tREAL8 aRho = PreProcessCoord(aPt).x();
-    // StdOut() << " RRR " << aRho  << " "<< mRho0 << " " << mRho1 <<std::endl;
+    // coding part between 2 circle
     return   (aRho>=mRho0)  && (aRho<mRho1) ;
 }
 
 int cCircNP2B::BitsOfNorm(const cPt2dr & aPt) const 
 {
+     // compute the angle, taking into account origin & sens
      tREAL8 aTeta = (PreProcessCoord(aPt).y() -mTeta0) * mSignT;
+     // compute bit index from teta by mapping "[0,2PI]"  to "[0,NbBits]" 
      tREAL8 aIndex = mNbBits * (aTeta / (2*M_PI)) ;
+     // assure that index is in "[0,NbBits]"
      aIndex = mod_real(aIndex,mNbBits);
-     return round_down (aIndex);
+     return round_down (aIndex);   
 }
 
 /* *************************************************** */
@@ -443,6 +549,8 @@ int cCircNP2B::BitsOfNorm(const cPt2dr & aPt) const
 /*             cStraightNP2B                           */
 /*                                                     */
 /* *************************************************** */
+
+/**  A "cNormPix2Bit" where the bits are coded on a regular grid */
 
 class cStraightNP2B : public  cNormPix2Bit
 {
@@ -452,8 +560,8 @@ class cStraightNP2B : public  cNormPix2Bit
 	 int     BitsOfNorm    (const cPt2dr & aPt)     const   override;
 
      private :
-         bool     mIsSym;
-	 tREAL8   mRho1;
+         bool     mIsSym;  ///< If true, the coding part is splited in two part
+	 tREAL8   mRho1;   ///< begin
          int      mNbBits;
          int      mNbBS2;
 	 tREAL8   mSep2L;
@@ -474,29 +582,29 @@ cStraightNP2B::cStraightNP2B(const cFullSpecifTarget & aSpecif,bool IsSym) :
 bool    cStraightNP2B::PNormIsCoding(const cPt2dr & aPt) const   
 {
     return  mIsSym                      ?
-	    (std::abs(aPt.y()) > mRho1) : 
-	    (aPt.y() >  mRho1)        ;
+	    (std::abs(aPt.y()) > mRho1) :    // sym case, the coding part is symetric
+	    (aPt.y() >  mRho1)        ;      // else coding part on one side
 }
 
 int   cStraightNP2B::BitsOfNorm(const cPt2dr & aPt) const
 {
     bool  isLine2 =   (aPt.y()>mSep2L)  ;
+    //  map  [-mRho1,+mRho1] to [0,mNbBS2]  (because x is initially signed)
     int aRes = round_down((aPt.x()+mRho1)/(2*mRho1) *mNbBS2)  ;
 
-    // MPD 16/08/23 => correction because  want a trigonometrique ordrer of bits
-    // so that bit-shift correspond to rotations
+    // MPD 16/08/23 => correction because  want a trigonometrique ordrer of bits     0 1 2    and not  0 1 2
+    // so that bit-shift correspond to rotations            ie :                     xxxxx             xxxxx
+    //                                                                               5 4 3             3 4 5
     if (mIsSym && isLine2)
     {
         aRes =  mNbBS2-1 - aRes;
     }
     aRes = std::max(0,std::min(aRes,mNbBS2-1));
 
+    //  if second line, add the NbBits/2 
+    aRes =  aRes +  mNbBS2* isLine2;
 
-
-   aRes =  aRes +  mNbBS2* isLine2;
-
-   // StdOut()  << "rrr = " << aRes << " " << (aPt.x()+mRho1)/(2*mRho1) << std::endl;
-   return aRes;
+    return aRes;
 }
 
 /* *************************************************** */
@@ -505,23 +613,36 @@ int   cStraightNP2B::BitsOfNorm(const cPt2dr & aPt) const
 /*                                                     */
 /* *************************************************** */
 
+
+bool IsCircularTarge(eTyCodeTarget aType)
+{
+	return (aType==eTyCodeTarget::eCERN) || (aType==eTyCodeTarget::eIGNIndoor);
+}
+
+
 cNormPix2Bit * cNormPix2Bit::Alloc(const cFullSpecifTarget & aSpecif)
 {
+   if (IsCircularTarge(aSpecif.Type()))
+      return new cCircNP2B(aSpecif);
+
+
    switch (aSpecif.Type())
    {
+	   /*
          case eTyCodeTarget::eCERN :
          case eTyCodeTarget::eIGNIndoor:
 	       return new cCircNP2B(aSpecif);
+	       */
          case eTyCodeTarget::eIGNDroneSym:
 	       return new cStraightNP2B(aSpecif,true);
 
          case eTyCodeTarget::eIGNDroneTop:
 	       return new cStraightNP2B(aSpecif,false);
-         case eTyCodeTarget::eNbVals:
+	 default :
               return nullptr;
    }
 
-   return nullptr;
+   // return nullptr;
 }
 
 /* *************************************************** */
@@ -534,7 +655,8 @@ enum class eLPT  // Label Pattern Target
            {
               eBackGround,
               eForeGround,
-              eChar,
+              eCircleSepCar,
+              eBorderExt,
               eNumB0   // num first bit
            };
 
@@ -549,7 +671,7 @@ class cCodedTargetPatternIm
 
 	  tIm  ImCoding() const;
 
-	  tIm MakeOneImTarget(const cOneEncoding & aCode,bool doMarkC = false);
+	  tIm MakeOneImTarget(const cOneEncoding & aCode,bool is4Test = false);
      private :
 	  cCodedTargetPatternIm(const cCodedTargetPatternIm &) = delete;
 	  cPt2di  PDiag(tREAL8 aRhoNorm) const;
@@ -595,12 +717,13 @@ cCodedTargetPatternIm::cCodedTargetPatternIm(cFullSpecifTarget & aSpec) :
      mTeta0      (mRender.mChessboardAng),
      mRhoC       (mRender.mRho_0_EndCCB),
      mRho2C      (Square(mRhoC)),
-     mWOriTab    (mRender.mRayOrientTablet >0),
-     mRayOT      (mRender.mRayOrientTablet),
+     mWOriTab    (mRender.mRadiusOrientTablet >0),
+     mRayOT      (mRender.mRadiusOrientTablet),
      mCenterOT   (mRender.mCenterOrientTablet * FromPolar(1.0,(M_PI/4.0+mTeta0))),
-     mRayCT      (mRender.mRayCenterMiniTarget),
+     mRayCT      (mRender.mRadiusCenterMiniTarget),
      mRay2CT     (Square(mRayCT))
 {
+
     mDIC.InitCste(tElem(eLPT::eBackGround));
 
     // Structures for computing center of bits
@@ -610,9 +733,13 @@ cCodedTargetPatternIm::cCodedTargetPatternIm(cFullSpecifTarget & aSpec) :
     // structure specifying bits location
     std::unique_ptr<cNormPix2Bit>  aP2B (cNormPix2Bit::Alloc(aSpec));
 
+    tREAL8 aR2Sq = Square(mRender.mRho_2_EndCode);
+    tREAL8 aR3Sq = Square(mRender.mRho_3_BeginCar);
     for (const auto & aPix : mDIC)
     {
        cPt2dr aPN = mSpec.Render().Pix2Norm(aPix);
+       tREAL8 aR2N = SqN2(aPN);
+       tREAL8 aNormInf = NormInf(aPN);
        //  ============  1  Generate the bit coding =======================
        if (aP2B->PNormIsCoding(aPN))  // if point belong to bit-coding space
        {
@@ -623,7 +750,7 @@ cCodedTargetPatternIm::cCodedTargetPatternIm(cFullSpecifTarget & aSpec) :
 	   aVCenters.at(aNumB) += ToR(aPix);  // accumulate for centroid
        }
        //  ============  2  Generate the central circle =======================
-       else if (SqN2(aPN) <mRho2C)
+       else if (aR2N <mRho2C)
        {
            eLPT aLab = eLPT::eForeGround;  // a priori mar circle
            if (mSpec.Render().mWithChessboard)
@@ -649,22 +776,36 @@ cCodedTargetPatternIm::cCodedTargetPatternIm(cFullSpecifTarget & aSpec) :
 	   }
 	   mDIC.SetV(aPix,int(aLab));
        }
+       else if ((aR2N>aR2Sq) && ( aR2N<=aR3Sq))
+       {
+	   mDIC.SetV(aPix,int(eLPT::eCircleSepCar));
+       }
+
+       if ((aNormInf>mRender.mRho_4_EndCar) && (aNormInf<=mRender.mRho_EndIm))
+       {
+            mDIC.SetV(aPix,int(eLPT::eBorderExt));
+       }
     }
 
     // compute and memorize the center
     for (size_t aB=0 ; aB< aVWeight.size() ; aB++)
     {
+
        mSpec.SetBitCenter(aB,aVCenters.at(aB) / tREAL8(aVWeight.at(aB) * mSpec.DeZoomIm() ));
     }
 }
 
 cCodedTargetPatternIm::tIm cCodedTargetPatternIm::ImCoding() const {return mImCoding;}
 
-cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEncoding & anEnCode,bool doMarkC)
+cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEncoding & anEnCode,bool is4Test)
 {
    // compute gray level for background & foreground
    int aBG_Coul = mSpec.Render().mWhiteBackGround ? 255 : 0;
    int aFG_Coul =  255-aBG_Coul;
+
+   tREAL8 aWSC = 0.9;
+
+   int aColSepCirc = aFG_Coul*(1-aWSC) + aBG_Coul*aWSC;
 
    // by default all is backgrounf
    mDIT.InitCste(aBG_Coul);
@@ -674,6 +815,7 @@ cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEnco
    for (const auto & aPix : mDIC)
    {
        eLPT aLab =  eLPT(mDIC.GetV(aPix));
+
        if (aLab!=eLPT::eBackGround)
        {
            bool isBG = true;
@@ -683,14 +825,23 @@ cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEnco
            }
            else if (aLab>=eLPT::eNumB0)
            {
-                bool BitIs_1 =  (aCode & (1<<(int(aLab)-int(eLPT::eNumB0)))) != 0;
-                isBG = BitIs_1 !=  BGIs_0;
+               bool BitIs_1 =  (aCode & (size_t(1)<<(int(aLab)-int(eLPT::eNumB0)))) != 0;
+               isBG = BitIs_1 !=  BGIs_0;
            }
 
 	   if (!isBG)
 	   {
                mDIT.SetV(aPix,aFG_Coul);
 	   }
+       }
+
+       if (is4Test &&  (aLab== eLPT::eCircleSepCar))
+       {
+	   mDIT.SetV(aPix,aColSepCirc);
+       }
+       if (is4Test &&  (aLab== eLPT::eBorderExt))
+       {
+	   mDIT.SetV(aPix,aColSepCirc);
        }
    }
 
@@ -703,10 +854,14 @@ cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEnco
 
 	// Corners of string, 
         cPt2di  aP00 = PDiag(mRender.mRho_4_EndCar);
-	cPt2di  aP11 = PDiag(mRender.mRho_4_EndCar-mRender.mThickN_Car) ; // for a 1 length caracr
+	// cPt2di  aP11 = PDiag(mRender.mRho_4_EndCar-mRender.mThickN_Car *mRender.mFactEnlargeCar) ; // for a 1 length caracr
+	cPt2di  aP11 = aP00 + ToI(mRender.mPSzCar*mRender.mScale);
+
+        //StdOut() << " P00=" << aP00 << " P11=" << aP11 << " SzC=" << mRender.mPSzCar << " SC=" << mRender.mScale << "\n";
 
 	// udate highth of string, to adapt to length (aIndSplit is maximal legnt of 2 substrings)
-	int aHigth = (aP11.y()-aP00.y()) / aIndSplit;
+	// int aHigth = (aP11.y()-aP00.y()) / aIndSplit;
+	int aHigth = (aP11.y()-aP00.y()) ;
 	aP11 =  cPt2di(aP11.x(),aP00.y() + aHigth);
 
 	// loop for processing the 2 subsrt string 
@@ -735,15 +890,17 @@ cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEnco
 
 	     for (const auto & aPixStr : aDImStr)
 	     {
-                  if (aDImStr.GetV(aPixStr))
+                  bool isCar = aDImStr.GetV(aPixStr);
+                  if (isCar || is4Test)
 	          {
+                       int aCoul = isCar ? aFG_StrCoul : 128;
                        cPt2di aP0 = aPOri+ToI(ToR(aPixStr)*aSzPixStr);
                        cPt2di aP1 = aPOri+ToI(ToR(aPixStr+cPt2di(1,1))*aSzPixStr);
 
 		       for (const auto& aPixIm : cRect2(aP0,aP1))
 		       {
-                           mDIT.SetV(aPixIm,aFG_StrCoul);
-                           mDIT.SetV(aP4Sym-aPixIm,aFG_StrCoul);
+                           mDIT.SetVTruncIfInside(aPixIm,aCoul);
+                           mDIT.SetVTruncIfInside(aP4Sym-aPixIm,aCoul);
 		       }
 	          }
 	     }
@@ -755,11 +912,12 @@ cCodedTargetPatternIm::tIm cCodedTargetPatternIm::MakeOneImTarget(const cOneEnco
    tIm aRes = mImTarget.GaussDeZoom(mSpec.DeZoomIm());
 
    // in debug mode, marq with one pixel the center
-   if (doMarkC)
+   if (is4Test)
    {
       for (const auto & aC : mSpec.BitsCenters())
       {
-	      aRes.DIm().SetV(ToI(aC),128);
+          for (const auto aP : cRect2::BoxWindow(2))
+	      aRes.DIm().SetV(ToI(aC)+aP,128);
       }
    }
 
@@ -812,9 +970,10 @@ cFullSpecifTarget::tIm   cFullSpecifTarget::ImagePattern()
 {
 	return AllocCTPI()->ImCoding();
 }
-cFullSpecifTarget::tIm   cFullSpecifTarget::OneImTarget(const cOneEncoding & aCode)
+
+cFullSpecifTarget::tIm   cFullSpecifTarget::OneImTarget(const cOneEncoding & aCode,bool ForTest)
 {
-	return AllocCTPI()->MakeOneImTarget(aCode);
+	return AllocCTPI()->MakeOneImTarget(aCode,ForTest);
 }
 
 
@@ -835,9 +994,14 @@ int                               cFullSpecifTarget::DeZoomIm()    const {return
 eTyCodeTarget                     cFullSpecifTarget::Type()        const {return Specs().mType;}
 size_t                            cFullSpecifTarget::MinHammingD() const {return Specs().mMinHammingD;}
 
+cPt2dr    cFullSpecifTarget::Pix2Norm(const cPt2dr & aPix) const {return mRender.Pix2Norm(aPix*tREAL8(mRender.mSzGaussDeZoom));}
+cPt2dr    cFullSpecifTarget::Norm2Pix(const cPt2dr & aPix) const {return mRender.Norm2PixR(aPix)/tREAL8(mRender.mSzGaussDeZoom);}
+
+
 tREAL8 cFullSpecifTarget::Rho_0_EndCCB() const    {return mRender.mRho_0_EndCCB;}
 tREAL8 cFullSpecifTarget::Rho_1_BeginCode() const {return mRender.mRho_1_BeginCode;}
 tREAL8 cFullSpecifTarget::Rho_2_EndCode() const   {return mRender.mRho_2_EndCode;}
+tREAL8 cFullSpecifTarget::Rho_3_BeginCar() const   {return mRender.mRho_3_BeginCar;}
 
 
 const cPt2dr & cFullSpecifTarget::Center() const {return mRender.mCenterF;}
@@ -884,7 +1048,7 @@ void cFullSpecifTarget::AddData(const  cAuxAr2007 & anAuxParam)
      cAuxAr2007 anAux(TheMainTag,anAuxParam);
 
      mBE.AddData(anAux);
-     mRender.AddData(anAux);
+     mRender.PCT_AddData(anAux,&(mBE.Specs()));
      StdContAddData(cAuxAr2007("Centers",anAux),mBitsCenters);
 }
 
@@ -897,6 +1061,7 @@ cFullSpecifTarget *  cFullSpecifTarget::CreateFromFile(const std::string & aName
 {
     cFullSpecifTarget * aRes = new cFullSpecifTarget;
     ReadFromFile(*aRes,aName);
+
 
     if (0)  // we dont reset nb of bit, because don want do generate comments as 100100111
     {
@@ -962,6 +1127,7 @@ class cAppliGenCodedTarget : public cMMVII_Appli
         int PerGen() const { return mPerGen;}   //CM: avoid mPerGen unused
 
 
+	cPhotogrammetricProject  mPhgrPr;  ///< Used to generate dir visu
 	int                mPerGen;  // Pattern of numbers
 	int                mZoomShow;
 	std::string        mNameBE;
@@ -970,7 +1136,13 @@ class cAppliGenCodedTarget : public cMMVII_Appli
 	cParamCodedTarget  mPCT;
 	bool               mDoMarkC;
 	std::string        mPatternDoImage;
+	std::string        mPrefixVisu;
 	int                mNbPixBin;
+    std::string        mNameOut;
+    bool               mIm4Test;   ///< Do we generate image for inspection (and not for printing)
+    std::string        mNameImaAdd;
+    int                mSzMarginImaAdd;
+    cPt3di             mColMarginImaAdd;
 };
 
 eTyCodeTarget cAppliGenCodedTarget::Type() {return mBE.Specs().mType ;}
@@ -978,8 +1150,14 @@ eTyCodeTarget cAppliGenCodedTarget::Type() {return mBE.Specs().mType ;}
 
 cAppliGenCodedTarget::cAppliGenCodedTarget(const std::vector<std::string> & aVArgs,const cSpecMMVII_Appli & aSpec) :
    cMMVII_Appli  (aVArgs,aSpec),
+   mPhgrPr       (*this),
    mPerGen       (10),
-   mDoMarkC      (false)
+   mDoMarkC      (false),
+   mPrefixVisu   (""),
+   mNbPixBin     (1800),
+   mIm4Test      (false),
+   mSzMarginImaAdd (20),
+   mColMarginImaAdd    (cRGBImage::Orange)
 {
 }
 
@@ -987,7 +1165,8 @@ cCollecSpecArg2007 & cAppliGenCodedTarget::ArgObl(cCollecSpecArg2007 & anArgObl)
 {
  return
       anArgObl
-          <<   Arg2007(mNameBE,"Xml/Json name for bit encoding struct",{{eTA2007::XmlOfTopTag,cBitEncoding::TheMainTag}})
+          // <<   Arg2007(mNameBE,"Xml/Json name for bit encoding struct",{{eTA2007::XmlOfTopTag,cBitEncoding::TheMainTag}})
+          <<   Arg2007(mNameBE,"Xml/Json/Dmp name for bit encoding struct",{{eTA2007::FileAny}})
    ;
 }
 
@@ -997,7 +1176,12 @@ cCollecSpecArg2007 & cAppliGenCodedTarget::ArgOpt(cCollecSpecArg2007 & anArgOpt)
 {
    return anArgOpt
           << AOpt2007(mPatternDoImage,"PatIm","Pattern for generating image (def no generation)")
-          << AOpt2007(mPCT.mRayCenterMiniTarget,"RayMCT","Rayon \"mini\" center target (for topo)",{eTA2007::HDV})
+          << AOpt2007(mNameImaAdd,"ImageAdd","Name for additional image (\"Logo\")",{eTA2007::FileImage})
+          << AOpt2007(mSzMarginImaAdd,"SzMarginImageAdd","Sz of margin for additionnal image\")",{eTA2007::HDV})
+          << AOpt2007(mColMarginImaAdd,"ColMarginImageAdd","Sz of margin for additionnal image\")",{eTA2007::HDV})
+          << AOpt2007(mPrefixVisu,"PrefixVisu","To add in image name when PatIm is used",{eTA2007::HDV})
+          << AOpt2007(mIm4Test,"I4T","Generate image for test/inspection, not for use",{eTA2007::HDV})
+          << AOpt2007(mPCT.mRadiusCenterMiniTarget,"RayMCT","Rayon \"mini\" center target (for topo)",{eTA2007::HDV})
           // << AOpt2007(mPCT.mNbBit,"NbBit","Nb Bit printed",{eTA2007::HDV})
           // << AOpt2007(mPCT.mWithParity,"WPar","With parity bit",{eTA2007::HDV})
           << AOpt2007(mPCT.mThickN_WInt,"ThW0","Thickness of interior white circle",{eTA2007::HDV})
@@ -1008,10 +1192,11 @@ cCollecSpecArg2007 & cAppliGenCodedTarget::ArgOpt(cCollecSpecArg2007 & anArgOpt)
           << AOpt2007(mPCT.mChessboardAng,"Theta","Origin angle of chessboard pattern ",{eTA2007::HDV})
           << AOpt2007(mPCT.mWhiteBackGround,"WhiteBG","White back ground")
           << AOpt2007(mPCT.mModeFlight,"ModeFlight","Special mode for Patricio ",{eTA2007::HDV})
-	  << AOpt2007(mPCT.mRayOrientTablet,"SzOrFig","Size of \"diamond\" for orientation")
+	  << AOpt2007(mPCT.mRadiusOrientTablet,"SzOrFig","Size of \"diamond\" for orientation")
           << AOpt2007(mDoMarkC,"MarkC","Mark center of bits, just for verif ",{eTA2007::HDV,eTA2007::Tuning})
           << AOpt2007(mZoomShow,"ZoomShow","Zoom to generate a high resolution check images",{eTA2007::Tuning})
-          << AOpt2007(mNbPixBin,"NbPixBin","Size of binary image when printing")
+          << AOpt2007(mNbPixBin,"NbPixBin","Size of binary image when printing",{eTA2007::HDV})
+          << AOpt2007(mNameOut,"Out","Name for out file")
    ;
 }
 
@@ -1022,50 +1207,98 @@ int  cAppliGenCodedTarget::Exe()
 
        // anAppli.SetIfNotInit(mWithParity,false);
 
-   if (IsInit(&mNbPixBin))
-      mPCT.SetNbPixBin(mNbPixBin);
+   mPhgrPr.FinishInit();
+   //if (IsInit(&mNbPixBin))
+   mPCT.SetNbPixBin(mNbPixBin);
 
    ReadFromFile(mBE,mNameBE);
-   mPCT.FinishInitOfSpec(mBE.Specs());
-   mPCT.Finish();
+   mPCT.FinishInitOfSpec(mBE.Specs(),true);
+   mPCT.FinishWoSpec();
 
    cFullSpecifTarget  aFullSpec(mBE,mPCT);
 
    // Activate the computaion of centers
    aFullSpec.ImagePattern();
+   std::string aDirVisu = mPhgrPr.DirVisuAppli();
 
    if (IsInit(&mPatternDoImage))
    {
       //  generate the pattern image
-      aFullSpec.ImagePattern().DIm().ToFile(aFullSpec.NameOfImPattern());
+      aFullSpec.ImagePattern().DIm().ToFile(aDirVisu+mPrefixVisu + aFullSpec.NameOfImPattern());
 
       // parse all encodings
       for (const auto & anEncode : aFullSpec.Encodings())
       {
           if (MatchRegex(anEncode.Name(),mPatternDoImage))
 	  {
-             cCodedTargetPatternIm::tIm anIm = aFullSpec.OneImTarget(anEncode);
+             cCodedTargetPatternIm::tIm anIm = aFullSpec.OneImTarget(anEncode,mIm4Test);
 
              std::string aName = aFullSpec.NameOfEncode(anEncode);
-             anIm.DIm().ToFile(aName);
+	     std::string aNameOut = aDirVisu+mPrefixVisu +aName;
+	     if (IsInit(&mNameImaAdd))
+	     {
+
+            // int                mSzMarginImaAdd;
+             //cPt3di             mColMarginImaAdd;
+               //  int aMargin=20;  // size of separation Target/Logo
+
+                 const auto & aDimT =  anIm.DIm();
+                 cRGBImage aImAdd = cRGBImage::FromFile(mNameImaAdd);  // Initial "logo"
+
+		 // Comput sizes
+		 cPt2di aSzInitAdd = aImAdd.ImR().DIm().Sz(); //size of initial images
+		 tREAL8 aRatio = tREAL8(aDimT.Sz().x() ) / aSzInitAdd.x(); // ratio to equalize width
+		 cPt2di aSzFinalAdd = ToI(ToR(aSzInitAdd)*aRatio);  // final size of additional imaghes (preserve ratio)
+		 cPt2di aP0Add (0,aDimT.Sz().y()+mSzMarginImaAdd);   // begin of additional image in result
+		 cPt2di aP1Add = aP0Add + cPt2di(aDimT.Sz().x(),aSzFinalAdd.y()); // end of additional image
+		 cPt2di aSzGlob = aP1Add;   // size of result
+
+
+		 cRGBImage aRes(aSzGlob,mColMarginImaAdd);  // create the  RGB image
+
+		 // copy the target maintaining its resolution
+		 for (const auto & aPixTarget : aDimT)
+                     aRes.SetGrayPix(aPixTarget,aDimT.GetV(aPixTarget));
+
+                 // copy the additionnal image, with adequate offset/resizing
+		 for (const auto & aPixG : cRect2(aP0Add,aP1Add))
+		 {
+                     cPt2dr aPixLogo = ToR(aPixG-aP0Add) / aRatio;
+		     if (aImAdd.InsideBL(aPixLogo))
+                        aRes.SetRGBPix(aPixG,aImAdd.GetRGBPixBL(aPixLogo));
+		 }
+
+		 // Save result
+		 aRes.ToJpgFileDeZoom(DirOfPath(aNameOut,false)+LastPrefix(FileOfPath(aNameOut,false))+".jpg",1,{"QUALITY=90"});
+	     }
+	     else
+	     {
+                anIm.DIm().ToFile(aNameOut);
+	     }
              StdOut() << aName << std::endl;
 	  }
       }
    }
 
-   std::string aName = aFullSpec.Prefix()+"_FullSpecif."+TaggedNameDefSerial();
-   SaveInFile(aFullSpec, aName);
+   // std::string aName = aFullSpec.Prefix()+"_FullSpecif."+TaggedNameDefSerial();
+   if (! IsInit(&mNameOut)) 
+   {
+      // mNameOut = aFullSpec.Prefix()+"_FullSpecif."+  LastPostfix(mNameBE);
+      // Modif MPD : it seems more coherent to maintain users naming  ...
+      mNameOut =  LastPrefix(mNameBE) +"_FullSpecif."+  LastPostfix(mNameBE);
+   }
+   SaveInFile(aFullSpec, mNameOut);
 
    if (0)  // test reload
    {
-         auto aPtr = cFullSpecifTarget::CreateFromFile(aName);
-	 StdOut() << "NNN=" << aName << std::endl;
+         auto aPtr = cFullSpecifTarget::CreateFromFile(mNameOut);
+	 StdOut() << "NNN=" << mNameOut << std::endl;
 	 delete aPtr;
    }
 
    if (IsInit(&mZoomShow))
    {
-      TestReloadAndShow_cFullSpecifTarget(aName,mZoomShow);
+      TestReloadAndShow_cFullSpecifTarget(aDirVisu,mNameOut,mZoomShow);
    }
 
 
