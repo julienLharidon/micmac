@@ -1,61 +1,80 @@
-# Guide de Déploiement PyMicMac sur GCP (GKE + Ray)
+# Guide de Déploiement PyMicMac sur GCP (GKE + Ray + IAM)
 
-Ce guide explique comment monter l'infrastructure nécessaire sur Google Cloud Platform pour exécuter PyMicMac.
+Ce guide détaille le montage de l'infrastructure et la configuration des identités (IAM) pour sécuriser l'accès aux données.
 
 ## 1. Prérequis
 *   Un projet GCP actif.
-*   [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) installé et configuré.
-*   [Terraform](https://www.terraform.io/downloads) installé.
-*   [kubectl](https://kubernetes.io/docs/tasks/tools/) installé.
+*   [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
+*   [Terraform](https://www.terraform.io/downloads).
 
 ## 2. Déploiement de l'Infrastructure (IaC)
 
-1.  **Authentification** :
+1.  **Authentification et Configuration** :
     ```bash
     gcloud auth application-default login
-    gcloud config set project [VOTRE_PROJECT_ID]
+    gcloud config set project [PROJECT_ID]
     ```
 
-2.  **Initialisation et Application Terraform** :
+2.  **Application de l'Infrastructure** :
     ```bash
     cd install/gcp
     terraform init
-    terraform apply -var="project_id=[VOTRE_PROJECT_ID]" -var="region=europe-west1"
+    terraform apply -var="project_id=[PROJECT_ID]" -var="region=europe-west1"
     ```
-    *Cela va créer un cluster GKE Autopilot et un bucket GCS.*
+    *Terraform crée automatiquement :*
+    - *Un compte de service pour les nœuds (`pymicmac-gke-nodes`).*
+    - *Un compte de service pour l'application (`pymicmac-app-sa`) avec accès au bucket GCS.*
+    - *Le cluster GKE avec Workload Identity activé.*
 
-3.  **Configuration de kubectl** :
+3.  **Accès au Cluster** :
     ```bash
     gcloud container clusters get-credentials pymicmac-cluster --region europe-west1
     ```
 
-## 3. Installation de Ray (KubeRay)
+## 3. Configuration de Workload Identity (IAM)
 
-Déployez l'opérateur KubeRay pour gérer le cluster Ray sur GKE :
+Pour que vos pods Ray (identités Kubernetes) puissent accéder à GCS sans clé JSON, nous lions le compte de service Kubernetes au compte de service GCP :
+
+1.  **Création du Namespace et du Service Account Kubernetes** :
+    ```bash
+    kubectl create namespace pymicmac
+    kubectl create serviceaccount ray-worker-sa --namespace pymicmac
+    ```
+
+2.  **Liaison IAM (Binding)** :
+    Liez l'identité Kubernetes au compte de service GCP géré par Terraform :
+    ```bash
+    gcloud iam service-accounts add-iam-policy-binding pymicmac-app-sa@[PROJECT_ID].iam.gserviceaccount.com \
+        --role roles/iam.workloadIdentityUser \
+        --member "serviceAccount:[PROJECT_ID].svc.id.goog[pymicmac/ray-worker-sa]"
+    ```
+
+3.  **Annotation du Service Account K8s** :
+    ```bash
+    kubectl annotate serviceaccount ray-worker-sa --namespace pymicmac \
+        iam.gke.io/gcp-service-account=pymicmac-app-sa@[PROJECT_ID].iam.gserviceaccount.com
+    ```
+
+## 4. Installation de KubeRay
+
+Installez l'opérateur Ray en spécifiant le compte de service configuré pour vos workers :
 ```bash
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-helm install kuberay-operator kuberay/kuberay-operator --version 1.1.1
-kubectl apply -f ray-cluster.yaml
+helm install kuberay-operator kuberay/kuberay-operator
 ```
-*(Le fichier `ray-cluster.yaml` définit les ressources CPU/GPU des workers Ray)*
+*Lors du déploiement de votre cluster Ray, assurez-vous d'utiliser `serviceAccountName: ray-worker-sa` dans la spec des pods.*
 
-## 4. Préparation des Données de Test
+## 5. Test et Démo
 
-Utilisez le script fourni pour uploader des images de test vers GCS :
+Chargez vos données et lancez le traitement comme décrit dans la démo principale :
 ```bash
-export BUCKET_NAME=pymicmac-data-[VOTRE_PROJECT_ID]
-python3 scripts/upload_test_data.py --bucket $BUCKET_NAME --dir ./data/test_images
+# Upload via gcloud (utilise vos droits personnels)
+gsutil cp -r ./data/test_images gs://pymicmac-data-[PROJECT_ID]/raw-images/
+
+# Exécution du job (utilise le compte de service pymicmac-app-sa via Workload Identity)
+ray job submit --address http://localhost:8265 -- python3 demo_pymicmac.py
 ```
 
-## 5. Exécution du Traitement
-
-Lancez le job PyMicMac sur le cluster Ray :
-```bash
-ray job submit --address http://localhost:8265 -- python3 demo_pymicmac.py --bucket $BUCKET_NAME
-```
-
-## 6. Nettoyage
-Pour éviter des frais inutiles :
-```bash
-terraform destroy -var="project_id=[VOTRE_PROJECT_ID]"
-```
+## 6. Sécurité (Best Practices)
+*   **Principe du Moindre Privilège** : Le compte `pymicmac-app-sa` n'a accès qu'au bucket spécifique du projet.
+*   **Pas de clés statiques** : Grâce à Workload Identity, aucune clé JSON n'est stockée dans les pods.
