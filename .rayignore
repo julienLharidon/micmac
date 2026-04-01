@@ -1,12 +1,25 @@
-# Exclure tout par défaut
-*
+# Exclure les répertoires massifs du dépôt MicMac original
+.git/
+.github/
+BenchElise/
+CodeExterne/
+CodeGenere/
+ExtDataPrep/
+MMVII/
+applis/
+binaire-aux/
+completions/
+config/
+data/
+fdsc/
+include/
+install Micmac/
+src/
+build/
 
-# Inclure uniquement le nécessaire pour PyMicMac
-!pymicmac/
-!demo_pymicmac.py
-!requirements.txt
-!scripts/
-
-# Ne pas exclure les sous-répertoires de pymicmac
-!pymicmac/**
-!scripts/**
+# Exclure les fichiers de build et autres
+*.o
+*.so
+*.a
+*.pyc
+__pycache__/
