@@ -100,7 +100,8 @@ Pour soumettre un job, vous devez accéder au tableau de bord Ray (Dashboard) vi
     ```
 
 3.  **Exécution du job** :
-    Il est impératif de spécifier le répertoire de travail (`--working-dir .`) pour que Ray uploade votre code local (`demo_pymicmac.py` et le package `pymicmac`) sur le cluster :
+    Il est impératif de spécifier le répertoire de travail (`--working-dir .`) pour que Ray uploade votre code local sur le cluster.
+    **Note** : Le fichier `.rayignore` à la racine permet d'exclure les fichiers volumineux du repo MicMac original et de n'uploader que le nécessaire pour PyMicMac.
     ```bash
     # Exécutez cette commande à la racine du projet (où se trouve demo_pymicmac.py)
     ray job submit --address http://localhost:8265 \

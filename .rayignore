@@ -1,0 +1,12 @@
+# Exclure tout par défaut
+*
+
+# Inclure uniquement le nécessaire pour PyMicMac
+!pymicmac/
+!demo_pymicmac.py
+!requirements.txt
+!scripts/
+
+# Ne pas exclure les sous-répertoires de pymicmac
+!pymicmac/**
+!scripts/**
