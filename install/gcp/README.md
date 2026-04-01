@@ -50,13 +50,31 @@ Ce guide détaille le montage de l'infrastructure et la configuration des identi
         iam.gke.io/gcp-service-account=pymicmac-app-sa@$(gcloud config get-value project).iam.gserviceaccount.com
     ```
 
-## 4. Installation de KubeRay
+## 4. Installation de KubeRay et RayCluster
 
-```bash
-helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-helm install kuberay-operator kuberay/kuberay-operator
-# Déployez ensuite votre RayCluster (voir documentation KubeRay)
-```
+L'opérateur KubeRay gère le cycle de vie de vos clusters Ray sur Kubernetes.
+
+1.  **Installation de l'Opérateur** :
+    ```bash
+    helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+    helm install kuberay-operator kuberay/kuberay-operator
+    ```
+
+2.  **Déploiement du Cluster Ray (RayCluster)** :
+    Utilisez le fichier `ray-cluster.yaml` fourni pour créer le cluster avec les bons droits d'accès GCS (Workload Identity) :
+    ```bash
+    kubectl apply -f ray-cluster.yaml
+    ```
+    *Ce fichier configure :*
+    - *Un Head node avec le Dashboard activé.*
+    - *Des Worker nodes (auto-scalables de 1 à 10).*
+    - *L'utilisation du compte de service `ray-worker-sa` pour chaque pod.*
+
+3.  **Vérification** :
+    Attendez que les pods soient en état `Running` :
+    ```bash
+    kubectl get pods -n pymicmac
+    ```
 
 ## 5. Test et Démo (depuis Cloud Shell)
 

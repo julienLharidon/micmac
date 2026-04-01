@@ -1,0 +1,52 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-pymicmac
+  namespace: pymicmac
+spec:
+  rayVersion: '2.9.0' # Version de Ray à utiliser
+  # Configuration du Head Node (Gestionnaire)
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        serviceAccountName: ray-worker-sa # Utilise Workload Identity
+        containers:
+          - name: ray-head
+            image: rayproject/ray:2.9.0-py310
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "1"
+                memory: "2Gi"
+            ports:
+              - containerPort: 6379
+                name: gcs-server
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+  # Configuration des Worker Nodes (Calcul)
+  workerGroupSpecs:
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 10
+      groupName: worker-group
+      rayStartParams: {}
+      template:
+        spec:
+          serviceAccountName: ray-worker-sa # Utilise Workload Identity pour l'accès GCS
+          containers:
+            - name: ray-worker
+              image: rayproject/ray:2.9.0-py310
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+                  # nvidia.com/gpu: 1 # Optionnel : Décommentez pour activer le GPU
+                requests:
+                  cpu: "2"
+                  memory: "4Gi"
