@@ -1,25 +1,16 @@
-# Exclure les répertoires massifs du dépôt MicMac original
-.git/
-.github/
-BenchElise/
-CodeExterne/
-CodeGenere/
-ExtDataPrep/
-MMVII/
-applis/
-binaire-aux/
-completions/
-config/
-data/
-fdsc/
-include/
-install Micmac/
-src/
-build/
+# On repart de zéro pour être sûr de ne rien rater
+*
 
-# Exclure les fichiers de build et autres
-*.o
-*.so
-*.a
-*.pyc
-__pycache__/
+# On ré-autorise uniquement ce qui est nécessaire pour le job
+!pymicmac/
+!pymicmac/**
+!demo_pymicmac.py
+!requirements.txt
+
+# On re-bloque les fichiers volumineux qui pourraient se glisser dans pymicmac/ par erreur
+pymicmac/**/*.tif
+pymicmac/**/*.jpg
+pymicmac/**/*.JPG
+pymicmac/**/*.png
+pymicmac/**/__pycache__/
+pymicmac/**/*.pyc
