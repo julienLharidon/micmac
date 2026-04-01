@@ -4,7 +4,7 @@ metadata:
   name: raycluster-pymicmac
   namespace: pymicmac
 spec:
-  rayVersion: '2.9.0' # Version de Ray à utiliser
+  rayVersion: '2.54.1' # Utilise la version installée sur Cloud Shell
   # Configuration du Head Node (Gestionnaire)
   headGroupSpec:
     rayStartParams:
@@ -14,7 +14,7 @@ spec:
         serviceAccountName: ray-worker-sa # Utilise Workload Identity
         containers:
           - name: ray-head
-            image: rayproject/ray:2.9.0-py310
+            image: rayproject/ray:2.54.1-py312
             resources:
               limits:
                 cpu: "1"
@@ -41,7 +41,7 @@ spec:
           serviceAccountName: ray-worker-sa # Utilise Workload Identity pour l'accès GCS
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.9.0-py310
+              image: rayproject/ray:2.54.1-py312
               resources:
                 limits:
                   cpu: "2"
