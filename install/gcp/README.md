@@ -104,11 +104,12 @@ Pour soumettre un job, vous devez accéder au tableau de bord Ray (Dashboard) vi
     **Note** : Le fichier `.rayignore` à la racine permet d'exclure les fichiers volumineux du repo MicMac original et de n'uploader que le nécessaire pour PyMicMac.
     ```bash
     # Exécutez cette commande à la racine du projet (où se trouve demo_pymicmac.py)
+    # L'argument --runtime-env-json force Ray à lire le requirements.txt pour installer les dépendances sur le cluster.
     ray job submit --address http://localhost:8265 \
         --working-dir . \
+        --runtime-env-json '{"pip": ["torch", "numpy", "ray[default]", "google-cloud-storage"]}' \
         -- python3 demo_pymicmac.py
     ```
-    *Note : Si le cluster n'a pas les bibliothèques nécessaires, Ray les installera via le `runtime_env` automatiquement si vous ajoutez un fichier `requirements.txt` à la racine.*
 
 ## 6. Sécurité (Best Practices)
 *   **Identité** : Le job s'exécute avec l'identité `pymicmac-app-sa` grâce à Workload Identity.
