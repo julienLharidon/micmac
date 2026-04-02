@@ -1,0 +1,55 @@
+# .rayignore optimisé pour PyMicMac
+# On exclut les gros répertoires de MicMac C++
+.git/
+.github/
+.terraform/
+**/.terraform/
+MMVII/
+src/
+include/
+data/
+scripts/
+install/
+BenchElise/
+CodeExterne/
+CodeGenere/
+ExtDataPrep/
+applis/
+binaire-aux/
+completions/
+config/
+fdsc/
+"install Micmac/"
+build/
+
+# On exclut les fichiers volumineux à la racine
+*.tif
+*.JPG
+*.jpg
+*.png
+*.zip
+*.tar.gz
+*.pdf
+*.sh
+*.bat
+CMakeLists.txt
+Dockerfile*
+LICENSE.md
+pom.xml
+vcpkg.json
+appveyor.yml
+.travis.yml
+Doxyfile.in
+
+# On exclut les fichiers texte de MicMac mais on garde ceux de PyMicMac
+*.txt
+!requirements.txt
+
+# On exclut les fichiers markdown sauf la doc PyMicMac
+*.md
+!ARCHITECTURE.md
+!REWRITE_PROPOSAL.md
+
+# Cache Python
+__pycache__/
+*.pyc
