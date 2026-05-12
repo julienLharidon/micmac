@@ -1,0 +1,6 @@
+ruff==0.1.11
+lizard==1.17.10
+pytest==7.4.4
+pytest-cov==4.1.0
+mypy==1.8.0
+types-setuptools
