@@ -423,3 +423,11 @@ include/StdAfx.h.gch
 include/StdAfx.h.pch
 include/graphes/cNewO_BuildOptions.h
 MMVII/src/DenseMatch/PSMNet/
+
+# PyMicMac
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc

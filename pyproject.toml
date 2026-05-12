@@ -1,0 +1,20 @@
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.coverage.run]
+source = ["pymicmac"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80

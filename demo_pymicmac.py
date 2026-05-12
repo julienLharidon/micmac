@@ -3,9 +3,9 @@ Script de démonstration de PyMicMac.
 Ce script valide le flux de travail distribué avec Ray et l'optimisation avec PyTorch.
 """
 
-import ray
-import torch
 import numpy as np
+import ray
+
 from pymicmac.core.workflow import BundleAdjustmentWorker, extract_tie_points_mock
 
 
@@ -46,8 +46,8 @@ def run_demo():
     Exécute le workflow complet de démonstration de PyMicMac.
     """
     print("🚀 Initialisation du cluster Ray...")
-    # Initialisation en mode local pour la démonstration
-    ray.init(local_mode=True)
+    # Initialisation de Ray
+    ray.init()
 
     print("\n--- ÉTAPE 1 : TAPIOCA (Extraction de points en parallèle) ---")
     image_names = ["IMG_001.JPG", "IMG_002.JPG", "IMG_003.JPG"]
