@@ -17,7 +17,10 @@ The following modules and features have been implemented in the `pymicmac` libra
 
 ## 3. Orientation / Bundle Adjustment (`pymicmac/orientation`)
 - **`tapas`**: Entry point for orientation solving.
-- **`RadialCameraModel`**: Differentiable camera model implemented in **PyTorch**. Supports radial distortion and focal length optimization via autograd.
+- **Solvers**:
+    - **PyTorch Backend**: Differentiable Bundle Adjustment loop using autograd and Adam optimizer.
+    - **Ceres Solver Backend**: Integration with `pyceres` for industrial-grade optimization.
+- **`RadialCameraModel`**: Differentiable camera model. Supports radial distortion and focal length optimization.
 - **Legacy Support**: Placeholder for exporting orientation to MicMac XML/DAT formats.
 
 ## 4. Dense Matching (`pymicmac/matching`)

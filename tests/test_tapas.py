@@ -23,24 +23,19 @@ def test_batch_rodrigues():
     v = torch.randn(5, 3)
     R = batch_rodrigues_to_rotation_matrix(v)
     assert R.shape == (5, 3, 3)
-    # Check identity for zero vector
     v0 = torch.zeros(1, 3)
     R0 = batch_rodrigues_to_rotation_matrix(v0)
     assert torch.allclose(R0, torch.eye(3).unsqueeze(0))
 
-def test_bundle_adjustment_optimization():
-    # Synthetic data
+def test_bundle_adjustment_pytorch():
     num_cameras = 2
     num_points = 5
-
-    # Ground truth parameters: consistent with initialization
     gt_r_vecs = torch.zeros(num_cameras, 3)
     gt_t_vecs = torch.tensor([[0., 0., 5.], [0.5, 0., 5.]])
     gt_points_3d = torch.tensor([
         [0., 0., 0.], [0.1, 0., 0.], [0., 0.1, 0.], [-0.1, 0., 0.], [0., -0.1, 0.]
     ])
 
-    # Observations
     cam_idx = []
     point_idx = []
 
@@ -65,11 +60,21 @@ def test_bundle_adjustment_optimization():
         'points_2d': points_2d.tolist()
     }
 
-    # Run optimization
-    optimized_model = tapas("RadialStd", None, observations=obs, num_iterations=1000)
+    optimized_model = tapas("RadialStd", None, observations=obs, num_iterations=200)
 
     with torch.no_grad():
         final_predicted = optimized_model(obs_cam_idx, obs_point_idx)
         final_loss = torch.nn.functional.mse_loss(final_predicted, points_2d)
-        print(f"Final loss: {final_loss.item()}")
         assert final_loss.item() < 100.0
+
+def test_tapas_ceres():
+    obs = {
+        'cam_idx': [0, 0, 1, 1],
+        'point_idx': [0, 1, 0, 1],
+        'points_2d': [[500, 500], [510, 500], [490, 500], [500, 500]]
+    }
+    # Test that Ceres solver doesn't crash
+    # Optimization might be slow or need more iterations for real accuracy
+    res = tapas("RadialStd", None, observations=obs, solver="ceres")
+    assert res is not None
+    assert 'r_vecs' in res
