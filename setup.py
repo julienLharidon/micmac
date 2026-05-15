@@ -1,0 +1,19 @@
+from setuptools import find_packages, setup
+
+setup(
+    name="pymicmac",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "numpy>=1.26.4",
+        "torch>=2.2.1",
+        "ray[default]>=2.10.0",
+        "opencv-python-headless>=4.9.0.80",
+        "gdal>=3.4.1",
+        "pyarrow>=15.0.0",
+        "pyiceberg>=0.6.0",
+        "scipy>=1.12.0",
+        "pillow>=10.2.0",
+    ],
+    python_requires=">=3.11",
+)

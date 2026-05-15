@@ -1,0 +1,14 @@
+exclude = [
+    "MMVII",
+    "src",
+    "applis",
+    "fdsc",
+    "scripts",
+    "BenchElise",
+    "CodeGenere",
+    "ExtDataPrep",
+]
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = []
