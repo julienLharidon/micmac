@@ -1,0 +1,8 @@
+ruff
+mypy
+bandit
+lizard
+pytest
+pytest-cov
+pre-commit
+-r requirements.txt

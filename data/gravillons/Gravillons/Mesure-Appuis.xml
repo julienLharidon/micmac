@@ -1,0 +1,63 @@
+<?xml version="1.0" ?>
+<SetOfMesureAppuisFlottants>
+
+     <MesureAppuiFlottant1Im>
+          <NameIm>1.JPG</NameIm>
+	    <OneMesureAF1I>
+               <NamePt>1</NamePt>
+               <PtIm>341 89</PtIm> <!-- 683 178 -->
+          </OneMesureAF1I>
+		  <OneMesureAF1I>
+               <NamePt>2</NamePt>
+               <PtIm>1582 88</PtIm> <!-- 3165 177 -->
+          </OneMesureAF1I>
+          <OneMesureAF1I>
+               <NamePt>3</NamePt>
+               <PtIm>1604 1319</PtIm> <!-- 3209 2638 -->
+          </OneMesureAF1I>
+          <OneMesureAF1I>
+               <NamePt>4</NamePt>
+               <PtIm>355 1349</PtIm> <!-- 710 2698 -->
+          </OneMesureAF1I>
+     </MesureAppuiFlottant1Im>
+
+     <MesureAppuiFlottant1Im>
+          <NameIm>3.JPG</NameIm>
+	  <OneMesureAF1I>
+               <NamePt>1</NamePt>
+               <PtIm>320 245</PtIm> <!-- 641 490 -->
+          </OneMesureAF1I>
+		  <OneMesureAF1I>
+               <NamePt>2</NamePt>
+               <PtIm>1622 104</PtIm> <!-- 3244 208 -->
+          </OneMesureAF1I>
+          <OneMesureAF1I>
+               <NamePt>3</NamePt>
+               <PtIm>1728 1373</PtIm> <!-- 3457 2746 -->
+          </OneMesureAF1I>
+	  <OneMesureAF1I>
+               <NamePt>4</NamePt>
+               <PtIm>657 1254</PtIm> <!-- 1314 2508 -->
+          </OneMesureAF1I>
+     </MesureAppuiFlottant1Im>
+
+     <MesureAppuiFlottant1Im>
+          <NameIm>4.JPG</NameIm>
+	  <OneMesureAF1I>
+               <NamePt>1</NamePt>
+               <PtIm>491 38</PtIm> <!-- 983 77 -->
+          </OneMesureAF1I>
+		  <OneMesureAF1I>
+               <NamePt>2</NamePt>
+               <PtIm>1526 163</PtIm> <!-- 3053 326 -->
+          </OneMesureAF1I>
+          <OneMesureAF1I>
+               <NamePt>3</NamePt>
+               <PtIm>1500 1191</PtIm> <!-- 3001 2382 -->
+          </OneMesureAF1I>
+	  <OneMesureAF1I>
+               <NamePt>4</NamePt>
+               <PtIm>503 1353</PtIm> <!-- 1006 2706 -->
+          </OneMesureAF1I>
+     </MesureAppuiFlottant1Im>
+</SetOfMesureAppuisFlottants>

@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 80
+select = ["E", "F", "B"]
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=pymicmac --cov-report=term-missing --cov-fail-under=80"

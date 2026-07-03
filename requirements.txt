@@ -1,0 +1,8 @@
+torch
+ray[default]>=2.31.0
+numpy
+opencv-python-headless
+google-cloud-storage
+pandas
+pyarrow
+scipy
