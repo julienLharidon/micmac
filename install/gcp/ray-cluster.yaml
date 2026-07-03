@@ -1,0 +1,54 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: raycluster-pymicmac
+spec:
+  rayVersion: '2.10.0'
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        containers:
+          - name: ray-head
+            image: rayproject/ray:2.10.0-py312
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+            resources:
+              limits:
+                cpu: "2"
+                memory: "4Gi"
+              requests:
+                cpu: "2"
+                memory: "4Gi"
+  workerGroupSpecs:
+    - replicas: 3
+      minReplicas: 1
+      maxReplicas: 10
+      groupName: worker-node-pool
+      rayStartParams: {}
+      template:
+        spec:
+          serviceAccountName: ray-worker-sa
+          containers:
+            - name: ray-worker
+              image: rayproject/ray:2.10.0-py312
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+                requests:
+                  cpu: "2"
+                  memory: "4Gi"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ray-worker-sa
+  annotations:
+    iam.gke.io/gcp-service-account: pymicmac-ray-sa@${PROJECT_ID}.iam.gserviceaccount.com
