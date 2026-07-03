@@ -1,5 +1,5 @@
 # Python artifacts
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
@@ -8,6 +8,17 @@ __pycache__/
 .ruff_cache/
 coverage.xml
 htmlcov/
+.ipynb_checkpoints/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Infrastructure
 .terraform/
